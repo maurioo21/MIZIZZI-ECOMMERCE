@@ -524,6 +524,7 @@ def create_app(config_name=None, enable_socketio=True):
         'admin_meilisearch_routes': Blueprint('admin_meilisearch_routes', __name__),
         'flash_sale_routes': Blueprint('flash_sale_routes', __name__),
         'admin_settings_routes': Blueprint('admin_settings_routes', __name__),
+        'cache_management_routes': Blueprint('cache_management_routes', __name__),
     }
     
     # Add basic routes to fallback blueprints
@@ -671,6 +672,10 @@ def create_app(config_name=None, enable_socketio=True):
     @fallback_blueprints['flash_sale_routes'].route('/health', methods=['GET'])
     def fallback_flash_sale_health():
         return jsonify({"status": "ok", "message": "Fallback flash sale routes active"}), 200
+    
+    @fallback_blueprints['cache_management_routes'].route('/health', methods=['GET'])
+    def fallback_cache_management_health():
+        return jsonify({"status": "ok", "message": "Fallback cache management routes active"}), 200
     
     # Blueprint import paths dictionary
     blueprint_imports = {
@@ -902,6 +907,12 @@ def create_app(config_name=None, enable_socketio=True):
             ('backend.app.routes.admin.admin_settings_routes', 'admin_settings_routes'),
             ('backend.routes.admin.admin_settings_routes', 'admin_settings_routes')
         ],
+        'cache_management_routes': [
+            ('app.routes.admin.cache_management', 'cache_management_bp'),
+            ('routes.admin.cache_management', 'cache_management_bp'),
+            ('backend.app.routes.admin.cache_management', 'cache_management_bp'),
+            ('backend.routes.admin.cache_management', 'cache_management_bp'),
+        ],
     }
     
     # Import blueprints with clean logging
@@ -1065,6 +1076,9 @@ def create_app(config_name=None, enable_socketio=True):
 
         app.register_blueprint(final_blueprints['flash_sale_routes'], url_prefix='/api/flash-sale')
         app.logger.info("✅ Flash sale routes registered at /api/flash-sale")
+        
+        app.register_blueprint(final_blueprints['cache_management_routes'], url_prefix='/api/admin/cache')
+        app.logger.info("✅ Cache management routes registered at /api/admin/cache")
 
         try:
             app.logger.debug("Importing Google Auth routes...")

@@ -127,6 +127,12 @@ CACHE_PATTERNS = {
         "Product data and listings",
         CacheGroupType.HOMEPAGE.value
     ),
+    "mizizzi:cloudinary:*": CachePattern(
+        "mizizzi:cloudinary:*",
+        "Cloudinary Images Cache",
+        "Cloudinary image URLs and metadata cache",
+        CacheGroupType.CRITICAL.value
+    ),
 }
 
 # Define cache groups with their associated patterns
@@ -139,6 +145,7 @@ CACHE_GROUPS: Dict[str, Dict] = {
             "mizizzi:categories:*",
             "mizizzi:feature_cards:*",
             "mizizzi:topbar:*",
+            "mizizzi:cloudinary:*",
         ]
     },
     CacheGroupType.DEFERRED.value: {
