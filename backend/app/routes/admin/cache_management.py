@@ -62,27 +62,35 @@ def admin_required(f):
 
 
 def get_redis_connection():
-    """Get Redis connection from app context"""
+    """Get Redis connection from app context with detailed logging"""
+    import sys
+    
     try:
         # Try to get redis_client from app.utils.redis_cache
         from app.utils.redis_cache import redis_cache
+        logger.info("[Cache] Successfully got redis_cache from app.utils.redis_cache")
         return redis_cache
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"[Cache] Failed to import from app.utils.redis_cache: {str(e)}")
     
     try:
         # Fallback: try to get redis client from cache module
         from app.cache.redis_client import redis_client
+        logger.info("[Cache] Successfully got redis_client from app.cache.redis_client")
         return redis_client
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"[Cache] Failed to import from app.cache.redis_client: {str(e)}")
     
     try:
-        # Last resort: try configuration.extensions (though it may not have redis_cache)
+        # Last resort: try configuration.extensions
         from app.configuration.extensions import redis_cache
+        logger.info("[Cache] Successfully got redis_cache from app.configuration.extensions")
         return redis_cache
-    except:
-        return None
+    except Exception as e:
+        logger.warning(f"[Cache] Failed to import from app.configuration.extensions: {str(e)}")
+    
+    logger.error("[Cache] Failed to get Redis connection from any source")
+    return None
 
 
 def get_timestamp():
@@ -99,23 +107,52 @@ def get_timestamp():
 def get_cache_status():
     """
     GET /api/admin/cache/status
-    Get current cache status and metrics
+    Get current cache status and metrics with real-time data
     """
     try:
         redis_conn = get_redis_connection()
-        service = CacheInvalidationService(redis_conn)
         
+        if redis_conn is None:
+            logger.warning("[Cache Status] Redis connection is None")
+            return jsonify({
+                "connected": False,
+                "error": "Redis connection unavailable",
+                "memory_usage": 0,
+                "keys_count": 0,
+                "cache_groups": [],
+                "last_updated": get_timestamp(),
+                "message": "Unable to connect to Redis cache service"
+            }), 200  # Return 200 even when disconnected for better UX
+        
+        service = CacheInvalidationService(redis_conn)
         status = service.get_status()
+        
+        # Ensure all required fields are present
+        if not isinstance(status, dict):
+            status = {}
+        
+        # Set defaults for missing fields
+        status.setdefault("connected", False)
+        status.setdefault("memory_usage", 0)
+        status.setdefault("keys_count", 0)
+        status.setdefault("cache_groups", [])
         status["last_updated"] = get_timestamp()
-
+        
+        logger.info(f"[Cache Status] Connected: {status.get('connected')}, Keys: {status.get('keys_count')}, Memory: {status.get('memory_usage')}")
+        
         return jsonify(status), 200
 
     except Exception as e:
-        logger.error(f"Error getting cache status: {str(e)}")
+        logger.error(f"[Cache Status] Error getting cache status: {str(e)}", exc_info=True)
         return jsonify({
+            "connected": False,
             "error": "Failed to get cache status",
-            "message": str(e)
-        }), 500
+            "message": str(e),
+            "memory_usage": 0,
+            "keys_count": 0,
+            "cache_groups": [],
+            "last_updated": get_timestamp()
+        }), 200  # Return 200 for better frontend UX
 
 
 @cache_management_bp.route("/invalidate", methods=["POST"])

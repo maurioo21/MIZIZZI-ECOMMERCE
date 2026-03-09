@@ -13,21 +13,19 @@ import { Zap, History, Settings } from 'lucide-react'
 export default function CacheManagementPage() {
   const { toast } = useToast()
   const {
-    status,
+    cacheStatus,
     isLoading,
     error,
-    invalidateCritical,
-    invalidateDeferred,
-    invalidateHomepage,
-    invalidateAll,
-    rebuild,
+    invalidateCacheGroup,
+    invalidateAllCaches,
+    rebuildCaches,
   } = useCacheManagement()
 
   const [activeTab, setActiveTab] = useState('overview')
 
   const handleClearCritical = async () => {
     try {
-      await invalidateCritical()
+      await invalidateCacheGroup('critical')
       toast({ title: 'Success', description: 'Critical caches cleared' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
@@ -36,7 +34,7 @@ export default function CacheManagementPage() {
 
   const handleClearDeferred = async () => {
     try {
-      await invalidateDeferred()
+      await invalidateCacheGroup('deferred')
       toast({ title: 'Success', description: 'Deferred caches cleared' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
@@ -45,7 +43,7 @@ export default function CacheManagementPage() {
 
   const handleClearHomepage = async () => {
     try {
-      await invalidateHomepage()
+      await invalidateCacheGroup('homepage')
       toast({ title: 'Success', description: 'Homepage caches cleared' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
@@ -54,7 +52,7 @@ export default function CacheManagementPage() {
 
   const handleRebuild = async () => {
     try {
-      await rebuild()
+      await rebuildCaches()
       toast({ title: 'Success', description: 'Caches rebuilt successfully' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to rebuild caches', variant: 'destructive' })
@@ -63,7 +61,7 @@ export default function CacheManagementPage() {
 
   const handleClearAll = async () => {
     try {
-      await invalidateAll()
+      await invalidateAllCaches()
       toast({ title: 'Success', description: 'All caches cleared' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
@@ -109,7 +107,7 @@ export default function CacheManagementPage() {
 
           <TabsContent value="overview" className="space-y-6">
             {/* Status Dashboard */}
-            <CacheStatusDashboard status={status} isLoading={isLoading} error={error} />
+            <CacheStatusDashboard status={cacheStatus} isLoading={isLoading} error={error} />
 
             {/* Actions Grid */}
             <CacheActionsGrid
@@ -122,7 +120,7 @@ export default function CacheManagementPage() {
             />
 
             {/* Cache Groups */}
-            <CacheGroupsDisplay status={status} isLoading={isLoading} />
+            <CacheGroupsDisplay status={cacheStatus} isLoading={isLoading} />
           </TabsContent>
 
           <TabsContent value="history">
