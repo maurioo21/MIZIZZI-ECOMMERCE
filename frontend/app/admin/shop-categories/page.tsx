@@ -7,6 +7,7 @@ import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
 import { CategoryFormDialog } from "@/components/admin/categories/category-form-dialog"
 import { CategoryDeleteDialog } from "@/components/admin/categories/category-delete-dialog"
+import { buildCloudinaryUrlFromFullUrl, isCloudinaryUrl } from "@/lib/cloudinary-url-builder"
 
 const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = false): string => {
   if (!url) return "/placeholder.svg"
@@ -25,8 +26,21 @@ const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = f
     return "/placeholder.svg"
   }
 
+  // Optimize Cloudinary URLs for fast loading
+  if (isCloudinaryUrl(finalUrl)) {
+    // Use Cloudinary transformations for optimal quality and size
+    finalUrl = buildCloudinaryUrlFromFullUrl(finalUrl, {
+      width: 200,
+      height: 150,
+      crop: "fill",
+      quality: "auto",
+      format: "auto",
+      dpr: "auto",
+    })
+  }
+
   // Add cache-busting parameter for Cloudinary URLs to force fresh images
-  if (bustCache && (finalUrl.includes("cloudinary.com") || finalUrl.includes("res.cloudinary.com"))) {
+  if (bustCache && finalUrl.includes("cloudinary.com")) {
     const separator = finalUrl.includes("?") ? "&" : "?"
     finalUrl = `${finalUrl}${separator}t=${Date.now()}`
   }
@@ -190,7 +204,10 @@ export default function ShopCategoriesAdminPage() {
                     src={getValidImageUrl(category.image_url, true)}
                     alt={category.name}
                     fill
+                    sizes="(max-width: 640px) 64px, 80px"
                     className="object-cover"
+                    loading="lazy"
+                    quality={85}
                   />
                 </div>
 
