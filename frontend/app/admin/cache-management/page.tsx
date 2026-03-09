@@ -1,248 +1,137 @@
-"use client"
+'use client'
 
-import { useState, useEffect } from "react"
-import { useToast } from "@/hooks/use-toast"
-import { useCacheManagement } from "@/hooks/use-cache-management"
-import { CacheStatusCard } from "@/components/admin/cache-management/cache-status-card"
-import { CacheGroupsSection } from "@/components/admin/cache-management/cache-groups-section"
-import { QuickActions } from "@/components/admin/cache-management/quick-actions"
-import { InvalidationHistory } from "@/components/admin/cache-management/invalidation-history"
-import { DangerZone } from "@/components/admin/cache-management/danger-zone"
-import { CacheInvalidationDialog } from "@/components/admin/cache-management/cache-invalidation-dialog"
-import { CACHE_GROUPS_CONFIG, CacheGroupType } from "@/types/cache-management"
-import { AlertCircle, Loader2 } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-
-interface DialogState {
-  isOpen: boolean
-  type: "critical" | "deferred" | "homepage" | "all" | "rebuild" | "pattern" | null
-  selectedPattern?: string
-}
+import { useState } from 'react'
+import { useCacheManagement } from '@/hooks/use-cache-management'
+import { useToast } from '@/hooks/use-toast'
+import CacheStatusDashboard from '@/components/admin/cache-management/cache-status-dashboard'
+import CacheActionsGrid from '@/components/admin/cache-management/cache-actions-grid'
+import CacheGroupsDisplay from '@/components/admin/cache-management/cache-groups-display'
+import CacheHistoryTable from '@/components/admin/cache-management/cache-history-table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Zap, History, Settings } from 'lucide-react'
 
 export default function CacheManagementPage() {
   const { toast } = useToast()
   const {
-    cacheStatus,
-    history,
+    status,
     isLoading,
     error,
-    isServiceAvailable,
-    fetchCacheStatus,
-    fetchHistory,
-    invalidateCache,
-    invalidateCacheGroup,
-    invalidateAllCaches,
-    rebuildCaches,
-  } = useCacheManagement({ autoRefresh: true, refreshInterval: 30000 })
+    invalidateCritical,
+    invalidateDeferred,
+    invalidateHomepage,
+    invalidateAll,
+    rebuild,
+  } = useCacheManagement()
 
-  const [dialog, setDialog] = useState<DialogState>({ isOpen: false, type: null })
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
 
-  // Fetch history on mount
-  useEffect(() => {
-    fetchHistory()
-  }, [fetchHistory])
-
-  const handleDialogOpen = (type: DialogState["type"], selectedPattern?: string) => {
-    setDialog({ isOpen: true, type, selectedPattern })
-  }
-
-  const handleDialogConfirm = async () => {
-    if (!dialog.type) return
-
-    setIsProcessing(true)
+  const handleClearCritical = async () => {
     try {
-      let result
-      let toastMessage = ""
-
-      switch (dialog.type) {
-        case "critical":
-          result = await invalidateCacheGroup(CacheGroupType.CRITICAL)
-          toastMessage = "Critical caches cleared successfully"
-          break
-        case "deferred":
-          result = await invalidateCacheGroup(CacheGroupType.DEFERRED)
-          toastMessage = "Deferred caches cleared successfully"
-          break
-        case "homepage":
-          result = await invalidateCacheGroup(CacheGroupType.HOMEPAGE)
-          toastMessage = "Homepage caches cleared successfully"
-          break
-        case "all":
-          result = await invalidateAllCaches(true)
-          toastMessage = "All caches cleared successfully"
-          break
-        case "rebuild":
-          const rebuildResult = await rebuildCaches(false)
-          if (rebuildResult.success) {
-            toastMessage = "Caches rebuilt successfully"
-            toast({ title: "Success", description: toastMessage })
-          } else {
-            toast({ title: "Error", description: rebuildResult.message, variant: "destructive" })
-          }
-          setDialog({ isOpen: false, type: null })
-          return
-        case "pattern":
-          if (dialog.selectedPattern) {
-            result = await invalidateCache(dialog.selectedPattern)
-            toastMessage = `Cache pattern cleared: ${dialog.selectedPattern}`
-          }
-          break
-      }
-
-      if (result && result.success) {
-        toast({ title: "Success", description: toastMessage })
-        fetchHistory()
-      } else if (result) {
-        toast({ title: "Warning", description: result.message, variant: "destructive" })
-      }
-
-      setDialog({ isOpen: false, type: null })
+      await invalidateCritical()
+      toast({ title: 'Success', description: 'Critical caches cleared' })
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to process cache operation"
-      toast({ title: "Error", description: message, variant: "destructive" })
-    } finally {
-      setIsProcessing(false)
+      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
     }
   }
 
-  if (!isServiceAvailable) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Cache Management</h1>
-        </div>
-
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Cache management service is unavailable. Please ensure the Flask backend is running at {process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}.
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
+  const handleClearDeferred = async () => {
+    try {
+      await invalidateDeferred()
+      toast({ title: 'Success', description: 'Deferred caches cleared' })
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
+    }
   }
 
-  if (error && !cacheStatus) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Cache Management</h1>
-        </div>
-
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-
-        <button
-          onClick={fetchCacheStatus}
-          className="inline-flex h-10 items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-        >
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Retry"}
-        </button>
-      </div>
-    )
+  const handleClearHomepage = async () => {
+    try {
+      await invalidateHomepage()
+      toast({ title: 'Success', description: 'Homepage caches cleared' })
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
+    }
   }
 
-  const cacheGroups = Object.values(CACHE_GROUPS_CONFIG)
+  const handleRebuild = async () => {
+    try {
+      await rebuild()
+      toast({ title: 'Success', description: 'Caches rebuilt successfully' })
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to rebuild caches', variant: 'destructive' })
+    }
+  }
+
+  const handleClearAll = async () => {
+    try {
+      await invalidateAll()
+      toast({ title: 'Success', description: 'All caches cleared' })
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
+    }
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Cache Management</h1>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            Monitor and manage application cache groups and invalidation
-          </p>
+      <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm">
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 p-2.5">
+                  <Zap className="h-6 w-6 text-white" />
+                </div>
+                <h1 className="text-4xl font-bold tracking-tight text-white">Cache Control</h1>
+              </div>
+              <p className="text-sm text-slate-400">Monitor and manage Redis cache systems</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+      {/* Main Content */}
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/5 p-4 backdrop-blur-sm">
+            <p className="text-sm text-red-200">{error}</p>
+          </div>
+        )}
 
-      {/* Status Card */}
-      <CacheStatusCard status={cacheStatus} isLoading={isLoading} />
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="bg-slate-800/50 border border-slate-700">
+            <TabsTrigger value="overview" className="flex items-center gap-2 text-slate-400 data-[state=active]:text-white">
+              <Settings className="h-4 w-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-2 text-slate-400 data-[state=active]:text-white">
+              <History className="h-4 w-4" />
+              History
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Quick Actions */}
-      <QuickActions
-        onClearCritical={() => handleDialogOpen("critical")}
-        onClearDeferred={() => handleDialogOpen("deferred")}
-        onClearHomepage={() => handleDialogOpen("homepage")}
-        onRebuild={() => handleDialogOpen("rebuild")}
-        onClearAll={() => handleDialogOpen("all")}
-        isLoading={isProcessing}
-        disabled={isLoading}
-      />
+          <TabsContent value="overview" className="space-y-6">
+            {/* Status Dashboard */}
+            <CacheStatusDashboard status={status} isLoading={isLoading} error={error} />
 
-      {/* Cache Groups */}
-      <CacheGroupsSection
-        groups={cacheGroups}
-        onInvalidate={(group) => handleDialogOpen(group as DialogState["type"])}
-        onInvalidatePattern={(pattern) => handleDialogOpen("pattern", pattern)}
-        isLoading={isProcessing}
-        disabled={isLoading}
-      />
+            {/* Actions Grid */}
+            <CacheActionsGrid
+              onClearCritical={handleClearCritical}
+              onClearDeferred={handleClearDeferred}
+              onClearHomepage={handleClearHomepage}
+              onRebuild={handleRebuild}
+              onClearAll={handleClearAll}
+              isLoading={isLoading}
+            />
 
-      {/* Invalidation History */}
-      {history && (
-        <InvalidationHistory
-          history={history.items}
-          isLoading={isLoading}
-          total={history.total}
-        />
-      )}
+            {/* Cache Groups */}
+            <CacheGroupsDisplay status={status} isLoading={isLoading} />
+          </TabsContent>
 
-      {/* Danger Zone */}
-      <DangerZone
-        onClearAll={() => handleDialogOpen("all")}
-        onRebuild={() => handleDialogOpen("rebuild")}
-        isLoading={isProcessing}
-        disabled={isLoading}
-      />
-
-      {/* Confirmation Dialog */}
-      <CacheInvalidationDialog
-        isOpen={dialog.isOpen}
-        onOpenChange={(open) => !open && setDialog({ isOpen: false, type: null })}
-        title={
-          dialog.type === "all"
-            ? "Clear All Caches"
-            : dialog.type === "rebuild"
-              ? "Rebuild Caches"
-              : dialog.type === "pattern"
-                ? "Clear Cache Pattern"
-                : dialog.type === "critical"
-                  ? "Clear Critical Caches"
-                  : dialog.type === "deferred"
-                    ? "Clear Deferred Caches"
-                    : "Clear Homepage Caches"
-        }
-        description={
-          dialog.type === "all"
-            ? "This will clear ALL caches in the system. This may significantly impact performance until caches are rebuilt."
-            : dialog.type === "rebuild"
-              ? "This will clear and rebuild all homepage caches with fresh data from the database."
-              : dialog.type === "pattern"
-                ? `Clear cache with pattern: ${dialog.selectedPattern}`
-                : `Clear ${dialog.type} cache group?`
-        }
-        affectedCaches={
-          dialog.type && dialog.type !== "pattern"
-            ? CACHE_GROUPS_CONFIG[dialog.type as CacheGroupType]?.patterns.map((p) => p.name) || []
-            : []
-        }
-        isDangerous={dialog.type === "all"}
-        requiresDoubleConfirm={dialog.type === "all"}
-        onConfirm={handleDialogConfirm}
-        isLoading={isProcessing}
-      />
+          <TabsContent value="history">
+            <CacheHistoryTable />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }
