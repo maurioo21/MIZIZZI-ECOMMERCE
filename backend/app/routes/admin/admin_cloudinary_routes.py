@@ -390,3 +390,94 @@ def upload_to_cloudinary():
             'count': 0,
             'message': 'Upload failed'
         }), 500
+
+
+@admin_cloudinary_routes.route('/upload/category', methods=['POST', 'OPTIONS'])
+@jwt_required()
+@admin_required
+def upload_category_image():
+    """Upload category image to Cloudinary.
+    
+    Accepts form-data:
+      - file: Single image file for category
+      - image_type: 'category' or 'banner' (optional, defaults to 'category')
+    
+    Returns:
+        - success: boolean
+        - url: Cloudinary image URL
+        - secure_url: Secure HTTPS URL
+        - public_id: Cloudinary public ID
+        - width, height, format, bytes: Image metadata
+    """
+    if request.method == 'OPTIONS':
+        return '', 200
+
+    try:
+        # Get the uploaded file
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+
+        file = request.files.get('file')
+        if not file or file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+
+        image_type = request.form.get('image_type', 'category')
+
+        # Ensure Cloudinary is configured
+        cloud_name = os.environ.get('NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME') or os.environ.get('CLOUDINARY_CLOUD_NAME')
+        api_key = os.environ.get('NEXT_PUBLIC_CLOUDINARY_API_KEY') or os.environ.get('CLOUDINARY_API_KEY')
+        api_secret = os.environ.get('NEXT_PUBLIC_CLOUDINARY_API_SECRET') or os.environ.get('CLOUDINARY_API_SECRET')
+
+        if not api_key or not api_secret or not cloud_name:
+            current_app.logger.error("Cloudinary configuration missing")
+            return jsonify({'error': 'Cloudinary configuration missing'}), 500
+
+        cloudinary.config(cloud_name=cloud_name, api_key=api_key, api_secret=api_secret)
+
+        # Determine folder based on image type
+        folder = 'mizizzi/categories'
+        if image_type == 'banner':
+            folder = 'mizizzi/categories/banners'
+
+        current_app.logger.info(f"Uploading category image to Cloudinary in folder: {folder}")
+
+        # Upload to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            file,
+            folder=folder,
+            resource_type='image',
+            quality='auto',
+            format='auto'
+        )
+
+        secure_url = upload_result.get('secure_url') or upload_result.get('url')
+        public_id = upload_result.get('public_id')
+
+        if not secure_url or not public_id:
+            current_app.logger.error(f"Cloudinary upload failed: No metadata returned")
+            return jsonify({'error': 'Failed to upload image to Cloudinary'}), 500
+
+        response = {
+            'success': True,
+            'url': secure_url,
+            'secure_url': secure_url,
+            'public_id': public_id,
+            'width': upload_result.get('width'),
+            'height': upload_result.get('height'),
+            'format': upload_result.get('format'),
+            'bytes': upload_result.get('bytes'),
+            'message': 'Category image uploaded successfully'
+        }
+
+        current_app.logger.info(f"Category image uploaded successfully: {public_id}")
+        return jsonify(response), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Category image upload error: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': f'Upload failed: {str(e)}',
+            'message': 'Failed to upload category image'
+        }), 500

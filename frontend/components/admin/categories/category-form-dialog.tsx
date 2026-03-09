@@ -10,7 +10,6 @@ import { Switch } from "@/components/ui/switch"
 import { Modal, ModalHeader, ModalTitle, ModalDescription, ModalBody, ModalFooter } from "@/components/ui/modal"
 import { useToast } from "@/hooks/use-toast"
 import { Loader, ImageIcon, Upload, Save, X } from "lucide-react"
-import Image from "next/image"
 import { websocketService } from "@/services/websocket"
 import { useSWRConfig } from "swr"
 import { categoryService } from "@/services/category"
@@ -107,11 +106,15 @@ export function CategoryFormDialog({
       setUploadingImage(type)
       const formDataObj = new FormData()
       formDataObj.append("file", file)
+      formDataObj.append("image_type", type)
 
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
-      const response = await fetch(`${baseUrl}/api/admin/shop-categories/categories/upload-image`, {
+      console.log("[v0] Uploading image to Cloudinary:", { type, fileName: file.name })
+
+      // Use the new Cloudinary upload endpoint
+      const response = await fetch(`${baseUrl}/api/admin/cloudinary/upload/category`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -126,9 +129,15 @@ export function CategoryFormDialog({
 
       const data = await response.json()
 
+      if (!data.success) {
+        throw new Error(data.message || "Upload failed")
+      }
+
       const fieldName = type === "category" ? "image_url" : "banner_url"
-      const imageUrl = data.url || data.data
+      const imageUrl = data.secure_url || data.url
       
+      console.log("[v0] Image uploaded successfully:", { url: imageUrl, public_id: data.public_id })
+
       setFormData((prev) => ({
         ...prev,
         [fieldName]: imageUrl,
@@ -136,7 +145,7 @@ export function CategoryFormDialog({
 
       toast({
         title: "Success",
-        description: `${type === "category" ? "Category" : "Banner"} image uploaded`,
+        description: `${type === "category" ? "Category" : "Banner"} image uploaded to Cloudinary`,
       })
     } catch (error) {
       console.error("Error uploading image:", error)
@@ -337,13 +346,13 @@ export function CategoryFormDialog({
                 className="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors duration-200 h-32 group cursor-pointer"
                 onClick={() => categoryImageRef.current?.click()}
               >
-                <Image
-                  src={getValidImageUrl(formData.image_url)}
-                  alt="Category preview"
-                  fill
-                  className="object-cover group-hover:opacity-90 transition-opacity"
-                />
-                {!formData.image_url && (
+                {formData.image_url ? (
+                  <img
+                    src={getValidImageUrl(formData.image_url)}
+                    alt="Category preview"
+                    className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+                  />
+                ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                     <div className="text-center">
                       <ImageIcon className="h-8 w-8 text-white mx-auto mb-2" />
@@ -393,13 +402,13 @@ export function CategoryFormDialog({
                 className="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors duration-200 h-32 group cursor-pointer"
                 onClick={() => bannerImageRef.current?.click()}
               >
-                <Image
-                  src={getValidImageUrl(formData.banner_url)}
-                  alt="Banner preview"
-                  fill
-                  className="object-cover group-hover:opacity-90 transition-opacity"
-                />
-                {!formData.banner_url && (
+                {formData.banner_url ? (
+                  <img
+                    src={getValidImageUrl(formData.banner_url)}
+                    alt="Banner preview"
+                    className="w-full h-full object-cover group-hover:opacity-90 transition-opacity"
+                  />
+                ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                     <div className="text-center">
                       <ImageIcon className="h-8 w-8 text-white mx-auto mb-2" />
