@@ -73,18 +73,16 @@ export default function CacheManagementPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white">
+      <div className="border-b border-gray-200 bg-gradient-to-r from-white via-blue-50 to-white">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 p-2.5">
-                  <Zap className="h-6 w-6 text-white" />
-                </div>
-                <h1 className="text-4xl font-bold tracking-tight text-gray-900">Cache Control</h1>
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="rounded-lg bg-gradient-to-br from-blue-600 to-blue-500 p-2.5 shadow-lg">
+                <Zap className="h-6 w-6 text-white" />
               </div>
-              <p className="text-sm text-gray-600">Monitor and manage Redis cache systems</p>
+              <h1 className="text-4xl font-bold tracking-tight text-gray-900">Cache Control</h1>
             </div>
+            <p className="text-sm text-gray-600">Monitor and manage Redis cache systems in real-time</p>
           </div>
         </div>
       </div>
@@ -92,20 +90,20 @@ export default function CacheManagementPage() {
       {/* Main Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm">
+            <p className="text-sm font-medium text-red-800">{error}</p>
           </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-gray-100 border border-gray-200">
-            <TabsTrigger value="overview" className="flex items-center gap-2 text-gray-700 data-[state=active]:text-gray-900 data-[state=active]:bg-white">
+          <TabsList className="bg-gray-100 border border-gray-200 shadow-sm">
+            <TabsTrigger value="overview" className="flex items-center gap-2 text-gray-700 data-[state=active]:text-blue-600 data-[state=active]:bg-white">
               <Settings className="h-4 w-4" />
               Overview
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2 text-gray-700 data-[state=active]:text-gray-900 data-[state=active]:bg-white">
+            <TabsTrigger value="history" className="flex items-center gap-2 text-gray-700 data-[state=active]:text-blue-600 data-[state=active]:bg-white">
               <History className="h-4 w-4" />
-              History
+              History & Logs
             </TabsTrigger>
           </TabsList>
 

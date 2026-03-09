@@ -51,9 +51,9 @@ export default function CacheHistoryTable() {
 
   if (!displayItems.length) {
     return (
-      <div className="rounded-lg border border-slate-700 bg-slate-900/50 p-8 text-center">
-        <Clock className="h-8 w-8 text-slate-600 mx-auto mb-3" />
-        <p className="text-slate-400">No cache invalidation history yet</p>
+      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
+        <Clock className="h-8 w-8 text-gray-300 mx-auto mb-3" />
+        <p className="text-gray-500">No cache invalidation history yet</p>
       </div>
     )
   }
