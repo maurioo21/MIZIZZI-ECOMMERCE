@@ -230,87 +230,15 @@ class UpstashRedisClient:
         return result if isinstance(result, int) else 0
 
 
-class InMemoryCacheClient:
-    """
-    Fallback in-memory cache client when Upstash Redis is not configured.
-    Provides same interface as UpstashRedisClient for compatibility.
-    """
-    def __init__(self):
-        self.store = {}
-        self.ttl_store = {}
-        import time
-        self.time_func = time.time
-        logger.info("In-memory cache client initialized (no Upstash configured)")
-    
-    def set(self, key: str, value: Any, ex: int = None) -> bool:
-        """Set a key with optional TTL"""
-        self.store[key] = value
-        if ex:
-            self.ttl_store[key] = self.time_func() + ex
-        return True
-    
-    def get(self, key: str) -> Optional[Any]:
-        """Get a value by key"""
-        if key in self.ttl_store and self.time_func() > self.ttl_store[key]:
-            del self.store[key]
-            del self.ttl_store[key]
-            return None
-        return self.store.get(key)
-    
-    def delete(self, *keys: str) -> int:
-        """Delete one or more keys"""
-        count = 0
-        for key in keys:
-            if key in self.store:
-                del self.store[key]
-                if key in self.ttl_store:
-                    del self.ttl_store[key]
-                count += 1
-        return count
-    
-    def ping(self) -> bool:
-        """Check if cache is available"""
-        return True
-    
-    def keys(self, pattern: str = None) -> List[str]:
-        """Get all keys, optionally matching a pattern"""
-        if not pattern or pattern == "*":
-            return list(self.store.keys())
-        
-        # Simple pattern matching
-        import fnmatch
-        return [k for k in self.store.keys() if fnmatch.fnmatch(k, pattern)]
-    
-    def dbsize(self) -> int:
-        """Get number of keys in store"""
-        return len(self.store)
-    
-    def flushdb(self) -> bool:
-        """Clear all keys"""
-        self.store.clear()
-        self.ttl_store.clear()
-        return True
-    
-    def info(self) -> dict:
-        """Get cache info"""
-        return {
-            "type": "in-memory",
-            "keys": len(self.store),
-            "memory_usage": "N/A"
-        }
-
-
 def create_upstash_client():
     """
     Create and return an Upstash Redis client instance.
-    Falls back to in-memory cache if Upstash is not configured.
     
     This function attempts to create a connection to Upstash Redis
-    and validates it with a ping command. If Upstash credentials are
-    not available, returns an in-memory cache client for fallback.
+    and validates it with a ping command.
     
     Returns:
-        UpstashRedisClient instance, InMemoryCacheClient, or None if connection fails
+        UpstashRedisClient instance or None if connection fails
     """
     global _redis_client, _is_connected
     
@@ -323,14 +251,11 @@ def create_upstash_client():
     if not url or not token:
         logger.warning(
             "Upstash Redis credentials not found. "
-            "Using in-memory cache client as fallback. "
             "Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN "
-            "environment variables for persistent distributed caching."
+            "environment variables. Using in-memory fallback."
         )
-        # Use in-memory fallback instead of returning None
-        _redis_client = InMemoryCacheClient()
-        _is_connected = True  # Mark as "connected" since fallback is working
-        return _redis_client
+        _is_connected = False
+        return None
     
     try:
         # Create the HTTP-based client
@@ -343,16 +268,14 @@ def create_upstash_client():
             _is_connected = True
             return client
         else:
-            logger.warning("Upstash Redis ping failed, falling back to in-memory cache")
-            _redis_client = InMemoryCacheClient()
-            _is_connected = True
-            return _redis_client
+            logger.warning("Upstash Redis ping failed, using fallback")
+            _is_connected = False
+            return None
             
     except Exception as e:
-        logger.error(f"Failed to create Upstash Redis client: {e}, using in-memory fallback")
-        _redis_client = InMemoryCacheClient()
-        _is_connected = True
-        return _redis_client
+        logger.error(f"Failed to create Upstash Redis client: {e}")
+        _is_connected = False
+        return None
 
 
 def get_redis_client():

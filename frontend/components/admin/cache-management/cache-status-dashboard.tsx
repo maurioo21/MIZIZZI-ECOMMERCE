@@ -67,8 +67,6 @@ export default function CacheStatusDashboard({ status, isLoading, error }: Cache
   const memoryUsage = status?.memory_usage || 0
   const keysCount = status?.keys_count || 0
   const cacheGroupsCount = status?.cache_groups?.length || 0
-  const cacheType = (status as any)?.type || 'unknown'
-  const statusMessage = status?.message || error || 'Unable to connect to Redis cache service.'
 
   return (
     <div className="space-y-6">
@@ -114,15 +112,7 @@ export default function CacheStatusDashboard({ status, isLoading, error }: Cache
         {!isConnected && (
           <div className="px-6 py-3 bg-red-50 border-t border-red-100">
             <p className="text-sm text-red-700">
-              {statusMessage}
-            </p>
-          </div>
-        )}
-        
-        {isConnected && cacheType === 'in-memory' && (
-          <div className="px-6 py-3 bg-amber-50 border-t border-amber-100">
-            <p className="text-sm text-amber-700">
-              <strong>Fallback Mode:</strong> Using in-memory cache (Upstash not configured). Cache will be lost on server restart. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN for persistent caching.
+              {error || status?.message || 'Unable to connect to Redis cache service. Please check if the cache service is running.'}
             </p>
           </div>
         )}
@@ -141,7 +131,6 @@ export default function CacheStatusDashboard({ status, isLoading, error }: Cache
           <p className="text-3xl font-bold text-gray-900">{keysCount.toLocaleString()}</p>
           <p className="text-xs text-gray-500 mt-2">Keys in Redis</p>
           {!isConnected && <p className="text-xs text-orange-600 mt-1">Unavailable when disconnected</p>}
-          {isConnected && cacheType === 'in-memory' && <p className="text-xs text-blue-600 mt-1">In-memory cache (fallback)</p>}
         </div>
 
         {/* Memory Usage */}

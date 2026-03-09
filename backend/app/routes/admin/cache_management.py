@@ -122,18 +122,10 @@ def get_cache_status():
                 "cache_groups": [],
                 "last_updated": get_timestamp(),
                 "message": "Unable to connect to Redis cache service"
-            }), 200
+            }), 200  # Return 200 even when disconnected for better UX
         
         service = CacheInvalidationService(redis_conn)
         status = service.get_status()
-        
-        # Enhance status response based on cache type
-        if isinstance(status, dict):
-            cache_type = status.get("type", "unknown")
-            if cache_type == "in-memory":
-                status["message"] = "Using in-memory cache (Upstash not configured). Cache will be lost on server restart."
-            elif cache_type == "upstash":
-                status["message"] = "Connected to Upstash Redis successfully"
         
         # Ensure all required fields are present
         if not isinstance(status, dict):
@@ -146,7 +138,7 @@ def get_cache_status():
         status.setdefault("cache_groups", [])
         status["last_updated"] = get_timestamp()
         
-        logger.info(f"[Cache Status] Connected: {status.get('connected')}, Type: {status.get('type', 'unknown')}, Keys: {status.get('keys_count')}")
+        logger.info(f"[Cache Status] Connected: {status.get('connected')}, Keys: {status.get('keys_count')}, Memory: {status.get('memory_usage')}")
         
         return jsonify(status), 200
 
@@ -160,7 +152,7 @@ def get_cache_status():
             "keys_count": 0,
             "cache_groups": [],
             "last_updated": get_timestamp()
-        }), 200
+        }), 200  # Return 200 for better frontend UX
 
 
 @cache_management_bp.route("/invalidate", methods=["POST"])
