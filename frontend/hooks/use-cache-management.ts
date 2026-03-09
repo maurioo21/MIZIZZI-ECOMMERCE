@@ -24,7 +24,7 @@ export function useCacheManagement(options: UseCacheManagementOptions = {}) {
   // Fetch cache status
   const fetchCacheStatus = useCallback(async () => {
     setIsLoading(true)
-    setError(null)
+    setError(undefined)
 
     try {
       const status = await cacheManagementService.getCacheStatus()
@@ -52,7 +52,7 @@ export function useCacheManagement(options: UseCacheManagementOptions = {}) {
 
   // Invalidate single cache
   const invalidateCache = useCallback(async (pattern: string) => {
-    setError(null)
+    setError(undefined)
     try {
       const result = await cacheManagementService.invalidateCache(pattern)
       await fetchCacheStatus() // Refresh status
@@ -66,7 +66,7 @@ export function useCacheManagement(options: UseCacheManagementOptions = {}) {
 
   // Invalidate cache group
   const invalidateCacheGroup = useCallback(async (group: CacheGroupType) => {
-    setError(null)
+    setError(undefined)
     try {
       const result = await cacheManagementService.invalidateCacheGroup(group)
       await fetchCacheStatus() // Refresh status
@@ -80,7 +80,7 @@ export function useCacheManagement(options: UseCacheManagementOptions = {}) {
 
   // Invalidate multiple groups
   const invalidateMultipleGroups = useCallback(async (groups: CacheGroupType[]) => {
-    setError(null)
+    setError(undefined)
     try {
       const result = await cacheManagementService.invalidateMultipleGroups(groups)
       await fetchCacheStatus() // Refresh status
@@ -94,7 +94,7 @@ export function useCacheManagement(options: UseCacheManagementOptions = {}) {
 
   // Invalidate all caches
   const invalidateAllCaches = useCallback(async (confirmed: boolean = true) => {
-    setError(null)
+    setError(undefined)
     try {
       const result = await cacheManagementService.invalidateAllCaches(confirmed)
       await fetchCacheStatus() // Refresh status
@@ -108,7 +108,7 @@ export function useCacheManagement(options: UseCacheManagementOptions = {}) {
 
   // Rebuild caches
   const rebuildCaches = useCallback(async (force: boolean = false) => {
-    setError(null)
+    setError(undefined)
     try {
       const result = await cacheManagementService.rebuildCaches(force)
       await fetchCacheStatus() // Refresh status
