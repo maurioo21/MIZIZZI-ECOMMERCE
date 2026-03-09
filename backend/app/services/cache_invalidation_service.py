@@ -342,20 +342,30 @@ class CacheInvalidationService:
                 return {
                     "connected": False,
                     "error": "Redis connection not available",
+                    "memory_usage": 0,
+                    "keys_count": 0,
+                    "cache_groups": [],
                 }
 
             # Test connection
             self.redis.ping()
 
-            # Get memory info
-            info = self.redis.info("memory")
-            memory_usage = info.get("used_memory", 0)
+            # Get memory info - handle both Upstash and in-memory clients
+            try:
+                info = self.redis.info("memory") if hasattr(self.redis, 'info') else {}
+                memory_usage = info.get("used_memory", 0) if isinstance(info, dict) else 0
+            except:
+                memory_usage = 0
 
             # Count keys in database
-            keys_count = self.redis.dbsize()
+            keys_count = self.redis.dbsize() if hasattr(self.redis, 'dbsize') else 0
+
+            # Determine cache type
+            cache_type = "upstash" if hasattr(self.redis, 'url') else "in-memory"
 
             return {
                 "connected": True,
+                "type": cache_type,
                 "memory_usage": memory_usage,
                 "keys_count": keys_count,
                 "last_updated": datetime.utcnow().isoformat(),
@@ -375,4 +385,7 @@ class CacheInvalidationService:
             return {
                 "connected": False,
                 "error": str(e),
+                "memory_usage": 0,
+                "keys_count": 0,
+                "cache_groups": [],
             }
