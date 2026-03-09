@@ -11,7 +11,6 @@ import { buildCloudinaryUrlFromFullUrl, isCloudinaryUrl } from "@/lib/cloudinary
 
 const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = false): string => {
   if (!url) {
-    console.log("[v0] No URL provided, using placeholder")
     return "/placeholder.svg"
   }
 
@@ -26,15 +25,11 @@ const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = f
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
     finalUrl = `${baseUrl}${url}`
   } else {
-    console.warn("[v0] Invalid URL format:", url)
     return "/placeholder.svg"
   }
 
-  console.log("[v0] getValidImageUrl - Input finalUrl:", finalUrl)
-
   // Optimize Cloudinary URLs for fast loading
   if (isCloudinaryUrl(finalUrl)) {
-    console.log("[v0] Detected Cloudinary URL, applying transformations")
     const transformed = buildCloudinaryUrlFromFullUrl(finalUrl, {
       width: 200,
       height: 150,
@@ -44,17 +39,14 @@ const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = f
       dpr: "auto",
     })
     finalUrl = transformed || finalUrl // Fall back to original if transform fails
-    console.log("[v0] After transformation:", finalUrl)
   }
 
   // Add cache-busting parameter for Cloudinary URLs to force fresh images
   if (bustCache && finalUrl.includes("cloudinary.com")) {
     const separator = finalUrl.includes("?") ? "&" : "?"
     finalUrl = `${finalUrl}${separator}t=${Date.now()}`
-    console.log("[v0] Added cache buster:", finalUrl)
   }
 
-  console.log("[v0] getValidImageUrl - Final URL:", finalUrl)
   return finalUrl
 }
 

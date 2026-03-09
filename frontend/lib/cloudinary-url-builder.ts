@@ -37,6 +37,39 @@ export function parseCloudinaryUrl(
       return null
     }
 
+    // Extract cloud name from subdomain (e.g., "da35rsdl0" from "da35rsdl0.res.cloudinary.com")
+    const parts = urlObj.hostname.split(".")
+    const cloudName = parts[0] // First part is the cloud name
+    
+    const pathParts = urlObj.pathname.split("/").filter(Boolean)
+    
+    // Find the public ID (everything after /upload/)
+    const uploadIndex = pathParts.indexOf("upload")
+    if (uploadIndex === -1) {
+      return null
+    }
+    
+    // Everything after /upload/ is potentially the public ID
+    let remainingParts = pathParts.slice(uploadIndex + 1)
+    
+    // Skip version numbers (v123456, v1, etc.) - Cloudinary versions start with 'v' followed by digits
+    if (remainingParts.length > 0 && /^v\d+$/.test(remainingParts[0])) {
+      remainingParts = remainingParts.slice(1)
+    }
+    
+    // Join the remaining parts to get the public ID
+    let publicId = remainingParts.join("/")
+    
+    // Remove any transformation prefix (shouldn't normally be here, but just in case)
+    publicId = publicId.replace(/^[a-z0-9_,]+\//, "")
+    
+    return { cloudName, publicId }
+  } catch (error) {
+    console.error("[v0] Error parsing Cloudinary URL:", error)
+    return null
+  }
+}
+
     const cloudName = urlObj.hostname.split(".")[0]
     const pathParts = urlObj.pathname.split("/").filter(Boolean)
     
@@ -140,7 +173,6 @@ export function buildCloudinaryUrl(
   
   // Build final URL
   const finalUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${transformString}/${cleanPublicId}`
-  console.log("[v0] Built Cloudinary URL:", finalUrl)
   
   return finalUrl
 }
@@ -152,8 +184,6 @@ export function buildCloudinaryUrlFromFullUrl(
   url: string,
   options: CloudinaryUrlOptions = {}
 ): string {
-  console.log("[v0] buildCloudinaryUrlFromFullUrl - Input URL:", url, "Options:", options)
-  
   if (!url) {
     console.error("[v0] Empty URL provided to buildCloudinaryUrlFromFullUrl")
     return ""
@@ -165,9 +195,7 @@ export function buildCloudinaryUrlFromFullUrl(
     return url
   }
 
-  const result = buildCloudinaryUrl(parsed.cloudName, parsed.publicId, options)
-  console.log("[v0] buildCloudinaryUrlFromFullUrl - Result:", result)
-  return result
+  return buildCloudinaryUrl(parsed.cloudName, parsed.publicId, options)
 }
 
 /**
