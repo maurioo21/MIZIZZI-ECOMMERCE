@@ -8,7 +8,6 @@ from werkzeug.utils import secure_filename
 import os
 import uuid
 from datetime import datetime
-import imghdr
 from PIL import Image
 import io
 import json
@@ -49,16 +48,13 @@ def validate_image(file_stream):
         # Reset stream position
         file_stream.seek(0)
 
-        # Check if it's a valid image using imghdr
-        image_type = imghdr.what(file_stream)
-        if image_type not in ['png', 'jpeg', 'gif', 'webp']:
+        # Try to open with PIL to validate image format and check if it's not corrupted
+        img = Image.open(file_stream)
+        
+        # Check if format is supported
+        allowed_formats = ['PNG', 'JPEG', 'GIF', 'WEBP']
+        if img.format not in allowed_formats:
             return False
-
-        # Reset stream position again
-        file_stream.seek(0)
-
-        # Try to open with PIL to ensure it's not corrupted
-        Image.open(file_stream)
 
         # Reset stream position for actual use
         file_stream.seek(0)
