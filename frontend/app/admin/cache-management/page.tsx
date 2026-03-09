@@ -20,6 +20,7 @@ export default function CacheManagementPage() {
     invalidateCacheGroup,
     invalidateAllCaches,
     rebuildCaches,
+    fetchCacheStatus,
   } = useCacheManagement()
 
   const [activeTab, setActiveTab] = useState('overview')
@@ -27,46 +28,50 @@ export default function CacheManagementPage() {
   const handleClearCritical = async () => {
     try {
       await invalidateCacheGroup(CacheGroupType.CRITICAL)
-      toast({ title: 'Success', description: 'Critical caches cleared' })
     } catch (err) {
-      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
+      console.error('Error clearing critical cache:', err)
+      throw err
     }
   }
 
   const handleClearDeferred = async () => {
     try {
       await invalidateCacheGroup(CacheGroupType.DEFERRED)
-      toast({ title: 'Success', description: 'Deferred caches cleared' })
     } catch (err) {
-      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
+      console.error('Error clearing deferred cache:', err)
+      throw err
     }
   }
 
   const handleClearHomepage = async () => {
     try {
       await invalidateCacheGroup(CacheGroupType.HOMEPAGE)
-      toast({ title: 'Success', description: 'Homepage caches cleared' })
     } catch (err) {
-      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
+      console.error('Error clearing homepage cache:', err)
+      throw err
     }
   }
 
   const handleRebuild = async () => {
     try {
       await rebuildCaches()
-      toast({ title: 'Success', description: 'Caches rebuilt successfully' })
     } catch (err) {
-      toast({ title: 'Error', description: 'Failed to rebuild caches', variant: 'destructive' })
+      console.error('Error rebuilding cache:', err)
+      throw err
     }
   }
 
   const handleClearAll = async () => {
     try {
       await invalidateAllCaches()
-      toast({ title: 'Success', description: 'All caches cleared' })
     } catch (err) {
-      toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
+      console.error('Error clearing all cache:', err)
+      throw err
     }
+  }
+
+  const handleCacheRefresh = () => {
+    fetchCacheStatus()
   }
 
   return (
@@ -118,10 +123,11 @@ export default function CacheManagementPage() {
               onRebuild={handleRebuild}
               onClearAll={handleClearAll}
               isLoading={isLoading}
+              onSuccess={handleCacheRefresh}
             />
 
             {/* Cache Groups */}
-            <CacheGroupsDisplay status={cacheStatus} isLoading={isLoading} />
+            <CacheGroupsDisplay status={cacheStatus} isLoading={isLoading} onGroupDeleted={handleCacheRefresh} />
           </TabsContent>
 
           <TabsContent value="history">
@@ -132,3 +138,4 @@ export default function CacheManagementPage() {
     </div>
   )
 }
+

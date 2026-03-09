@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { AlertTriangle, Zap, Database, Home, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, Zap, Database, Home, RefreshCw, Trash2, CheckCircle2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useToast } from '@/hooks/use-toast'
 
 interface CacheActionsGridProps {
   onClearCritical?: () => Promise<any>
@@ -12,6 +13,7 @@ interface CacheActionsGridProps {
   onRebuild?: () => Promise<any>
   onClearAll?: () => Promise<any>
   isLoading?: boolean
+  onSuccess?: () => void
 }
 
 interface ActionConfig {
@@ -32,9 +34,12 @@ export default function CacheActionsGrid({
   onRebuild,
   onClearAll,
   isLoading,
+  onSuccess,
 }: CacheActionsGridProps) {
+  const { toast } = useToast()
   const [activeDialog, setActiveDialog] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [lastAction, setLastAction] = useState<{ id: string; success: boolean } | null>(null)
 
   const actions: ActionConfig[] = [
     {
@@ -96,8 +101,28 @@ export default function CacheActionsGrid({
   const confirmAction = async (action: ActionConfig) => {
     setIsProcessing(true)
     try {
-      await action.handler()
+      const result = await action.handler()
+      setLastAction({ id: action.id, success: true })
+      
+      toast({
+        title: 'Success',
+        description: `${action.label} completed successfully. Cache will refresh with updated data.`,
+        variant: 'default',
+      })
+      
+      if (onSuccess) {
+        onSuccess()
+      }
     } catch (error) {
+      setLastAction({ id: action.id, success: false })
+      const errorMsg = error instanceof Error ? error.message : 'An error occurred'
+      
+      toast({
+        title: 'Error',
+        description: `Failed to ${action.label.toLowerCase()}: ${errorMsg}`,
+        variant: 'destructive',
+      })
+      
       console.error('Cache action failed:', error)
     } finally {
       setIsProcessing(false)
@@ -115,13 +140,20 @@ export default function CacheActionsGrid({
               key={action.id}
               onClick={() => handleAction(action)}
               disabled={isLoading || isProcessing}
-              className={`group relative overflow-hidden rounded-lg border-2 bg-gradient-to-br p-4 transition-all duration-300 ${action.color} ${action.accentColor} disabled:opacity-50`}
+              className={`group relative overflow-hidden rounded-lg border-2 bg-gradient-to-br p-4 transition-all duration-300 ${action.color} ${action.accentColor} disabled:opacity-50 ${
+                lastAction?.id === action.id && lastAction.success ? 'ring-2 ring-green-500' : ''
+              }`}
             >
               <div className="absolute inset-0 bg-black opacity-0 transition-opacity group-hover:opacity-5" />
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <div className={`${action.accentColor.split(' ')[0]}`}>{action.icon}</div>
-                  {action.isDangerous && <AlertTriangle className="h-4 w-4 text-red-600" />}
+                  <div className="flex items-center gap-2">
+                    {action.isDangerous && <AlertTriangle className="h-4 w-4 text-red-600" />}
+                    {lastAction?.id === action.id && lastAction.success && (
+                      <CheckCircle2 className="h-4 w-4 text-green-600 animate-pulse" />
+                    )}
+                  </div>
                 </div>
                 <h3 className="font-semibold text-sm text-gray-900">{action.label}</h3>
                 <p className="mt-1 text-xs text-gray-600">{action.description}</p>
@@ -147,7 +179,7 @@ export default function CacheActionsGrid({
               </div>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setActiveDialog(null)} className="border-gray-300">
+              <Button variant="outline" onClick={() => setActiveDialog(null)} className="border-gray-300" disabled={isProcessing}>
                 Cancel
               </Button>
               <Button
@@ -164,3 +196,4 @@ export default function CacheActionsGrid({
     </>
   )
 }
+
