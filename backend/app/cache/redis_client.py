@@ -252,6 +252,78 @@ class UpstashRedisClient:
         except Exception as e:
             logger.warning(f"Error executing INFO command: {e}")
             return {}
+    
+    def scan(self, cursor: int = 0, match: str = None, count: int = 10, _type: str = None) -> tuple:
+        """
+        Scan keys using SCAN command.
+        Returns (new_cursor, keys_list) tuple.
+        For Upstash REST API, we use KEYS command as an alternative since SCAN is complex.
+        """
+        try:
+            if match:
+                # Use KEYS command for pattern matching (simpler for REST API)
+                result = self._execute_command('KEYS', match)
+                if isinstance(result, list):
+                    # Return cursor=0 to indicate end, and the matched keys
+                    return (0, result)
+                return (0, [])
+            else:
+                # For full KEYS scan without pattern
+                result = self._execute_command('KEYS', '*')
+                if isinstance(result, list):
+                    return (0, result)
+                return (0, [])
+        except Exception as e:
+            logger.warning(f"Error executing SCAN command: {e}")
+            return (0, [])
+    
+    def pipeline(self):
+        """
+        Create a pipeline object for batch operations.
+        For Upstash REST API, we use a simple wrapper that buffers commands.
+        """
+        return UpstashPipeline(self)
+
+
+class UpstashPipeline:
+    """Pipeline wrapper for Upstash REST API to batch commands."""
+    
+    def __init__(self, client: 'UpstashRedisClient'):
+        self.client = client
+        self.commands = []
+    
+    def delete(self, *keys):
+        """Add DEL command to pipeline."""
+        for key in keys:
+            self.commands.append(('DEL', key))
+        return self
+    
+    def set(self, key, value, ex=None):
+        """Add SET command to pipeline."""
+        if ex:
+            self.commands.append(('SET', key, value, 'EX', ex))
+        else:
+            self.commands.append(('SET', key, value))
+        return self
+    
+    def get(self, key):
+        """Add GET command to pipeline."""
+        self.commands.append(('GET', key))
+        return self
+    
+    def execute(self):
+        """Execute all buffered commands."""
+        results = []
+        for cmd in self.commands:
+            try:
+                result = self.client._execute_command(*cmd)
+                results.append(result)
+            except Exception as e:
+                logger.warning(f"Error executing pipeline command {cmd}: {e}")
+                results.append(None)
+        self.commands = []  # Clear commands after execution
+        return results
+
 
 
 def create_upstash_client():
