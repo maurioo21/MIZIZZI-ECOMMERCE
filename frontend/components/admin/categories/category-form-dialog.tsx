@@ -137,15 +137,21 @@ export function CategoryFormDialog({
       const imageUrl = data.url || data.secure_url || data.data
       
       console.log(`[v0] Extracted image URL: ${imageUrl}`)
+      console.log(`[v0] Field name to update: ${fieldName}`)
       
       if (!imageUrl) {
         console.error(`[v0] No image URL found in response`, data)
         throw new Error("No image URL returned from server")
       }
       
-      setFormData((prev) => ({
-        ...prev,
-        [fieldName]: imageUrl,
+      console.log(`[v0] Setting ${fieldName} to: ${imageUrl}`)
+      setFormData((prev) => {
+        const updated = {
+          ...prev,
+          [fieldName]: imageUrl,
+        }
+        console.log(`[v0] Updated formData:`, updated)
+        return updated
       }))
 
       toast({
@@ -220,7 +226,8 @@ export function CategoryFormDialog({
       // Helper to normalize URLs for comparison (remove cache-busting params)
       const normalizeUrl = (url: string | undefined) => {
         if (!url) return ""
-        return url.split("?")[0].split("&t=")[0]
+        // Remove query parameters and cache-busting timestamps
+        return url.split("?")[0].split("#")[0].trim()
       }
 
       const normalizedImageUrl = normalizeUrl(editingCategory?.image_url)
@@ -228,22 +235,23 @@ export function CategoryFormDialog({
       const normalizedImageData = normalizeUrl(imageData)
       const normalizedBannerData = normalizeUrl(bannerData)
 
-      // Add image data if it's a new upload or if the URL has changed
-      if (imageData && normalizedImageData !== normalizedImageUrl) {
-        if (imageData.includes("base64") || !imageData.startsWith("http")) {
+      // Add image data - Always include if it's a Cloudinary URL or if it changed from original
+      if (imageData) {
+        if (imageData.includes("base64") || (!imageData.startsWith("http") && !imageData.startsWith("https"))) {
           // Base64 encoded data - send as base64
           payload.image_data = imageData
           payload.image_mimetype = imageMimetype
           payload.image_filename = "category_image.jpg"
         } else {
-          // URL-based image (e.g., from Cloudinary) - send as URL
+          // URL-based image (e.g., from Cloudinary or external) - send as URL
+          // Always send it regardless of whether it changed, to ensure persistence
           payload.image_url = imageData
         }
       }
 
-      // Add banner data if it's a new upload or if the URL has changed
-      if (bannerData && normalizedBannerData !== normalizedBannerUrl) {
-        if (bannerData.includes("base64") || !bannerData.startsWith("http")) {
+      // Add banner data - Always include if it exists
+      if (bannerData) {
+        if (bannerData.includes("base64") || (!bannerData.startsWith("http") && !bannerData.startsWith("https"))) {
           // Base64 encoded data - send as base64
           payload.banner_data = bannerData
           payload.banner_mimetype = bannerMimetype
@@ -258,6 +266,10 @@ export function CategoryFormDialog({
         ? `${baseUrl}/api/admin/shop-categories/categories/${editingCategory.id}`
         : `${baseUrl}/api/admin/shop-categories/categories`
 
+      console.log(`[v0] Sending payload to ${editingCategory ? "UPDATE" : "CREATE"} endpoint:`, payload)
+      console.log(`[v0] Endpoint URL: ${url}`)
+      console.log(`[v0] Request method: ${editingCategory ? "PUT" : "POST"}`)
+
       const response = await fetch(url, {
         method: editingCategory ? "PUT" : "POST",
         headers: {
@@ -269,10 +281,12 @@ export function CategoryFormDialog({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error(`[v0] API Error: ${response.status}`, errorData)
         throw new Error(errorData.error || "Failed to save category")
       }
 
-      await response.json()
+      const responseData = await response.json()
+      console.log(`[v0] Save successful, response:`, responseData)
 
       toast({
         title: "Success",
