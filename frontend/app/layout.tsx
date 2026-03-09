@@ -45,7 +45,7 @@ export default async function RootLayout({
   })
 
   return (
-    <html lang="en" suppressHydrationWarning className="fixed inset-0 overflow-hidden">
+    <html lang="en" suppressHydrationWarning className="fixed inset-0 overflow-hidden" data-scroll-behavior="smooth">
       <head>
         {/* Suppress React DevTools warning in development */}
         {process.env.NODE_ENV === "development" && (
