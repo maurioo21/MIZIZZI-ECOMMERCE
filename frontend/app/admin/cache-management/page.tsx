@@ -71,9 +71,9 @@ export default function CacheManagementPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900">
+    <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm">
+      <div className="border-b border-gray-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div>
@@ -81,9 +81,9 @@ export default function CacheManagementPage() {
                 <div className="rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 p-2.5">
                   <Zap className="h-6 w-6 text-white" />
                 </div>
-                <h1 className="text-4xl font-bold tracking-tight text-white">Cache Control</h1>
+                <h1 className="text-4xl font-bold tracking-tight text-gray-900">Cache Control</h1>
               </div>
-              <p className="text-sm text-slate-400">Monitor and manage Redis cache systems</p>
+              <p className="text-sm text-gray-600">Monitor and manage Redis cache systems</p>
             </div>
           </div>
         </div>
@@ -92,18 +92,18 @@ export default function CacheManagementPage() {
       {/* Main Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {error && (
-          <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/5 p-4 backdrop-blur-sm">
-            <p className="text-sm text-red-200">{error}</p>
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="text-sm text-red-700">{error}</p>
           </div>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-800/50 border border-slate-700">
-            <TabsTrigger value="overview" className="flex items-center gap-2 text-slate-400 data-[state=active]:text-white">
+          <TabsList className="bg-gray-100 border border-gray-200">
+            <TabsTrigger value="overview" className="flex items-center gap-2 text-gray-700 data-[state=active]:text-gray-900 data-[state=active]:bg-white">
               <Settings className="h-4 w-4" />
               Overview
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2 text-slate-400 data-[state=active]:text-white">
+            <TabsTrigger value="history" className="flex items-center gap-2 text-gray-700 data-[state=active]:text-gray-900 data-[state=active]:bg-white">
               <History className="h-4 w-4" />
               History
             </TabsTrigger>
