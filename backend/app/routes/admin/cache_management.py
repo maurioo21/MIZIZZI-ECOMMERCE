@@ -62,34 +62,38 @@ def admin_required(f):
 
 
 def get_redis_connection():
-    """Get Redis connection from app context with detailed logging"""
-    import sys
+    """Get Redis connection - uses the same client initialized by the main app"""
+    global _redis_connection_cache
+    
+    # Return cached connection if available
+    if hasattr(get_redis_connection, '_cached_client'):
+        return get_redis_connection._cached_client
     
     try:
-        # Try to get redis_client from app.utils.redis_cache
-        from app.utils.redis_cache import redis_cache
-        logger.info("[Cache] Successfully got redis_cache from app.utils.redis_cache")
-        return redis_cache
-    except Exception as e:
-        logger.warning(f"[Cache] Failed to import from app.utils.redis_cache: {str(e)}")
-    
-    try:
-        # Fallback: try to get redis client from cache module
+        # Primary: Get redis_client from app.cache.redis_client (the module that initializes Upstash)
         from app.cache.redis_client import redis_client
-        logger.info("[Cache] Successfully got redis_client from app.cache.redis_client")
-        return redis_client
+        if redis_client is not None:
+            logger.info("[Cache Management] Using redis_client from app.cache.redis_client")
+            get_redis_connection._cached_client = redis_client
+            return redis_client
+    except ImportError as e:
+        logger.warning(f"[Cache Management] Failed to import redis_client from app.cache.redis_client: {e}")
     except Exception as e:
-        logger.warning(f"[Cache] Failed to import from app.cache.redis_client: {str(e)}")
+        logger.warning(f"[Cache Management] Error accessing redis_client: {e}")
     
     try:
-        # Last resort: try configuration.extensions
-        from app.configuration.extensions import redis_cache
-        logger.info("[Cache] Successfully got redis_cache from app.configuration.extensions")
-        return redis_cache
+        # Fallback: Get redis_cache from app.utils.redis_cache
+        from app.utils.redis_cache import redis_cache
+        if redis_cache is not None:
+            logger.info("[Cache Management] Using redis_cache from app.utils.redis_cache")
+            get_redis_connection._cached_client = redis_cache
+            return redis_cache
+    except ImportError as e:
+        logger.warning(f"[Cache Management] Failed to import redis_cache from app.utils.redis_cache: {e}")
     except Exception as e:
-        logger.warning(f"[Cache] Failed to import from app.configuration.extensions: {str(e)}")
+        logger.warning(f"[Cache Management] Error accessing redis_cache: {e}")
     
-    logger.error("[Cache] Failed to get Redis connection from any source")
+    logger.error("[Cache Management] Failed to get Redis connection from any source")
     return None
 
 

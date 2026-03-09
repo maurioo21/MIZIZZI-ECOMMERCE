@@ -228,6 +228,30 @@ class UpstashRedisClient:
         """Increment a counter."""
         result = self._execute_command('INCR', key)
         return result if isinstance(result, int) else 0
+    
+    def dbsize(self) -> int:
+        """Get the number of keys in the database."""
+        result = self._execute_command('DBSIZE')
+        return result if isinstance(result, int) else 0
+    
+    def info(self, section: str = None) -> dict:
+        """Get server info. Section parameter is optional."""
+        try:
+            result = self._execute_command('INFO')
+            if isinstance(result, dict):
+                return result
+            # Parse INFO response if it's a string
+            if isinstance(result, str):
+                info_dict = {}
+                for line in result.split('\r\n'):
+                    if ':' in line and not line.startswith('#'):
+                        key, value = line.split(':', 1)
+                        info_dict[key] = value
+                return info_dict
+            return {}
+        except Exception as e:
+            logger.warning(f"Error executing INFO command: {e}")
+            return {}
 
 
 def create_upstash_client():

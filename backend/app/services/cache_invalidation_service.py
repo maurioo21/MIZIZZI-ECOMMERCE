@@ -335,24 +335,52 @@ class CacheInvalidationService:
 
     def get_status(self) -> Dict:
         """
-        Get current Redis connection status and cache metrics
+        Get current Redis connection status and cache metrics.
+        Handles both standard redis.Redis clients and custom Upstash REST clients.
         """
         try:
             if not self.redis:
+                logger.warning("Redis client is None")
                 return {
                     "connected": False,
                     "error": "Redis connection not available",
+                    "memory_usage": 0,
+                    "keys_count": 0,
+                    "cache_groups": [],
                 }
 
             # Test connection
-            self.redis.ping()
+            if not self.redis.ping():
+                logger.warning("Redis ping failed")
+                return {
+                    "connected": False,
+                    "error": "Redis ping failed",
+                    "memory_usage": 0,
+                    "keys_count": 0,
+                    "cache_groups": [],
+                }
 
-            # Get memory info
-            info = self.redis.info("memory")
-            memory_usage = info.get("used_memory", 0)
+            # Get memory info - handle both standard redis and Upstash clients
+            memory_usage = 0
+            try:
+                info = self.redis.info("memory") if hasattr(self.redis, 'info') else {}
+                if isinstance(info, dict):
+                    memory_usage = info.get("used_memory", 0)
+                    if isinstance(memory_usage, str):
+                        memory_usage = int(memory_usage)
+            except Exception as e:
+                logger.debug(f"Could not get memory info: {e}")
+                memory_usage = 0
 
-            # Count keys in database
-            keys_count = self.redis.dbsize()
+            # Count keys in database - handle both client types
+            keys_count = 0
+            try:
+                keys_count = self.redis.dbsize() if hasattr(self.redis, 'dbsize') else 0
+                if isinstance(keys_count, str):
+                    keys_count = int(keys_count)
+            except Exception as e:
+                logger.debug(f"Could not get dbsize: {e}")
+                keys_count = 0
 
             return {
                 "connected": True,
@@ -371,8 +399,11 @@ class CacheInvalidationService:
             }
 
         except Exception as e:
-            logger.error(f"Error getting cache status: {str(e)}")
+            logger.error(f"Error getting cache status: {str(e)}", exc_info=True)
             return {
                 "connected": False,
                 "error": str(e),
+                "memory_usage": 0,
+                "keys_count": 0,
+                "cache_groups": [],
             }
