@@ -40,59 +40,29 @@ export function parseCloudinaryUrl(
     // Extract cloud name from subdomain (e.g., "da35rsdl0" from "da35rsdl0.res.cloudinary.com")
     const parts = urlObj.hostname.split(".")
     const cloudName = parts[0] // First part is the cloud name
-    
+
     const pathParts = urlObj.pathname.split("/").filter(Boolean)
-    
+
     // Find the public ID (everything after /upload/)
     const uploadIndex = pathParts.indexOf("upload")
     if (uploadIndex === -1) {
       return null
     }
-    
+
     // Everything after /upload/ is potentially the public ID
     let remainingParts = pathParts.slice(uploadIndex + 1)
-    
+
     // Skip version numbers (v123456, v1, etc.) - Cloudinary versions start with 'v' followed by digits
     if (remainingParts.length > 0 && /^v\d+$/.test(remainingParts[0])) {
       remainingParts = remainingParts.slice(1)
     }
-    
+
     // Join the remaining parts to get the public ID
     let publicId = remainingParts.join("/")
-    
-    // Remove any transformation prefix (shouldn't normally be here, but just in case)
-    publicId = publicId.replace(/^[a-z0-9_,]+\//, "")
-    
-    return { cloudName, publicId }
-  } catch (error) {
-    console.error("[v0] Error parsing Cloudinary URL:", error)
-    return null
-  }
-}
 
-    const cloudName = urlObj.hostname.split(".")[0]
-    const pathParts = urlObj.pathname.split("/").filter(Boolean)
-    
-    // Find the public ID (everything after /upload/)
-    const uploadIndex = pathParts.indexOf("upload")
-    if (uploadIndex === -1) {
-      console.warn("[v0] No /upload/ found in Cloudinary URL path:", urlObj.pathname)
-      return null
-    }
-    
-    // Everything after /upload/ is the public ID
-    // This may include version info (v123) and file extension, which we should preserve
-    const remainingParts = pathParts.slice(uploadIndex + 1)
-    
-    // Remove transformation parameters if they exist (they shouldn't in parsed URLs)
-    let publicId = remainingParts.join("/")
-    
     // Remove any transformation prefix (shouldn't normally be here, but just in case)
-    // Transformations come after /upload/ and before the public ID
-    // They look like: w_200,h_150,c_fill, etc.
     publicId = publicId.replace(/^[a-z0-9_,]+\//, "")
-    
-    console.log("[v0] Parsed Cloudinary URL - Cloud:", cloudName, "Public ID:", publicId)
+
     return { cloudName, publicId }
   } catch (error) {
     console.error("[v0] Error parsing Cloudinary URL:", error)
@@ -133,27 +103,27 @@ export function buildCloudinaryUrl(
   // Dimensions
   if (width) transforms.push(`w_${width}`)
   if (height) transforms.push(`h_${height}`)
-  
+
   // Crop mode
   transforms.push(`c_${crop}`)
-  
+
   // Quality (auto optimizes for bandwidth)
   if (typeof quality === "number") {
     transforms.push(`q_${quality}`)
   } else {
     transforms.push(`q_${quality}`)
   }
-  
+
   // Format (auto selects best format for browser)
   transforms.push(`f_${format}`)
-  
+
   // Device pixel ratio
   if (dpr === "auto") {
     transforms.push("dpr_auto")
   } else if (typeof dpr === "number") {
     transforms.push(`dpr_${dpr}`)
   }
-  
+
   // Additional transforms
   if (gravity) transforms.push(`g_${gravity}`)
   if (radius !== undefined) {
@@ -167,13 +137,13 @@ export function buildCloudinaryUrl(
   }
 
   const transformString = transforms.join(",")
-  
+
   // Ensure publicId is clean (no leading slashes)
   const cleanPublicId = publicId.startsWith("/") ? publicId.slice(1) : publicId
-  
+
   // Build final URL
   const finalUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${transformString}/${cleanPublicId}`
-  
+
   return finalUrl
 }
 
@@ -188,7 +158,7 @@ export function buildCloudinaryUrlFromFullUrl(
     console.error("[v0] Empty URL provided to buildCloudinaryUrlFromFullUrl")
     return ""
   }
-  
+
   const parsed = parseCloudinaryUrl(url)
   if (!parsed) {
     console.warn("[v0] Failed to parse Cloudinary URL, returning original:", url)
