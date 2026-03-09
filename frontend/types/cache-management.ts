@@ -22,7 +22,7 @@ export interface CacheStatus {
   connected: boolean
   memoryUsage?: number
   keysCount?: number
-  cacheGroups: CacheGroupStatus[]
+  cacheGroups?: CacheGroupStatus[]
   lastUpdated: string
 }
 

@@ -60,7 +60,9 @@ export function CacheStatusCard({ status, isLoading }: CacheStatusCardProps) {
 
           <div className="space-y-1">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">Cache Groups</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{status.cacheGroups.length}</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+              {status.cacheGroups ? status.cacheGroups.length : 0}
+            </p>
           </div>
 
           {status.keysCount !== undefined && (
