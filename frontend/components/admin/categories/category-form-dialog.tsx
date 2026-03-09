@@ -135,15 +135,15 @@ export function CategoryFormDialog({
 
       const fieldName = type === "category" ? "image_url" : "banner_url"
       const imageUrl = data.url || data.secure_url || data.data
-      
+
       console.log(`[v0] Extracted image URL: ${imageUrl}`)
       console.log(`[v0] Field name to update: ${fieldName}`)
-      
+
       if (!imageUrl) {
         console.error(`[v0] No image URL found in response`, data)
         throw new Error("No image URL returned from server")
       }
-      
+
       console.log(`[v0] Setting ${fieldName} to: ${imageUrl}`)
       setFormData((prev) => {
         const updated = {
@@ -152,7 +152,7 @@ export function CategoryFormDialog({
         }
         console.log(`[v0] Updated formData:`, updated)
         return updated
-      }))
+      })
 
       toast({
         title: "Success",
@@ -301,7 +301,7 @@ export function CategoryFormDialog({
       // Clear caches and force a full refresh of categories
       categoryService.clearCache()
       mutate((key: any) => typeof key === "string" && key.includes("categories"), undefined, { revalidate: true })
-      
+
       // Close dialog and refetch immediately with cache busting to get updated image URLs
       onOpenChange(false)
       onSaveSuccess(true)
