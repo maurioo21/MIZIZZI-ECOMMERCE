@@ -30,6 +30,18 @@ export function CacheStatusCard({ status, isLoading }: CacheStatusCardProps) {
     )
   }
 
+  // Safe date formatting
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "Loading..."
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return "Invalid timestamp"
+      return date.toLocaleString()
+    } catch {
+      return "Invalid timestamp"
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -42,7 +54,7 @@ export function CacheStatusCard({ status, isLoading }: CacheStatusCardProps) {
             {status.connected ? "Connected" : "Disconnected"}
           </Badge>
         </CardTitle>
-        <CardDescription>Last updated: {new Date(status.lastUpdated).toLocaleString()}</CardDescription>
+        <CardDescription>Last updated: {formatDate(status.lastUpdated)}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-6 md:grid-cols-4">

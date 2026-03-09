@@ -87,7 +87,11 @@ def get_redis_connection():
 
 def get_timestamp():
     """Get current timestamp as ISO format string"""
-    return datetime.utcnow().isoformat() if hasattr(datetime, 'utcnow') else datetime.now().isoformat()
+    try:
+        return datetime.utcnow().isoformat() + "Z"
+    except AttributeError:
+        # Python 3.12+ uses datetime.now() instead
+        return datetime.now().isoformat() + "Z"
 
 
 @cache_management_bp.route("/status", methods=["GET"])
