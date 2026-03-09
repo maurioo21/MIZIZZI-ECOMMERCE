@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Plus, Pencil, Trash2, Loader, ImageIcon, ChevronLeft, ChevronRight } from "lucide-react"
+import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
 import { CategoryFormDialog } from "@/components/admin/categories/category-form-dialog"
 import { CategoryDeleteDialog } from "@/components/admin/categories/category-delete-dialog"
@@ -185,10 +186,11 @@ export default function ShopCategoriesAdminPage() {
               >
                 {/* Category Image - Thumbnail */}
                 <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-lg overflow-hidden bg-muted flex-shrink-0 border border-border/50">
-                  <img
+                  <Image
                     src={getValidImageUrl(category.image_url)}
                     alt={category.name}
-                    className="w-full h-full object-cover"
+                    fill
+                    className="object-cover"
                   />
                 </div>
 
