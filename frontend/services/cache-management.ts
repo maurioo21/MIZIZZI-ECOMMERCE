@@ -17,6 +17,8 @@ import { CacheGroupType } from "@/types/cache-management"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000"
 
+console.log("[v0] Cache Management Service - API_BASE_URL:", API_BASE_URL)
+
 /**
  * Get authentication token from localStorage
  */
@@ -44,6 +46,7 @@ async function fetchWithAuth<T>(
   }
 
   const url = `${API_BASE_URL}${endpoint}`
+  console.log("[v0] Cache Management - Fetching:", url)
 
   try {
     const response = await fetch(url, {
@@ -58,12 +61,20 @@ async function fetchWithAuth<T>(
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: response.statusText }))
-      throw new Error(error.message || `Request failed: ${response.status}`)
+      const errorMessage = error.message || `Request failed: ${response.status}`
+      
+      // Provide more helpful error messages
+      if (response.status === 404) {
+        throw new Error(`Endpoint not found: ${endpoint}. Please ensure the backend is properly configured.`)
+      }
+      
+      throw new Error(errorMessage)
     }
 
     return await response.json()
   } catch (error) {
-    console.error(`[Cache Management] API Error at ${endpoint}:`, error)
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error(`[Cache Management] API Error at ${endpoint}:`, errorMsg)
     throw error
   }
 }

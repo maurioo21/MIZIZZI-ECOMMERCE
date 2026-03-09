@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
 import logging
 from sqlalchemy import desc
+from datetime import datetime
 
 # Import cache service and models
 from app.services.cache_invalidation_service import (
@@ -64,10 +65,30 @@ def admin_required(f):
 def get_redis_connection():
     """Get Redis connection from app context"""
     try:
+        # Try to get redis_client from app.utils.redis_cache
+        from app.utils.redis_cache import redis_cache
+        return redis_cache
+    except:
+        pass
+    
+    try:
+        # Fallback: try to get redis client from cache module
+        from app.cache.redis_client import redis_client
+        return redis_client
+    except:
+        pass
+    
+    try:
+        # Last resort: try configuration.extensions (though it may not have redis_cache)
         from app.configuration.extensions import redis_cache
         return redis_cache
     except:
         return None
+
+
+def get_timestamp():
+    """Get current timestamp as ISO format string"""
+    return datetime.utcnow().isoformat() if hasattr(datetime, 'utcnow') else datetime.now().isoformat()
 
 
 @cache_management_bp.route("/status", methods=["GET"])
@@ -82,7 +103,7 @@ def get_cache_status():
         service = CacheInvalidationService(redis_conn)
         
         status = service.get_status()
-        status["last_updated"] = datetime.utcnow().isoformat()
+        status["last_updated"] = get_timestamp()
 
         return jsonify(status), 200
 
@@ -120,7 +141,6 @@ def invalidate_single_cache():
         success, deleted_count, message = service.invalidate_single_pattern(pattern)
 
         # Log the operation (after successful Redis operation)
-        from datetime import datetime
         CacheInvalidationService.log_invalidation(
             admin_id=g.get("admin_id"),
             admin_name=g.get("admin_name"),
@@ -144,7 +164,7 @@ def invalidate_single_cache():
             "message": message,
             "deleted_count": deleted_count,
             "affected_groups": [pattern],
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": get_timestamp(),
         }), 200
 
     except RateLimitError as e:
@@ -221,7 +241,7 @@ def invalidate_cache_group():
             "message": result.get("message"),
             "deleted_count": result.get("deleted_count"),
             "affected_groups": [group],
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": get_timestamp(),
         }), 200
 
     except RateLimitError as e:
@@ -294,7 +314,7 @@ def invalidate_all_caches():
             "message": result.get("message"),
             "deleted_count": result.get("total_deleted"),
             "affected_groups": list(CACHE_GROUPS.keys()),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": get_timestamp(),
         }), 200
 
     except RateLimitError as e:
@@ -356,7 +376,7 @@ def rebuild_caches():
             "success": True,
             "message": result.get("message"),
             "rebuilt_services": result.get("rebuilt_services", []),
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": get_timestamp(),
         }), 200
 
     except Exception as e:
@@ -415,9 +435,6 @@ def get_invalidation_history():
             "message": str(e)
         }), 500
 
-
-# Import datetime at the top of the file
-from datetime import datetime
 
 # Register blueprint with app
 def init_cache_management_routes(app):
