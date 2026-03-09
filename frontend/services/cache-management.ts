@@ -36,13 +36,13 @@ async function fetchWithAuth<T>(
 ): Promise<T> {
   const token = getAuthToken()
 
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-    ...options.headers,
+  const headers = new Headers(options.headers)
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json")
   }
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`
+    headers.set("Authorization", `Bearer ${token}`)
   }
 
   const url = `${API_BASE_URL}${endpoint}`
@@ -62,12 +62,12 @@ async function fetchWithAuth<T>(
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: response.statusText }))
       const errorMessage = error.message || `Request failed: ${response.status}`
-      
+
       // Provide more helpful error messages
       if (response.status === 404) {
         throw new Error(`Endpoint not found: ${endpoint}. Please ensure the backend is properly configured.`)
       }
-      
+
       throw new Error(errorMessage)
     }
 
