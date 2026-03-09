@@ -28,8 +28,7 @@ logger = logging.getLogger(__name__)
 # Create blueprint
 cache_management_bp = Blueprint(
     "cache_management",
-    __name__,
-    url_prefix="/api/admin/cache"
+    __name__
 )
 
 
