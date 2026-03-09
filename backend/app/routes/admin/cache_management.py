@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify, g
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
 import logging
-from sqlalchemy import desc
+from sqlalchemy import desc, select
 from datetime import datetime
 
 # Import cache service and models
@@ -402,19 +402,25 @@ def get_invalidation_history():
         per_page = min(per_page, 100)
 
         from app.models.cache_invalidation_log import CacheInvalidationLog
+        from app.configuration.extensions import db
 
-        # Query logs ordered by timestamp descending
-        query = CacheInvalidationLog.query.order_by(desc(CacheInvalidationLog.created_at))
+        # Use SQLAlchemy 2.0+ session syntax
+        stmt = select(CacheInvalidationLog).order_by(desc(CacheInvalidationLog.created_at))
         
-        total = query.count()
-        logs = query.paginate(page=page, per_page=per_page)
+        # Get total count
+        total_stmt = select(db.func.count()).select_from(CacheInvalidationLog)
+        total = db.session.execute(total_stmt).scalar()
+        
+        # Get paginated results
+        offset = (page - 1) * per_page
+        results = db.session.execute(stmt.offset(offset).limit(per_page)).scalars().all()
 
         return jsonify({
-            "items": [log.to_dict() for log in logs.items],
+            "items": [log.to_dict() for log in results],
             "total": total,
             "page": page,
             "per_page": per_page,
-            "pages": logs.pages,
+            "pages": (total + per_page - 1) // per_page,
         }), 200
 
     except ImportError:
