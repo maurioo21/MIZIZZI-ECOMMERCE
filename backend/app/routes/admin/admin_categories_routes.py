@@ -368,23 +368,30 @@ def upload_category_image():
             alt_text=file.filename
         )
         
+        current_app.logger.info(f"[v0] Cloudinary service result: {result}")
+        
         if not result.get('success'):
             current_app.logger.error(f"Cloudinary upload failed: {result.get('error')}")
             return jsonify({'error': result.get('error', 'Upload failed')}), 500
         
-        current_app.logger.info(f"Category image uploaded to Cloudinary: {result['public_id']}")
+        current_app.logger.info(f"Category image uploaded to Cloudinary: {result.get('public_id')}")
         
-        return jsonify({
+        response = {
             'message': 'Image uploaded successfully to CDN',
             'success': True,
-            'url': result['secure_url'],  # Cloudinary CDN URL
-            'public_id': result['public_id'],
+            'url': result.get('secure_url'),
+            'secure_url': result.get('secure_url'),
+            'public_id': result.get('public_id'),
             'width': result.get('width'),
             'height': result.get('height'),
             'format': result.get('format'),
             'bytes': result.get('bytes'),
             'size': result.get('bytes')
-        }), 200
+        }
+        
+        current_app.logger.info(f"[v0] Returning response: {response}")
+        
+        return jsonify(response), 200
         
     except Exception as e:
         current_app.logger.error(f"Error uploading image: {str(e)}")

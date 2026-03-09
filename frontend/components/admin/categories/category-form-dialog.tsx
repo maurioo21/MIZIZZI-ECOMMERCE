@@ -111,7 +111,10 @@ export function CategoryFormDialog({
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
-      const response = await fetch(`${baseUrl}/api/admin/shop-categories/categories/upload-image`, {
+      const endpoint = `${baseUrl}/api/admin/shop-categories/categories/upload-image`
+      console.log(`[v0] Uploading ${type} image to: ${endpoint}`)
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -119,15 +122,26 @@ export function CategoryFormDialog({
         body: formDataObj,
       })
 
+      console.log(`[v0] Response status: ${response.status}`)
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error(`[v0] Upload error response:`, errorData)
         throw new Error(errorData.error || "Upload failed")
       }
 
       const data = await response.json()
+      console.log(`[v0] Full response data:`, data)
 
       const fieldName = type === "category" ? "image_url" : "banner_url"
-      const imageUrl = data.url || data.data
+      const imageUrl = data.url || data.secure_url || data.data
+      
+      console.log(`[v0] Extracted image URL: ${imageUrl}`)
+      
+      if (!imageUrl) {
+        console.error(`[v0] No image URL found in response`, data)
+        throw new Error("No image URL returned from server")
+      }
       
       setFormData((prev) => ({
         ...prev,
