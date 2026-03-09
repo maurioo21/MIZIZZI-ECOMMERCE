@@ -106,15 +106,14 @@ export function CategoryFormDialog({
       setUploadingImage(type)
       const formDataObj = new FormData()
       formDataObj.append("file", file)
-      formDataObj.append("image_type", type)
 
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
       console.log("[v0] Uploading image to Cloudinary:", { type, fileName: file.name })
 
-      // Use the new Cloudinary upload endpoint
-      const response = await fetch(`${baseUrl}/api/admin/cloudinary/upload/category`, {
+      // Use the Cloudinary upload endpoint
+      const response = await fetch(`${baseUrl}/api/admin/cloudinary/upload`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -136,7 +135,7 @@ export function CategoryFormDialog({
       const fieldName = type === "category" ? "image_url" : "banner_url"
       const imageUrl = data.secure_url || data.url
       
-      console.log("[v0] Image uploaded successfully:", { url: imageUrl, public_id: data.public_id })
+      console.log("[v0] Image uploaded to Cloudinary:", { url: imageUrl, public_id: data.public_id })
 
       setFormData((prev) => ({
         ...prev,
@@ -145,7 +144,7 @@ export function CategoryFormDialog({
 
       toast({
         title: "Success",
-        description: `${type === "category" ? "Category" : "Banner"} image uploaded to Cloudinary`,
+        description: `${type === "category" ? "Category" : "Banner"} image uploaded to Cloudinary CDN`,
       })
     } catch (error) {
       console.error("Error uploading image:", error)
@@ -183,27 +182,6 @@ export function CategoryFormDialog({
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
-      // Extract base64 data from data URLs if they exist
-      let imageData = formData.image_url
-      let imageMimetype = "image/jpeg"
-      if (formData.image_url?.startsWith("data:")) {
-        const matches = formData.image_url.match(/^data:([^;]+);base64,(.+)$/)
-        if (matches) {
-          imageMimetype = matches[1]
-          imageData = matches[2]
-        }
-      }
-
-      let bannerData = formData.banner_url
-      let bannerMimetype = "image/jpeg"
-      if (formData.banner_url?.startsWith("data:")) {
-        const matches = formData.banner_url.match(/^data:([^;]+);base64,(.+)$/)
-        if (matches) {
-          bannerMimetype = matches[1]
-          bannerData = matches[2]
-        }
-      }
-
       const payload: Record<string, any> = {
         name: formData.name.trim(),
         slug: formData.slug || formData.name.toLowerCase().replace(/\s+/g, "-"),
@@ -212,30 +190,14 @@ export function CategoryFormDialog({
         sort_order: formData.sort_order,
       }
 
-      // Add image data if it's a new upload or if the URL has changed
-      if (imageData && imageData !== editingCategory?.image_url) {
-        if (imageData.includes("base64") || !imageData.startsWith("http")) {
-          // Base64 encoded data - send as base64
-          payload.image_data = imageData
-          payload.image_mimetype = imageMimetype
-          payload.image_filename = "category_image.jpg"
-        } else {
-          // URL-based image (e.g., from Cloudinary) - send as URL
-          payload.image_url = imageData
-        }
+      // Add image URL (from Cloudinary) if it's a new upload or has changed
+      if (formData.image_url && formData.image_url !== editingCategory?.image_url) {
+        payload.image_url = formData.image_url
       }
 
-      // Add banner data if it's a new upload or if the URL has changed
-      if (bannerData && bannerData !== editingCategory?.banner_url) {
-        if (bannerData.includes("base64") || !bannerData.startsWith("http")) {
-          // Base64 encoded data - send as base64
-          payload.banner_data = bannerData
-          payload.banner_mimetype = bannerMimetype
-          payload.banner_filename = "category_banner.jpg"
-        } else {
-          // URL-based image - send as URL
-          payload.banner_url = bannerData
-        }
+      // Add banner URL (from Cloudinary) if it's a new upload or has changed
+      if (formData.banner_url && formData.banner_url !== editingCategory?.banner_url) {
+        payload.banner_url = formData.banner_url
       }
 
       const url = editingCategory
