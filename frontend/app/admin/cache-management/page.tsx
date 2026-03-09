@@ -9,6 +9,7 @@ import CacheGroupsDisplay from '@/components/admin/cache-management/cache-groups
 import CacheHistoryTable from '@/components/admin/cache-management/cache-history-table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Zap, History, Settings } from 'lucide-react'
+import { CacheGroupType } from '@/types/cache-management'
 
 export default function CacheManagementPage() {
   const { toast } = useToast()
@@ -25,7 +26,7 @@ export default function CacheManagementPage() {
 
   const handleClearCritical = async () => {
     try {
-      await invalidateCacheGroup('critical')
+      await invalidateCacheGroup(CacheGroupType.CRITICAL)
       toast({ title: 'Success', description: 'Critical caches cleared' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
@@ -34,7 +35,7 @@ export default function CacheManagementPage() {
 
   const handleClearDeferred = async () => {
     try {
-      await invalidateCacheGroup('deferred')
+      await invalidateCacheGroup(CacheGroupType.DEFERRED)
       toast({ title: 'Success', description: 'Deferred caches cleared' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })
@@ -43,7 +44,7 @@ export default function CacheManagementPage() {
 
   const handleClearHomepage = async () => {
     try {
-      await invalidateCacheGroup('homepage')
+      await invalidateCacheGroup(CacheGroupType.HOMEPAGE)
       toast({ title: 'Success', description: 'Homepage caches cleared' })
     } catch (err) {
       toast({ title: 'Error', description: 'Failed to clear caches', variant: 'destructive' })

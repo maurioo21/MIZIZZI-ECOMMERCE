@@ -15,10 +15,10 @@ interface UseCacheManagementOptions {
 export function useCacheManagement(options: UseCacheManagementOptions = {}) {
   const { autoRefresh = true, refreshInterval = 30000 } = options
 
-  const [cacheStatus, setCacheStatus] = useState<CacheStatus | null>(null)
-  const [history, setHistory] = useState<InvalidationHistoryResponse | null>(null)
+  const [cacheStatus, setCacheStatus] = useState<CacheStatus | undefined>(undefined)
+  const [history, setHistory] = useState<InvalidationHistoryResponse | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | undefined>(undefined)
   const [isServiceAvailable, setIsServiceAvailable] = useState(true)
 
   // Fetch cache status
