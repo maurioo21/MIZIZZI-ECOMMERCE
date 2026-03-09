@@ -31,9 +31,17 @@ const nextConfig = {
   },
   images: {
     // Enable Next.js image optimization for proper serving, AVIF/WebP generation, and responsive sizing
+    // For Cloudinary URLs, unoptimized=true is used since Cloudinary provides pre-optimized images
     unoptimized: false,
     
     remotePatterns: [
+      // Cloudinary - Already optimized, disable Next.js optimization for these
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
+      // Pexels
       {
         protocol: 'https',
         hostname: 'images.pexels.com',
@@ -44,6 +52,7 @@ const nextConfig = {
         hostname: '*.pexels.com',
         pathname: '/**',
       },
+      // Unsplash
       {
         protocol: 'https',
         hostname: 'images.unsplash.com',
@@ -54,6 +63,7 @@ const nextConfig = {
         hostname: '*.unsplash.com',
         pathname: '/**',
       },
+      // Vercel Blob Storage
       {
         protocol: 'https',
         hostname: 'hebbkx1anhila5yf.public.blob.vercel-storage.com',
@@ -64,21 +74,19 @@ const nextConfig = {
         hostname: '*.vercel-storage.com',
         pathname: '/**',
       },
+      // Placeholder services
       {
         protocol: 'https',
         hostname: 'via.placeholder.com',
         pathname: '/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'res.cloudinary.com',
-        pathname: '/**',
-      },
+      // Wikimedia
       {
         protocol: 'https',
         hostname: 'upload.wikimedia.org',
         pathname: '/**',
       },
+      // Backend uploads
       {
         protocol: 'https',
         hostname: 'mizizzi-ecommerce-1.onrender.com',
@@ -90,6 +98,7 @@ const nextConfig = {
         port: '5000',
         pathname: '/api/uploads/**',
       },
+      // Fallback for any HTTPS domain (catch-all)
       {
         protocol: 'https',
         hostname: '**',

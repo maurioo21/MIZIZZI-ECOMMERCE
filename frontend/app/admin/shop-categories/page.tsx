@@ -208,6 +208,7 @@ export default function ShopCategoriesAdminPage() {
                     className="object-cover"
                     loading="lazy"
                     quality={85}
+                    unoptimized={category.image_url?.includes('cloudinary') ?? false}
                   />
                 </div>
 
