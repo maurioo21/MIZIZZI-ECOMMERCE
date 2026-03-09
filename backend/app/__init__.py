@@ -1004,6 +1004,19 @@ def create_app(config_name=None, enable_socketio=True):
         except ImportError:
             app.logger.debug(f"Admin shop categories routes import failed: {e}")
     
+    # Import cache management routes
+    try:
+        from app.routes.admin.cache_management import cache_management_bp
+        imported_blueprints['cache_management_routes'] = cache_management_bp
+        app.logger.info("✅ cache_management_routes → /api/admin/cache")
+    except ImportError as e:
+        try:
+            from routes.admin.cache_management import cache_management_bp
+            imported_blueprints['cache_management_routes'] = cache_management_bp
+            app.logger.info("✅ cache_management_routes → /api/admin/cache")
+        except ImportError:
+            app.logger.debug(f"Cache management routes import failed: {e}")
+    
     # Use imported blueprints or fallbacks
     final_blueprints = {}
     for blueprint_name in fallback_blueprints:
