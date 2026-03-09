@@ -1,18 +1,23 @@
 """
 Admin routes for managing categories including CRUD operations and image uploads.
 This file mirrors backend/routes/admin/admin_categories_routes.py for import compatibility.
+Uses Cloudinary for image storage instead of database binary storage.
 """
 from flask import Blueprint, request, jsonify, current_app, send_file
 from functools import wraps
 import os
 from werkzeug.utils import secure_filename
 from app.models.models import db, Category
+from app.services.cloudinary_service import CloudinaryService
 from datetime import datetime
 import re
 import inspect
 import threading
 import io
 import base64
+
+# Initialize Cloudinary service
+cloudinary_service = CloudinaryService()
 
 admin_categories_bp = Blueprint('admin_categories', __name__)
 
@@ -165,7 +170,7 @@ def get_category(category_id):
 @admin_categories_bp.route('/categories', methods=['POST'])
 @admin_required
 def create_category():
-    """Create new category with database-stored images"""
+    """Create new category with Cloudinary image support"""
     try:
         data = request.get_json()
         
@@ -191,26 +196,17 @@ def create_category():
             updated_at=datetime.utcnow()
         )
         
-        # Handle image data (if provided as base64)
-        if data.get('image_data'):
-            try:
-                # Decode base64 image data
-                image_binary = base64.b64decode(data['image_data'])
-                category.image_data = image_binary
-                category.image_filename = data.get('image_filename', 'category_image.jpg')
-                category.image_mimetype = data.get('image_mimetype', 'image/jpeg')
-            except Exception as e:
-                current_app.logger.error(f"Error decoding image data: {str(e)}")
+        # Handle category image - now expects Cloudinary URL
+        if data.get('image_url'):
+            # Store Cloudinary URL directly
+            category.image_url = data['image_url']
+            current_app.logger.info(f"Category image URL set: {data['image_url']}")
         
-        # Handle banner data (if provided as base64)
-        if data.get('banner_data'):
-            try:
-                banner_binary = base64.b64decode(data['banner_data'])
-                category.banner_data = banner_binary
-                category.banner_filename = data.get('banner_filename', 'category_banner.jpg')
-                category.banner_mimetype = data.get('banner_mimetype', 'image/jpeg')
-            except Exception as e:
-                current_app.logger.error(f"Error decoding banner data: {str(e)}")
+        # Handle banner image - now expects Cloudinary URL
+        if data.get('banner_url'):
+            # Store Cloudinary URL directly
+            category.banner_url = data['banner_url']
+            current_app.logger.info(f"Category banner URL set: {data['banner_url']}")
         
         db.session.add(category)
         db.session.commit()
@@ -244,7 +240,7 @@ def create_category():
 @admin_categories_bp.route('/categories/<int:category_id>', methods=['PUT'])
 @admin_required
 def update_category(category_id):
-    """Update existing category including database-stored images"""
+    """Update existing category with Cloudinary image support"""
     try:
         category = Category.query.get_or_404(category_id)
         data = request.get_json()
@@ -266,37 +262,15 @@ def update_category(category_id):
         if 'description' in data:
             category.description = data['description']
         
-        # Handle image updates
-        if 'image_data' in data and data['image_data']:
-            try:
-                image_binary = base64.b64decode(data['image_data'])
-                category.image_data = image_binary
-                category.image_filename = data.get('image_filename', 'category_image.jpg')
-                category.image_mimetype = data.get('image_mimetype', 'image/jpeg')
-                category.image_url = None  # Clear old URL
-            except Exception as e:
-                current_app.logger.error(f"Error decoding image data: {str(e)}")
-        elif 'image_url' in data and data['image_url']:
-            # Handle image URL (e.g., from Cloudinary) - store the URL directly
+        # Handle image updates - now expects Cloudinary URL
+        if 'image_url' in data and data['image_url']:
             category.image_url = data['image_url']
-            category.image_data = None  # Clear binary data if switching to URL
-            current_app.logger.info(f"Category {category_id} image URL updated to: {data['image_url']}")
+            current_app.logger.info(f"Category image updated: {data['image_url']}")
         
-        # Handle banner updates
-        if 'banner_data' in data and data['banner_data']:
-            try:
-                banner_binary = base64.b64decode(data['banner_data'])
-                category.banner_data = banner_binary
-                category.banner_filename = data.get('banner_filename', 'category_banner.jpg')
-                category.banner_mimetype = data.get('banner_mimetype', 'image/jpeg')
-                category.banner_url = None  # Clear old URL
-            except Exception as e:
-                current_app.logger.error(f"Error decoding banner data: {str(e)}")
-        elif 'banner_url' in data and data['banner_url']:
-            # Handle banner URL (e.g., from Cloudinary) - store the URL directly
+        # Handle banner updates - now expects Cloudinary URL
+        if 'banner_url' in data and data['banner_url']:
             category.banner_url = data['banner_url']
-            category.banner_data = None  # Clear binary data if switching to URL
-            current_app.logger.info(f"Category {category_id} banner URL updated to: {data['banner_url']}")
+            current_app.logger.info(f"Category banner updated: {data['banner_url']}")
         
         if 'is_featured' in data:
             category.is_featured = data['is_featured']
@@ -368,7 +342,7 @@ def delete_category(category_id):
 @admin_categories_bp.route('/categories/upload-image', methods=['POST'])
 @admin_required
 def upload_category_image():
-    """Upload category image and save to database"""
+    """Upload category image to Cloudinary CDN"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
@@ -381,33 +355,42 @@ def upload_category_image():
         if not allowed_file(file.filename):
             return jsonify({'error': 'Invalid file type. Allowed: png, jpg, jpeg, gif, webp'}), 400
         
-        filename = secure_filename(file.filename)
+        current_app.logger.info(f"Uploading category image to Cloudinary: {file.filename}")
         
-        # Read the file data into memory
-        file_data = file.read()
-        file_mimetype = file.content_type or 'image/jpeg'
+        # Get category_id from request if provided for organization
+        category_id = request.form.get('category_id', 0)
+        category_id = int(category_id) if str(category_id).isdigit() else 0
         
-        # Store in a temporary session variable or return for client to attach to category
-        # Since we don't have a category_id yet, return a data URL or store temporarily
-        file_base64 = base64.b64encode(file_data).decode('utf-8')
-        data_url = f"data:{file_mimetype};base64,{file_base64}"
+        # Upload to Cloudinary
+        result = cloudinary_service.upload_category_image(
+            file=file,
+            category_id=category_id,
+            alt_text=file.filename
+        )
         
-        current_app.logger.info(f"Category image uploaded to memory: {filename}")
+        if not result.get('success'):
+            current_app.logger.error(f"Cloudinary upload failed: {result.get('error')}")
+            return jsonify({'error': result.get('error', 'Upload failed')}), 500
+        
+        current_app.logger.info(f"Category image uploaded to Cloudinary: {result['public_id']}")
         
         return jsonify({
-            'message': 'File uploaded successfully',
-            'url': data_url,  # Return data URL for preview
-            'filename': filename,
-            'mimetype': file_mimetype,
-            'data': file_base64,  # Send base64 data to be saved with category
-            'size': len(file_data)
+            'message': 'Image uploaded successfully to CDN',
+            'success': True,
+            'url': result['secure_url'],  # Cloudinary CDN URL
+            'public_id': result['public_id'],
+            'width': result.get('width'),
+            'height': result.get('height'),
+            'format': result.get('format'),
+            'bytes': result.get('bytes'),
+            'size': result.get('bytes')
         }), 200
         
     except Exception as e:
         current_app.logger.error(f"Error uploading image: {str(e)}")
         import traceback
         current_app.logger.error(traceback.format_exc())
-        return jsonify({'error': 'Failed to upload image'}), 500
+        return jsonify({'error': f'Failed to upload image: {str(e)}'}), 500
 
 @admin_categories_bp.route('/categories/<int:category_id>/image', methods=['GET'])
 def get_category_image(category_id):
