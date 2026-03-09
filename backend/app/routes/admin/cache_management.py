@@ -19,7 +19,7 @@ from app.services.cache_invalidation_service import (
 )
 from app.config.cache_groups import (
     CACHE_GROUPS,
-    CACHE_GROUPS_CONFIG,
+    CACHE_PATTERNS,
     get_cache_group_patterns,
 )
 
