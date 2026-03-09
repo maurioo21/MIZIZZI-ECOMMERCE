@@ -217,8 +217,19 @@ export function CategoryFormDialog({
         sort_order: formData.sort_order,
       }
 
+      // Helper to normalize URLs for comparison (remove cache-busting params)
+      const normalizeUrl = (url: string | undefined) => {
+        if (!url) return ""
+        return url.split("?")[0].split("&t=")[0]
+      }
+
+      const normalizedImageUrl = normalizeUrl(editingCategory?.image_url)
+      const normalizedBannerUrl = normalizeUrl(editingCategory?.banner_url)
+      const normalizedImageData = normalizeUrl(imageData)
+      const normalizedBannerData = normalizeUrl(bannerData)
+
       // Add image data if it's a new upload or if the URL has changed
-      if (imageData && imageData !== editingCategory?.image_url) {
+      if (imageData && normalizedImageData !== normalizedImageUrl) {
         if (imageData.includes("base64") || !imageData.startsWith("http")) {
           // Base64 encoded data - send as base64
           payload.image_data = imageData
@@ -231,7 +242,7 @@ export function CategoryFormDialog({
       }
 
       // Add banner data if it's a new upload or if the URL has changed
-      if (bannerData && bannerData !== editingCategory?.banner_url) {
+      if (bannerData && normalizedBannerData !== normalizedBannerUrl) {
         if (bannerData.includes("base64") || !bannerData.startsWith("http")) {
           // Base64 encoded data - send as base64
           payload.banner_data = bannerData

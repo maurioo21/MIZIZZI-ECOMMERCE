@@ -187,7 +187,7 @@ export default function ShopCategoriesAdminPage() {
                 {/* Category Image - Thumbnail */}
                 <div className="relative h-16 w-16 sm:h-20 sm:w-20 rounded-lg overflow-hidden bg-muted flex-shrink-0 border border-border/50">
                   <Image
-                    src={getValidImageUrl(category.image_url)}
+                    src={getValidImageUrl(category.image_url, true)}
                     alt={category.name}
                     fill
                     className="object-cover"
