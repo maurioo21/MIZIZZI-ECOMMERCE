@@ -128,8 +128,10 @@ export function CategoryFormDialog({
 
       const data = await response.json()
 
+      console.log("[v0] Full response from Cloudinary upload:", JSON.stringify(data, null, 2))
+
       if (!data.success) {
-        throw new Error(data.message || "Upload failed")
+        throw new Error(data.error || data.message || "Upload failed")
       }
 
       const fieldName = type === "category" ? "image_url" : "banner_url"

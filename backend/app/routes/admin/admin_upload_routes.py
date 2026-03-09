@@ -493,6 +493,74 @@ def upload_carousel_banner():
             'details': str(e)
         }), 500
 
+@admin_upload_routes.route('/cloudinary/upload', methods=['POST', 'OPTIONS'])
+@cross_origin()
+@jwt_required()
+def upload_to_cloudinary():
+    """Generic Cloudinary upload endpoint for images"""
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'ok'})
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
+
+    # Check admin permissions
+    auth_check = admin_required()
+    if auth_check:
+        return auth_check
+
+    try:
+        current_app.logger.info(f"[v0] Cloudinary upload request received, files: {list(request.files.keys())}")
+
+        # Check if file is present
+        file = None
+        for field_name in ['file', 'image']:
+            if field_name in request.files:
+                file = request.files[field_name]
+                current_app.logger.info(f"[v0] Found file in field: {field_name}")
+                break
+
+        if not file or file.filename == '':
+            return jsonify({'success': False, 'error': 'No image file provided'}), 400
+
+        # Import Cloudinary service
+        from ...services.cloudinary_service import CloudinaryService
+        cloudinary_service = CloudinaryService()
+
+        # Upload to Cloudinary (generic upload)
+        upload_result = cloudinary_service.upload_product_image(file, product_id=0)
+
+        if not upload_result.get('success'):
+            current_app.logger.error(f"[v0] Cloudinary upload failed: {upload_result.get('error')}")
+            return jsonify({'success': False, 'error': upload_result.get('error', 'Upload failed')}), 400
+
+        current_app.logger.info(
+            f"[v0] Image uploaded successfully to Cloudinary: {upload_result['public_id']}"
+        )
+
+        return jsonify({
+            'success': True,
+            'url': upload_result['secure_url'],
+            'secure_url': upload_result['secure_url'],
+            'public_id': upload_result['public_id'],
+            'filename': secure_filename(file.filename),
+            'size': upload_result['bytes'],
+            'format': upload_result['format'],
+            'uploadedBy': get_jwt_identity(),
+            'uploadedAt': datetime.now().isoformat()
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"[v0] Error uploading to Cloudinary: {str(e)}")
+        import traceback
+        current_app.logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': 'Failed to upload image',
+            'details': str(e)
+        }), 500
+
 # Add this new route for public image access (no authentication required)
 @admin_upload_routes.route('/uploads/<path:filename>')
 def serve_uploaded_file_public(filename):
