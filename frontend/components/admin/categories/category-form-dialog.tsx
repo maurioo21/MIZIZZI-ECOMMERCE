@@ -20,6 +20,8 @@ import {
   getCategoryDisplayImageUrl,
   getBannerImageUrl 
 } from "@/lib/cloudinary-image-handler"
+import { clearCategoriesCache } from "@/hooks/use-categories-cache"
+import { forceRefreshCategories } from "@/lib/category-cache-utils"
 
 interface Category {
   id: number
@@ -471,8 +473,28 @@ export function CategoryFormDialog({
         description: `Category ${editingCategory ? "updated" : "created"} successfully`,
       })
 
-      // Refresh SWR cache
+      // Clear frontend browser cache for categories
+      console.log("[v0] Clearing browser categories cache")
+      clearCategoriesCache()
+      forceRefreshCategories()
+
+      // Refresh SWR cache for admin
       mutate("/api/admin/shop-categories/categories")
+      
+      // Revalidate server-side cache for homepage
+      try {
+        console.log("[v0] Revalidating server-side cache")
+        await fetch("/api/revalidate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tags: ["homepage", "feature-cards", "categories"] }),
+        })
+      } catch (error) {
+        console.error("[v0] Cache revalidation failed (non-critical):", error)
+      }
+      
+      // Force refresh homepage data
+      mutate("/api/homepage")
 
       // Close dialog
       onOpenChange(false)

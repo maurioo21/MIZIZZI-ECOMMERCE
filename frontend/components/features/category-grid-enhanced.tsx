@@ -4,6 +4,7 @@ import { useRef, useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react"
 import type { Category } from "@/lib/server/get-categories"
+import { onCategoriesUpdated } from "@/lib/category-cache-utils"
 
 interface CategoryGridProps {
   categories?: Category[]
@@ -91,6 +92,20 @@ const CategoryCard = ({
 
 export function CategoryGrid({ categories = [] }: CategoryGridProps) {
   const carouselRef = useRef<HTMLDivElement>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    // Listen for category cache updates from admin
+    const unsubscribe = onCategoriesUpdated(() => {
+      console.log("[v0] Categories updated event received, refreshing...")
+      // Force a re-render to pick up fresh category data
+      setRefreshKey(prev => prev + 1)
+      // Reload the page to get fresh data from server
+      window.location.href = window.location.href
+    })
+
+    return unsubscribe
+  }, [])
 
   useEffect(() => {
     if (categories.length === 0) return

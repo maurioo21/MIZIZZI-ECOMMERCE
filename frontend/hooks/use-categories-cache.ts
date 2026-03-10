@@ -6,7 +6,7 @@ import { recordCacheMetric } from '@/lib/performance-metrics'
 
 const CACHE_KEY = 'mizizzi_categories_cache'
 const CACHE_EXPIRY_KEY = 'mizizzi_categories_cache_expiry'
-const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+const CACHE_TTL = 60 * 60 * 1000 // 1 hour in milliseconds (reduced from 24h for faster admin updates)
 
 interface CacheEntry {
   data: Category[]
