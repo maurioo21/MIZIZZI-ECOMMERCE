@@ -231,12 +231,26 @@ class ProductDetailsService:
             selectinload(Product.brand)
         )
         
-        product = query.filter(
-            Product.is_active == True,
-            Product.is_visible == True
-        ).first()
+        # Apply visibility filters (can be bypassed with ?include_inactive=true for testing)
+        include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
+        if not include_inactive:
+            query = query.filter(
+                Product.is_active == True,
+                Product.is_visible == True
+            )
+        
+        product = query.first()
         
         if not product:
+            # Log diagnostic info
+            if product_id:
+                all_products = db.session.query(Product).filter(Product.id == product_id).all()
+                if all_products:
+                    p = all_products[0]
+                    current_app.logger.warning(
+                        f"Product {product_id} exists but filtered out: "
+                        f"is_active={p.is_active}, is_visible={p.is_visible}"
+                    )
             return None
         
         # Build response with parallel data fetching
