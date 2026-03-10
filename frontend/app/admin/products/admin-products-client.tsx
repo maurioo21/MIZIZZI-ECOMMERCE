@@ -1083,24 +1083,24 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
   }, [filteredProducts, currentPage, filterState.pageSize])
 
   return (
-    <div className="min-h-screen bg-white p-2 sm:p-3 md:p-6 space-y-3 sm:space-y-4 md:space-y-6 w-full overflow-x-hidden">
-      {/* Header */}
-      <div className="bg-white rounded-lg p-3 sm:p-4 md:p-6 shadow-sm border border-gray-100">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-gray-900">Products</h1>
-            <p className="text-gray-600 text-xs sm:text-sm md:text-base mt-1">Manage your product catalog</p>
+    <div className="min-h-screen bg-gray-50 px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-3 md:py-4 lg:py-6 space-y-3 sm:space-y-4 md:space-y-6">
+      {/* Header Section */}
+      <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-3 sm:p-4 md:p-5 lg:p-6 shadow-sm border border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 md:gap-6">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 truncate">Products</h1>
+            <p className="text-xs sm:text-sm md:text-base text-gray-600 mt-1">Manage your product catalog efficiently</p>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap flex-shrink-0">
             {!isMobile && (
               <>
-                <Button variant="outline" size="sm" className="rounded-lg text-xs h-8 sm:h-9">
-                  <Download className="mr-1 h-3 md:h-4 w-3 md:w-4" />
-                  <span className="hidden sm:inline text-xs md:text-sm">Export</span>
+                <Button variant="outline" size="sm" className="rounded-lg text-xs h-8 sm:h-9 whitespace-nowrap">
+                  <Download className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline text-xs">Export</span>
                 </Button>
-                <Button variant="outline" size="sm" className="rounded-lg text-xs h-8 sm:h-9">
-                  <Upload className="mr-1 h-3 md:h-4 w-3 md:w-4" />
-                  <span className="hidden sm:inline text-xs md:text-sm">Import</span>
+                <Button variant="outline" size="sm" className="rounded-lg text-xs h-8 sm:h-9 whitespace-nowrap">
+                  <Upload className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline text-xs">Import</span>
                 </Button>
               </>
             )}
@@ -1109,25 +1109,25 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
               size="sm"
               onClick={handleRefresh}
               disabled={uiState.isLoading}
-              className="rounded-lg text-xs h-8 sm:h-9"
+              className="rounded-lg text-xs h-8 sm:h-9 whitespace-nowrap"
             >
-              {uiState.isLoading ? <MiniSpinner /> : <RefreshCw className="h-3 md:h-4 w-3 md:w-4" />}
-              <span className="ml-1 hidden sm:inline text-xs md:text-sm">Refresh</span>
+              {uiState.isLoading ? <MiniSpinner /> : <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />}
+              <span className="ml-0.5 sm:ml-1 hidden xs:inline text-xs">Refresh</span>
             </Button>
             <Button
               onClick={() => router.push("/admin/products/new")}
               size="sm"
-              className="rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-xs h-8 sm:h-9"
+              className="rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-xs h-8 sm:h-9 whitespace-nowrap"
             >
-              <Plus className="h-4 w-4" />
-              <span className="ml-1 hidden sm:inline">Add Product</span>
+              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="ml-0.5 sm:ml-1 hidden sm:inline">Add Product</span>
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Stats Grid - Responsive with vibrant colors */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 mb-4">
+      {/* Stats Grid - Fully Responsive */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5 md:gap-3 lg:gap-4">
         <StatsCard
           title="Total Products"
           value={productStats?.totalProducts || 0}
@@ -1158,7 +1158,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
         />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5 md:gap-3 lg:gap-4">
         <StatsCard
           title="New Products"
           value={productStats?.newProducts || 0}
@@ -1189,52 +1189,64 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
         />
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+      <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Search & Filters Section */}
+        <div className="p-3 sm:p-4 md:p-5 lg:p-6 border-b border-gray-100">
+          <div className="flex flex-col gap-3 sm:gap-4">
+            {/* Search Bar - Full width on mobile */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-3 items-stretch sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none flex-shrink-0" />
                 <Input
-                  placeholder="Search products..."
+                  placeholder="Search products by name, SKU..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="pl-10 w-80 rounded-full border-gray-200 focus:border-gray-300"
+                  className="pl-10 w-full rounded-lg sm:rounded-full border-gray-200 focus:border-gray-400 text-xs sm:text-sm h-9 sm:h-10"
                 />
               </div>
               <Sheet open={uiState.isFilterSheetOpen} onOpenChange={(open) => setUiState((prev) => ({ ...prev, isFilterSheetOpen: open }))}>
                 <SheetTrigger asChild>
                   <Button
                     variant="outline"
+                    size="sm"
                     className={cn(
-                      "rounded-full border-gray-200 hover:bg-gray-50 transition-all duration-200",
+                      "rounded-lg sm:rounded-full border-gray-200 hover:bg-gray-50 transition-all duration-200 h-9 sm:h-10 whitespace-nowrap",
                       uiState.isFilterActive && "bg-blue-50 border-blue-200 text-blue-700",
                     )}
                   >
-                    <Filter className="mr-2 h-4 w-4" />
-                    Filters{" "}
-                    {uiState.isFilterActive &&
-                      `(${Object.values({ searchQuery: filterState.debouncedSearchQuery, filterOption: filterState.filterOption, categoryFilter: filterState.categoryFilter }).filter(Boolean).length})`}
+                    <Filter className="h-4 w-4 mr-1.5 flex-shrink-0" />
+                    <span className="text-xs sm:text-sm">Filters</span>
+                    {uiState.isFilterActive && (
+                      <span className="ml-1 text-xs font-semibold">
+                        ({Object.values({
+                          searchQuery: filterState.debouncedSearchQuery,
+                          filterOption: filterState.filterOption,
+                          categoryFilter: filterState.categoryFilter,
+                        }).filter(Boolean).length})
+                      </span>
+                    )}
                   </Button>
                 </SheetTrigger>
-                <SheetContent className="w-96">
-                  <SheetHeader>
-                    <SheetTitle className="text-xl font-semibold">Filter Products</SheetTitle>
-                    <SheetDescription className="text-gray-600">
-                      Apply filters to narrow down your product list
+                <SheetContent className="w-full sm:w-96 p-0">
+                  <SheetHeader className="p-4 sm:p-6 border-b border-gray-100">
+                    <SheetTitle className="text-lg sm:text-xl font-semibold">Filter Products</SheetTitle>
+                    <SheetDescription className="text-xs sm:text-sm text-gray-600">
+                      Customize your product view
                     </SheetDescription>
                   </SheetHeader>
-                  <div className="py-6 space-y-6">
+                  <div className="py-4 sm:py-6 px-4 sm:px-6 space-y-4 sm:space-y-6 max-h-[calc(100vh-150px)] overflow-y-auto">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2">Category</h3>
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Category</h3>
                       <Select
                         value={filterState.categoryFilter?.toString() || "all"}
-                        onValueChange={(value) => handleFilterChange("categoryFilter", value === "all" ? null : Number.parseInt(value))}
+                        onValueChange={(value) =>
+                          handleFilterChange("categoryFilter", value === "all" ? null : Number.parseInt(value))
+                        }
                       >
-                        <SelectTrigger className="w-full rounded-full border-gray-200">
+                        <SelectTrigger className="w-full rounded-lg sm:rounded-full border-gray-200 text-xs sm:text-sm h-9">
                           <SelectValue placeholder="All Categories" />
                         </SelectTrigger>
-                        <SelectContent className="rounded-xl">
+                        <SelectContent className="rounded-lg sm:rounded-xl">
                           <SelectItem value="all">All Categories</SelectItem>
                           {categories.map((category) => (
                             <SelectItem key={category.id} value={category.id.toString()}>
@@ -1524,8 +1536,9 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
         </div>
 
         <Tabs defaultValue="all" value={uiState.activeTab} onValueChange={(value) => setUiState((prev) => ({ ...prev, activeTab: value }))}>
-          <div className="px-6 py-4 border-b border-gray-100">
-            <TabsList className="grid grid-cols-4 md:grid-cols-8 gap-1 bg-gray-50 p-1 rounded-2xl">
+          {/* Responsive Tabs - Scrollable on mobile */}
+          <div className="px-3 sm:px-4 md:px-5 lg:px-6 py-2 sm:py-3 border-b border-gray-100 overflow-x-auto">
+            <TabsList className="inline-flex grid-cols-4 md:grid-cols-8 gap-1 sm:gap-1.5 bg-gray-50 p-1 rounded-lg sm:rounded-2xl w-max md:w-full md:inline-grid">
               {[
                 { value: "all", label: "All", count: allProducts.length, icon: Package },
                 { value: "in_stock", label: "In Stock", count: productStats?.inStock || 0, icon: CheckCircle2 },
@@ -1533,18 +1546,18 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                 { value: "featured", label: "Featured", count: productStats?.featured || 0, icon: Star },
                 { value: "on_sale", label: "On Sale", count: productStats?.onSale || 0, icon: Percent },
                 { value: "new", label: "New", count: productStats?.newProducts || 0, icon: Sparkles },
-                { value: "trending", label: "Trending", count: 0, icon: TrendingUp }, // Placeholder count
-                { value: "luxury_deal", label: "Luxury", count: productStats?.luxuryDeal || 0, icon: Crown }, // Use luxuryDeal count
+                { value: "trending", label: "Trending", count: 0, icon: TrendingUp },
+                { value: "luxury_deal", label: "Luxury", count: productStats?.luxuryDeal || 0, icon: Crown },
               ].map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="text-xs md:text-sm rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2"
+                  className="text-xs md:text-sm rounded-lg md:rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 md:gap-2 px-1.5 sm:px-2 md:px-3 py-1.5 md:py-2 whitespace-nowrap flex-shrink-0 md:flex-shrink"
                 >
-                  <tab.icon className="h-3 w-3" />
-                  <span className="hidden md:inline">{tab.label}</span>
-                  <span className="md:hidden">{tab.label.slice(0, 3)}</span>
-                  <Badge variant="secondary" className="ml-1 text-xs">
+                  <tab.icon className="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
+                  <span className="hidden sm:inline text-xs md:text-sm">{tab.label}</span>
+                  <span className="sm:hidden text-xs font-semibold">{tab.label.slice(0, 1)}</span>
+                  <Badge variant="secondary" className="ml-0 sm:ml-1 text-xs px-1.5 py-0 h-5 hidden sm:inline-flex">
                     {tab.count}
                   </Badge>
                 </TabsTrigger>
@@ -1552,81 +1565,76 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
             </TabsList>
           </div>
 
-          <div className="p-6">
+          <div className="p-3 sm:p-4 md:p-5 lg:p-6">
             {dialogState.errorMessage ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <AlertCircle className="h-16 w-16 text-red-500 mb-6" />
-                <h3 className="text-2xl font-bold mb-3">Failed to load products</h3>
-                <p className="text-gray-600 mb-6 max-w-md">{dialogState.errorMessage || "Failed to load products."}</p>
-                <Button onClick={fetchProducts} className="rounded-full bg-gray-900 hover:bg-gray-800">
-                  {" "}
-                  {/* Use fetchProducts */}
-                  <RefreshCw className="mr-2 h-4 w-4" />
+              <div className="flex flex-col items-center justify-center py-12 sm:py-20 px-4 text-center">
+                <AlertCircle className="h-12 sm:h-16 w-12 sm:w-16 text-red-500 mb-4 sm:mb-6" />
+                <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-3 text-gray-900">Failed to load products</h3>
+                <p className="text-xs sm:text-base text-gray-600 mb-4 sm:mb-6 max-w-md">{dialogState.errorMessage || "Failed to load products."}</p>
+                <Button onClick={fetchProducts} className="rounded-lg sm:rounded-full bg-gray-900 hover:bg-gray-800 text-xs sm:text-sm h-8 sm:h-10">
+                  <RefreshCw className="mr-2 h-3 sm:h-4 w-3 sm:w-4" />
                   Try Again
                 </Button>
               </div>
             ) : filteredProducts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <Package className="h-16 w-16 text-gray-400 mb-6" />
-                <h3 className="text-2xl font-bold mb-3">No products found</h3>
-                <p className="text-gray-600 mb-6 max-w-md">
+              <div className="flex flex-col items-center justify-center py-12 sm:py-20 px-4 text-center">
+                <Package className="h-12 sm:h-16 w-12 sm:w-16 text-gray-400 mb-4 sm:mb-6" />
+                <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-3 text-gray-900">No products found</h3>
+                <p className="text-xs sm:text-base text-gray-600 mb-4 sm:mb-6 max-w-md">
                   {uiState.isFilterActive
                     ? "Try adjusting your filters to see more results"
                     : "Get started by adding your first product to the catalog"}
                 </p>
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3 flex-wrap justify-center">
                   {uiState.isFilterActive && (
-                    <Button variant="outline" onClick={resetFilters} className="rounded-full bg-transparent">
-                      <X className="mr-2 h-4 w-4" />
+                    <Button variant="outline" onClick={resetFilters} className="rounded-lg sm:rounded-full bg-transparent text-xs sm:text-sm h-8 sm:h-10">
+                      <X className="mr-1 h-3 sm:h-4 w-3 sm:w-4" />
                       Reset Filters
                     </Button>
                   )}
                   <Button
                     onClick={() => router.push("/admin/products/new")}
-                    className="rounded-full bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700"
+                    className="rounded-lg sm:rounded-full bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-xs sm:text-sm h-8 sm:h-10"
                   >
-                    <Plus className="mr-2 h-4 w-4" /> Add Your First Product
+                    <Plus className="mr-1 h-3 sm:h-4 w-3 sm:w-4" /> Add Product
                   </Button>
                 </div>
               </div>
             ) : uiState.viewMode === "analytics" ? (
-              <div className="space-y-8">
-                {/* Analytics dashboard content */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-4 sm:space-y-6 md:space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
                   <Card className="border-0 shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5" />
+                    <CardHeader className="pb-3 sm:pb-4">
+                      <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                         Sales Performance
                       </CardTitle>
-                      <CardDescription>Overview of your sales over time.</CardDescription>
+                      <CardDescription className="text-xs sm:text-sm">Overview of your sales over time.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      {/* Chart component would go here */}
-                      <div className="h-64 bg-gray-50 rounded-xl flex items-center justify-center">
-                        <p className="text-gray-500">Sales chart visualization</p>
+                      <div className="h-48 sm:h-64 bg-gray-50 rounded-lg sm:rounded-xl flex items-center justify-center">
+                        <p className="text-xs sm:text-base text-gray-500">Sales chart visualization</p>
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card className="border-0 shadow-sm">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <PieChart className="h-5 w-5" />
+                    <CardHeader className="pb-3 sm:pb-4">
+                      <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                        <PieChart className="h-4 w-4 sm:h-5 sm:w-5" />
                         Category Distribution
                       </CardTitle>
-                      <CardDescription>Breakdown of products by category.</CardDescription>
+                      <CardDescription className="text-xs sm:text-sm">Breakdown of products by category.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <div className="h-64 bg-gray-50 rounded-xl flex items-center justify-center">
-                        <p className="text-gray-500">Category chart visualization</p>
+                      <div className="h-48 sm:h-64 bg-gray-50 rounded-lg sm:rounded-xl flex items-center justify-center">
+                        <p className="text-xs sm:text-base text-gray-500">Category chart visualization</p>
                       </div>
                     </CardContent>
                   </Card>
                 </div>
               </div>
             ) : (
-              // Responsive list view - use memoized paginatedProducts
               <ProductList
                 products={paginatedProducts}
                 selectedProducts={selectedProducts}
@@ -1639,40 +1647,36 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
               />
             )}
 
-            {/* Enhanced responsive pagination - compact on mobile */}
+            {/* Responsive Pagination */}
             {filteredProducts.length > 0 && totalPages > 1 && (
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mt-3 sm:mt-8 pt-2 sm:pt-6 pb-2 sm:pb-0 border-t border-gray-100">
-                {/* Info text - hidden on mobile, visible on sm+ */}
-                <div className="hidden sm:block text-sm text-gray-600">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mt-4 sm:mt-6 md:mt-8 pt-3 sm:pt-4 md:pt-6 pb-2 border-t border-gray-100">
+                <div className="hidden sm:block text-xs sm:text-sm text-gray-600">
                   Showing <span className="font-semibold">{(currentPage - 1) * filterState.pageSize + 1}</span> to{" "}
                   <span className="font-semibold">{Math.min(currentPage * filterState.pageSize, filteredProducts.length)}</span> of{" "}
                   <span className="font-semibold">{filteredProducts.length}</span> products
                 </div>
 
-                {/* Mobile info - visible on mobile only */}
                 <div className="sm:hidden text-xs text-gray-600 text-center w-full">
                   Page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalPages}</span>
                 </div>
 
-                {/* Pagination controls */}
                 <div className="flex items-center justify-center sm:justify-end gap-1 sm:gap-2 w-full sm:w-auto">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => goToPage(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="rounded-lg h-7 w-7 sm:h-10 sm:w-10 sm:rounded-full p-0 text-xs sm:text-sm flex-shrink-0"
+                    className="rounded-lg h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 sm:rounded-full p-0 text-xs flex-shrink-0"
                   >
                     <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Button>
 
-                  {/* Page numbers - hidden on mobile, visible on sm+ */}
                   <div className="hidden sm:flex gap-1">
                     {getPaginationItems().map((pageItem, index) =>
                       pageItem === "ellipsis-start" || pageItem === "ellipsis-end" ? (
                         <span
                           key={pageItem + index}
-                          className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 text-xs sm:text-sm text-gray-500"
+                          className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 text-xs text-gray-500"
                         >
                           ...
                         </span>
@@ -1682,7 +1686,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                           variant={currentPage === pageItem ? "default" : "outline"}
                           size="sm"
                           onClick={() => goToPage(pageItem as number)}
-                          className="rounded-full w-8 h-8 sm:w-10 sm:h-10 p-0 text-xs sm:text-sm"
+                          className="rounded-lg md:rounded-full w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 p-0 text-xs"
                         >
                           {pageItem}
                         </Button>
@@ -1690,8 +1694,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                     )}
                   </div>
 
-                  {/* Current page indicator - visible on mobile only */}
-                  <div className="sm:hidden flex items-center justify-center h-7 min-w-7 rounded-lg bg-primary text-white text-xs font-semibold flex-shrink-0">
+                  <div className="sm:hidden flex items-center justify-center h-8 min-w-8 rounded-lg bg-primary text-white text-xs font-semibold flex-shrink-0">
                     {currentPage}
                   </div>
 
@@ -1700,7 +1703,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                     size="sm"
                     onClick={() => goToPage(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="rounded-lg h-7 w-7 sm:h-10 sm:w-10 sm:rounded-full p-0 text-xs sm:text-sm flex-shrink-0"
+                    className="rounded-lg h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 sm:rounded-full p-0 text-xs flex-shrink-0"
                   >
                     <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Button>
