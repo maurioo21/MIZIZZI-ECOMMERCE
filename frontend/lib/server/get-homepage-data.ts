@@ -5,21 +5,21 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://mizizzi-ecommer
 // Helper to optimize Cloudinary URLs with CDN parameters for faster delivery
 function optimizeCloudinaryUrl(url: string | undefined | null): string | undefined {
   if (!url) return undefined
-  
+
   // Only optimize Cloudinary URLs
   if (!url.includes("res.cloudinary.com")) {
     return normalizeImageUrl(url)
   }
-  
+
   try {
     // For Cloudinary URLs, add CDN optimization parameters
     // This ensures fast delivery with automatic format optimization
     const uploadIndex = url.indexOf("/upload/")
     if (uploadIndex === -1) return url
-    
+
     const beforeUpload = url.substring(0, uploadIndex + "/upload/".length)
     const afterUpload = url.substring(uploadIndex + "/upload/".length)
-    
+
     // Add transformations for optimal performance and responsiveness
     // w_auto = dynamic width based on device, q_auto = dynamic quality, f_auto = optimal format
     return `${beforeUpload}w_auto,q_auto,f_auto/${afterUpload}`
@@ -28,17 +28,23 @@ function optimizeCloudinaryUrl(url: string | undefined | null): string | undefin
   }
 }
 
+function normalizeImageUrl(url: string | undefined | null): string | undefined {
+  if (!url) return undefined
+  // Basic normalization: trim and return the original URL; extend this if you need additional normalization
+  return typeof url === "string" ? url.trim() : undefined
+}
+
 export const getHomepageData = cache(async () => {
   try {
     console.log("[Homepage] Fetching from:", `${API_BASE_URL}/api/homepage`)
-    
+
     const response = await fetch(`${API_BASE_URL}/api/homepage`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      next: { 
+      next: {
         revalidate: 30, // Reduced from 60 to 30 seconds for faster updates
         tags: ["homepage", "feature-cards"] // Allow targeted invalidation
       },
@@ -54,30 +60,30 @@ export const getHomepageData = cache(async () => {
 
     if (result.status === "success" && result.data) {
       const data = result.data
-      
+
       // Transform API response to match frontend expectations and ensure image URLs are optimized for CDN
-      const categories = Array.isArray(data.categories) 
+      const categories = Array.isArray(data.categories)
         ? data.categories.map((cat: any) => ({
-            ...cat,
-            image_url: optimizeCloudinaryUrl(cat.image_url),
-            banner_url: optimizeCloudinaryUrl(cat.banner_url),
-          }))
+          ...cat,
+          image_url: optimizeCloudinaryUrl(cat.image_url),
+          banner_url: optimizeCloudinaryUrl(cat.banner_url),
+        }))
         : []
-      
+
       // Optimize product images for fast CDN delivery
       const optimizeProducts = (products: any[]) => {
         return Array.isArray(products)
           ? products.map((product: any) => ({
-              ...product,
-              image_url: optimizeCloudinaryUrl(product.image_url),
-              images: Array.isArray(product.images)
-                ? product.images.map((img: any) => ({
-                    ...img,
-                    url: optimizeCloudinaryUrl(img.url),
-                    secure_url: optimizeCloudinaryUrl(img.secure_url),
-                  }))
-                : [],
-            }))
+            ...product,
+            image_url: optimizeCloudinaryUrl(product.image_url),
+            images: Array.isArray(product.images)
+              ? product.images.map((img: any) => ({
+                ...img,
+                url: optimizeCloudinaryUrl(img.url),
+                secure_url: optimizeCloudinaryUrl(img.secure_url),
+              }))
+              : [],
+          }))
           : []
       }
 
