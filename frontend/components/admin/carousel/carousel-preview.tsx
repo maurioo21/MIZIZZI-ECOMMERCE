@@ -39,27 +39,33 @@ export function CarouselPreview({ banner }: CarouselPreviewProps) {
     if (!imageUrl.includes("cloudinary.com")) return imageUrl
     
     try {
-      const url = new URL(imageUrl)
-      const pathParts = url.pathname.split("/").filter(Boolean)
+      // For Cloudinary URLs, the format is:
+      // https://res.cloudinary.com/{cloud_name}/image/upload/{version}/{public_id}.{format}
+      // OR after transformations:
+      // https://res.cloudinary.com/{cloud_name}/image/upload/{transformations}/{version}/{public_id}.{format}
       
-      // Extract cloud name from URL
-      let cloudName = ""
-      if (url.hostname.startsWith("res.cloudinary.com")) {
-        // Extract from path for res.cloudinary.com URLs
-        cloudName = pathParts[0] || "da35rsdl0"
-      } else {
-        // Extract from subdomain for {cloud-name}.cloudinary.com URLs
-        cloudName = url.hostname.split(".")[0]
+      // Extract the full path after /upload/
+      const uploadMatch = imageUrl.match(/\/upload\/(.*?)$/)
+      if (!uploadMatch) {
+        console.log("[v0] Could not extract upload path from URL:", imageUrl)
+        return imageUrl
       }
       
-      // Find the image file name (after "upload/" transformation params)
-      const uploadIndex = pathParts.indexOf("upload")
-      const imageFileName = uploadIndex >= 0 ? pathParts[uploadIndex + 1] : pathParts[pathParts.length - 1]
+      const pathAfterUpload = uploadMatch[1]
+      console.log("[v0] Path after upload:", pathAfterUpload)
       
-      if (!imageFileName) return imageUrl
+      // Get the public_id (everything after the last slash)
+      const publicIdWithFormat = pathAfterUpload.split('/').pop() || ''
       
-      // Optimized for preview display
-      return `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_300,c_fill,q_auto,f_auto/${imageFileName}`
+      if (!publicIdWithFormat) {
+        console.log("[v0] Could not extract public_id from path:", pathAfterUpload)
+        return imageUrl
+      }
+      
+      console.log("[v0] Extracted public_id: ", publicIdWithFormat)
+      
+      // Construct optimized URL with transformations
+      return `https://res.cloudinary.com/da35rsdl0/image/upload/w_800,h_300,c_fill,q_auto,f_auto/${publicIdWithFormat}`
     } catch (error) {
       console.log("[v0] Error optimizing Cloudinary URL:", error)
       return imageUrl
