@@ -16,7 +16,7 @@ import { useSWRConfig } from "swr"
 import { categoryService } from "@/services/category"
 import { 
   validateImageFile, 
-  createImagePreview, 
+  generateImagePreview, 
   getCategoryDisplayImageUrl,
   getBannerImageUrl 
 } from "@/lib/cloudinary-image-handler"
@@ -210,7 +210,7 @@ export function CategoryFormDialog({
     }
 
     try {
-      const preview = await createImagePreview(file)
+      const preview = await generateImagePreview(file)
       setCategoryImage({
         preview,
         file,
@@ -242,7 +242,7 @@ export function CategoryFormDialog({
     }
 
     try {
-      const preview = await createImagePreview(file)
+      const preview = await generateImagePreview(file)
       setBannerImage({
         preview,
         file,
