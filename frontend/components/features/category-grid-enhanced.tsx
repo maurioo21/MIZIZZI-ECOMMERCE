@@ -20,15 +20,19 @@ const CategoryCard = ({
   const [imageFailed, setImageFailed] = useState(false)
   const imageUrl = category.image_url && category.image_url.trim() !== "" ? category.image_url : null
 
-  useEffect(() => {
+    useEffect(() => {
     if (!imageUrl) {
       setImageFailed(true)
       return
     }
 
     const img = new Image()
+    img.crossOrigin = "anonymous"
     img.onload = () => setImageLoaded(true)
-    img.onerror = () => setImageFailed(true)
+    img.onerror = () => {
+      console.log("[v0] Image failed to load:", imageUrl)
+      setImageFailed(true)
+    }
     img.src = imageUrl
 
     // If image loads within 100ms, mark as loaded immediately
@@ -90,10 +94,14 @@ export function CategoryGrid({ categories = [] }: CategoryGridProps) {
 
   useEffect(() => {
     if (categories.length === 0) return
+    
+    console.log("[v0] CategoryGrid received", categories.length, "categories")
+    console.log("[v0] First category:", categories[0])
 
     // Preload first 12 category images
     categories.slice(0, 12).forEach((category) => {
       if (category.image_url) {
+        console.log("[v0] Preloading image for", category.name, ":", category.image_url)
         const link = document.createElement("link")
         link.rel = "preload"
         link.as = "image"
