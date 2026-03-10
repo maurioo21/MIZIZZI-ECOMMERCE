@@ -1719,7 +1719,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                 </div>
               </div>
             )}
-        </div>
+          </div>
         </Tabs>
       </div>
 
