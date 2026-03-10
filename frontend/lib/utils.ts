@@ -1001,6 +1001,24 @@ export function generateSlug(text: string): string {
     .replace(/-+$/, "") // Trim - from end of text
 }
 
+/**
+ * Generate a SKU (Stock Keeping Unit) from a product ID and name
+ * Backend-preferred format: PROD-{YYYYMMDD}-{PADDED_ID}
+ * Example: PROD-20260310-00079
+ * 
+ * This is a frontend utility for reference. The backend is responsible for 
+ * generating the actual SKU during product creation/update.
+ * @param productId - The product ID
+ * @param productName - The product name (optional, for reference)
+ * @returns Generated SKU string
+ */
+export function generateSKU(productId: number | string, productName?: string): string {
+  const id = String(productId).padStart(5, "0")
+  const date = new Date()
+  const timestamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
+  return `PROD-${timestamp}-${id}`
+}
+
 // Convert hex color to RGB
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)

@@ -271,9 +271,10 @@ export function EditProductClient({
 
         // Remove fields that the backend doesn't handle
         // The backend only handles specific fields defined in the update_product route
+        // NOTE: SKU is excluded as it's auto-generated and read-only
         const allowedFields = [
           'name', 'slug', 'description', 'price', 'sale_price', 'stock',
-          'category_id', 'brand_id', 'sku', 'weight',
+          'category_id', 'brand_id', 'weight',
           'is_featured', 'is_new', 'is_sale', 'is_flash_sale', 'is_luxury_deal',
           'meta_title', 'meta_description', 'material',
           'image_urls', 'thumbnail_url', 'tags'
