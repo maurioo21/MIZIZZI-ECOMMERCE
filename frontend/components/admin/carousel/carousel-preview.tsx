@@ -33,7 +33,6 @@ export function CarouselPreview({ banner }: CarouselPreviewProps) {
   const getOptimizedUrl = (imageUrl: string) => {
     if (!imageUrl) return "/placeholder.svg"
     if (imageUrl.startsWith("blob:")) {
-      console.log("[v0] Blob URL detected, using placeholder")
       return "/placeholder.svg"
     }
     if (!imageUrl.includes("cloudinary.com")) return imageUrl
@@ -47,27 +46,21 @@ export function CarouselPreview({ banner }: CarouselPreviewProps) {
       // Extract the full path after /upload/
       const uploadMatch = imageUrl.match(/\/upload\/(.*?)$/)
       if (!uploadMatch) {
-        console.log("[v0] Could not extract upload path from URL:", imageUrl)
         return imageUrl
       }
       
       const pathAfterUpload = uploadMatch[1]
-      console.log("[v0] Path after upload:", pathAfterUpload)
       
       // Get the public_id (everything after the last slash)
       const publicIdWithFormat = pathAfterUpload.split('/').pop() || ''
       
       if (!publicIdWithFormat) {
-        console.log("[v0] Could not extract public_id from path:", pathAfterUpload)
         return imageUrl
       }
-      
-      console.log("[v0] Extracted public_id: ", publicIdWithFormat)
       
       // Construct optimized URL with transformations
       return `https://res.cloudinary.com/da35rsdl0/image/upload/w_800,h_300,c_fill,q_auto,f_auto/${publicIdWithFormat}`
     } catch (error) {
-      console.log("[v0] Error optimizing Cloudinary URL:", error)
       return imageUrl
     }
   }

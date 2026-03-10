@@ -54,7 +54,6 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
     // Use Cloudinary URL directly - it's already optimized for CDN delivery
     const optimizedUrl = url || ""
     const cloudinaryPublicId = publicId || ""
-    console.log(`[v0] Image uploaded with Cloudinary URL: ${optimizedUrl}, public_id: ${cloudinaryPublicId}`)
     
     setImageUrl(optimizedUrl)
     setImagePublicId(cloudinaryPublicId)
@@ -67,9 +66,9 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
     
     // Auto-save image URL if banner already exists (editing mode)
     if (banner?.id) {
-      console.log(`[v0] Auto-saving image for banner ID: ${banner.id}`)
       setIsSubmitting(true)
       try {
+        // For editing, pass only image fields - don't create a new banner
         await onSubmit({ 
           image_url: optimizedUrl,
           image_public_id: cloudinaryPublicId,
@@ -90,7 +89,7 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
         setIsSubmitting(false)
       }
     } else {
-      console.log(`[v0] New banner - image URL ready for create`)
+      // For new banner, just show success and keep form open for other details
       toast({
         title: "Image Ready",
         description: "Image uploaded. Fill in other details and click Create Banner to save.",

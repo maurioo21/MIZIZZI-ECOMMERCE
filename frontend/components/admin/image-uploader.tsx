@@ -111,15 +111,6 @@ export function ImageUploader({ onUpload, currentImage, type = "product" }: Imag
 
       // Check compressed size
       const compressedSize = compressedBlob.size
-      console.log(
-        `[v0] Image compressed: ${(file.size / 1024).toFixed(1)}KB → ${(compressedSize / 1024).toFixed(1)}KB (${type})`
-      )
-
-      if (compressedSize > settings.maxFileSize) {
-        console.warn(
-          `[v0] Compressed file (${(compressedSize / 1024).toFixed(1)}KB) exceeds target size (${(settings.maxFileSize / 1024).toFixed(1)}KB)`
-        )
-      }
 
       // Create object URL for preview
       const compressedUrl = URL.createObjectURL(compressedBlob)
@@ -149,8 +140,6 @@ export function ImageUploader({ onUpload, currentImage, type = "product" }: Imag
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "https://mizizzi-ecommerce-1.onrender.com"
       const uploadEndpoint = `${backendUrl}/api/admin/cloudinary/upload`
 
-      console.log(`[v0] Uploading to backend: ${uploadEndpoint} with token: ${token.substring(0, 10)}...`)
-
       const response = await fetch(uploadEndpoint, {
         method: "POST",
         body: formData,
@@ -161,7 +150,6 @@ export function ImageUploader({ onUpload, currentImage, type = "product" }: Imag
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.error(`[v0] Upload error response:`, errorData)
         throw new Error(errorData.error || "Upload failed")
       }
 
@@ -186,15 +174,9 @@ export function ImageUploader({ onUpload, currentImage, type = "product" }: Imag
         cloudinaryPublicId = data.public_id
       }
       
-      console.log(`[v0] Image uploaded successfully: ${cloudinaryUrl}`)
-      console.log(`[v0] Cloudinary public_id: ${cloudinaryPublicId}`)
-      console.log(`[v0] Backend response:`, data)
-      
       if (!cloudinaryUrl) {
         throw new Error("No image URL returned from server")
       }
-      
-      console.log(`[v0] Using Cloudinary CDN URL: ${cloudinaryUrl}`)
       
       // Call onUpload with both URL and public_id
       await Promise.resolve(onUpload(cloudinaryUrl, cloudinaryPublicId))
