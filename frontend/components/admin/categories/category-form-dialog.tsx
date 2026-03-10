@@ -361,41 +361,6 @@ export function CategoryFormDialog({
     }
   }
 
-      const data = await response.json()
-      const imageUrl = data.secure_url || data.url
-      const publicId = data.public_id
-
-      if (!imageUrl || !publicId) {
-        throw new Error("Invalid response from server")
-      }
-
-      // Update form data with URL and public_id
-      const fieldUrl = type === "category" ? "image_url" : "banner_url"
-      const fieldPublicId = type === "category" ? "image_public_id" : "banner_public_id"
-
-      setFormData(prev => ({
-        ...prev,
-        [fieldUrl]: imageUrl,
-        [fieldPublicId]: publicId,
-      }))
-
-      setImageState(prev => ({ ...prev, progress: 100, isUploading: false }))
-
-      toast({
-        title: "Success",
-        description: `${type === "category" ? "Category" : "Banner"} image uploaded successfully`,
-      })
-    } catch (error) {
-      console.error("Upload error:", error)
-      setImageState(prev => ({ ...prev, isUploading: false, progress: 0 }))
-      toast({
-        title: "Upload Failed",
-        description: error instanceof Error ? error.message : "Failed to upload image",
-        variant: "destructive",
-      })
-    }
-  }
-
   // Clear image
   const clearImage = (type: "category" | "banner") => {
     if (type === "category") {
@@ -564,6 +529,7 @@ export function CategoryFormDialog({
                   src={categoryImage.preview || getCategoryDisplayImageUrl(formData.image_url)}
                   alt="Category preview"
                   fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 400px"
                   className="object-cover"
                 />
                 
@@ -676,6 +642,7 @@ export function CategoryFormDialog({
                   src={bannerImage.preview || getBannerImageUrl(formData.banner_url)}
                   alt="Banner preview"
                   fill
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 400px"
                   className="object-cover"
                 />
                 
