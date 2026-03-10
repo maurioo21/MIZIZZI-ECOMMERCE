@@ -196,11 +196,14 @@ export function CategoryFormDialog({
   // Handle category image selection
   const handleCategoryImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    console.log("[v0] Category image selected:", file ? { name: file.name, size: file.size, type: file.type } : "none")
     if (!file) return
 
     // Validate file
     const validation = validateImageFile(file)
+    console.log("[v0] File validation result:", validation)
     if (!validation.valid) {
+      console.warn("[v0] Image validation failed:", validation.error)
       toast({
         title: "Invalid Image",
         description: validation.error,
@@ -210,14 +213,18 @@ export function CategoryFormDialog({
     }
 
     try {
+      console.log("[v0] Generating preview for category image...")
       const preview = await generateImagePreview(file)
+      console.log("[v0] Preview generated successfully, length:", preview.length)
       setCategoryImage({
         preview,
         file,
         progress: 0,
         isUploading: false,
       })
+      console.log("[v0] Category image state updated")
     } catch (error) {
+      console.error("[v0] Preview generation error:", error)
       toast({
         title: "Error",
         description: "Failed to preview image",
@@ -229,10 +236,13 @@ export function CategoryFormDialog({
   // Handle banner image selection
   const handleBannerImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    console.log("[v0] Banner image selected:", file ? { name: file.name, size: file.size, type: file.type } : "none")
     if (!file) return
 
     const validation = validateImageFile(file)
+    console.log("[v0] Banner file validation:", validation)
     if (!validation.valid) {
+      console.warn("[v0] Banner validation failed:", validation.error)
       toast({
         title: "Invalid Image",
         description: validation.error,
@@ -242,14 +252,18 @@ export function CategoryFormDialog({
     }
 
     try {
+      console.log("[v0] Generating preview for banner image...")
       const preview = await generateImagePreview(file)
+      console.log("[v0] Banner preview generated, length:", preview.length)
       setBannerImage({
         preview,
         file,
         progress: 0,
         isUploading: false,
       })
+      console.log("[v0] Banner image state updated")
     } catch (error) {
+      console.error("[v0] Banner preview error:", error)
       toast({
         title: "Error",
         description: "Failed to preview image",
@@ -264,17 +278,24 @@ export function CategoryFormDialog({
     const setImageState = type === "category" ? setCategoryImage : setBannerImage
 
     try {
+      console.log("[v0] Starting upload for:", type)
+      console.log("[v0] File details:", { name: file.name, size: file.size, type: file.type })
+      
       setImageState(prev => ({ ...prev, isUploading: true, progress: 20 }))
 
       const formDataObj = new FormData()
       formDataObj.append("file", file)
 
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
+      console.log("[v0] Auth token present:", !!token)
+      
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
       const endpoint = `${baseUrl}/api/admin/shop-categories/categories/upload-image`
+      console.log("[v0] Upload endpoint:", endpoint)
 
       setImageState(prev => ({ ...prev, progress: 40 }))
 
+      console.log("[v0] Sending fetch request...")
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -283,12 +304,62 @@ export function CategoryFormDialog({
         body: formDataObj,
       })
 
+      console.log("[v0] Response received:", { status: response.status, statusText: response.statusText })
       setImageState(prev => ({ ...prev, progress: 80 }))
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || "Upload failed")
+        console.error("[v0] Upload failed with error:", errorData)
+        throw new Error(errorData.error || `Upload failed: ${response.statusText}`)
       }
+
+      const data = await response.json()
+      console.log("[v0] Upload response data:", data)
+      
+      const imageUrl = data.secure_url || data.url
+      const publicId = data.public_id
+
+      console.log("[v0] Extracted URL:", imageUrl, "Public ID:", publicId)
+
+      if (!imageUrl || !publicId) {
+        console.error("[v0] Invalid response - missing URL or public_id")
+        throw new Error("Invalid response from server - missing URL or public_id")
+      }
+
+      // Update form data with URL and public_id
+      const fieldUrl = type === "category" ? "image_url" : "banner_url"
+      const fieldPublicId = type === "category" ? "image_public_id" : "banner_public_id"
+
+      console.log("[v0] Updating form data:", { [fieldUrl]: imageUrl, [fieldPublicId]: publicId })
+
+      setFormData(prev => ({
+        ...prev,
+        [fieldUrl]: imageUrl,
+        [fieldPublicId]: publicId,
+      }))
+
+      setImageState(prev => ({ ...prev, progress: 100, isUploading: false }))
+
+      console.log("[v0] Upload completed successfully for:", type)
+      
+      toast({
+        title: "Success",
+        description: `${type === "category" ? "Category" : "Banner"} image uploaded successfully`,
+      })
+    } catch (error) {
+      console.error("[v0] Upload error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error"
+      console.error("[v0] Error message:", errorMessage)
+      
+      setImageState(prev => ({ ...prev, isUploading: false, progress: 0 }))
+      
+      toast({
+        title: "Upload Failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    }
+  }
 
       const data = await response.json()
       const imageUrl = data.secure_url || data.url
@@ -340,8 +411,13 @@ export function CategoryFormDialog({
 
   // Handle form save
   const handleSave = async () => {
+    console.log("[v0] handleSave called")
+    console.log("[v0] Form data:", formData)
+    console.log("[v0] Category image state:", categoryImage)
+    
     // Validation
     if (!formData.name.trim()) {
+      console.log("[v0] Validation failed: name is empty")
       toast({
         title: "Validation Error",
         description: "Please enter a category name",
@@ -351,6 +427,7 @@ export function CategoryFormDialog({
     }
 
     if (!formData.image_url) {
+      console.log("[v0] Validation failed: image_url is missing")
       toast({
         title: "Validation Error",
         description: "Please upload a category image",
@@ -360,8 +437,10 @@ export function CategoryFormDialog({
     }
 
     // Validate slug
+    console.log("[v0] Validating slug:", formData.slug)
     const isSlugValid = await validateSlug(formData.slug)
     if (!isSlugValid) {
+      console.log("[v0] Slug validation failed")
       toast({
         title: "Validation Error",
         description: "Category slug already exists",
@@ -371,9 +450,13 @@ export function CategoryFormDialog({
     }
 
     try {
+      console.log("[v0] Starting save operation")
       setSaving(true)
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
+      console.log("[v0] Auth token present:", !!token)
+      
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+      console.log("[v0] Base URL:", baseUrl)
 
       const payload: Record<string, any> = {
         name: formData.name.trim(),
@@ -389,10 +472,14 @@ export function CategoryFormDialog({
         delete_old_banner: deleteOldBanner && editingCategory?.banner_public_id ? true : false,
       }
 
+      console.log("[v0] Payload to send:", payload)
+
       const method = editingCategory ? "PUT" : "POST"
       const endpoint = editingCategory 
         ? `${baseUrl}/api/admin/shop-categories/categories/${editingCategory.id}`
         : `${baseUrl}/api/admin/shop-categories/categories`
+
+      console.log("[v0] Sending request:", { method, endpoint })
 
       const response = await fetch(endpoint, {
         method,
@@ -403,12 +490,16 @@ export function CategoryFormDialog({
         body: JSON.stringify(payload),
       })
 
+      console.log("[v0] Response received:", { status: response.status, statusText: response.statusText })
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
+        console.error("[v0] API error:", errorData)
         throw new Error(errorData.error || `Failed to ${editingCategory ? "update" : "create"} category`)
       }
 
       const result = await response.json()
+      console.log("[v0] Save successful, result:", result)
 
       toast({
         title: "Success",
@@ -422,10 +513,14 @@ export function CategoryFormDialog({
       onOpenChange(false)
       onSaveSuccess(true)
     } catch (error) {
-      console.error("Save error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to save category"
+      console.error("[v0] Save error:", error)
+      console.error("[v0] Error message:", errorMessage)
+      console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
+      
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save category",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
