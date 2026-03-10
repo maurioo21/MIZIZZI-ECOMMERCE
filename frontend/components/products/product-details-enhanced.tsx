@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -38,12 +38,14 @@ import { useToast } from "@/components/ui/use-toast"
 import { formatPrice, cn } from "@/lib/utils"
 import { productService } from "@/services/product"
 import { inventoryService } from "@/services/inventory-service"
-import { cloudinaryService } from "@/services/cloudinary-service"
 import { websocketService } from "@/services/websocket"
 import { ImageZoomModal } from "./image-zoom-modal"
 import { reviewService, type Review, type ReviewSummary } from "@/services/review-service"
 import { useAuth } from "@/contexts/auth/auth-context"
-import { imageBatchService } from "@/services/image-batch-service"
+import { useProductInventory } from "@/hooks/use-product-inventory"
+import { useProductReviews } from "@/hooks/use-product-reviews"
+import { useExploreProducts } from "@/hooks/use-explore-products"
+import { getProductImageUrl, getProductImages, getStableProductRating } from "@/lib/product-image-utils"
 
 interface ProductDetailsEnhancedProps {
   product: any
@@ -100,54 +102,44 @@ export default memo(function ProductDetailsEnhanced({
   const [selectedVariant, setSelectedVariant] = useState<any>(null)
   const [quantity, setQuantity] = useState(1)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
-  const [exploreProducts, setExploreProducts] = useState<any[]>(
-    similarProducts && similarProducts.length > 0 ? similarProducts.slice(0, 12) : [],
-  )
-  const [exploreHasMore, setExploreHasMore] = useState(
-    (similarProducts && similarProducts.length > 12) || false,
-  )
-  const [exploreLoading, setExploreLoading] = useState(false)
 
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>(recentlyViewedProducts || [])
   const [isImageZoomModalOpen, setIsImageZoomModalOpen] = useState(false)
   const [zoomSelectedImage, setZoomSelectedImage] = useState(0)
-  const [showAllReviews, setShowAllReviews] = useState(false)
   const [showCartNotification, setShowCartNotification] = useState(false)
   const [cartNotificationData, setCartNotificationData] = useState<any>(null)
   const [optimisticWishlistState, setOptimisticWishlistState] = useState<boolean | null>(null)
   const [isTogglingWishlist, setIsTogglingWishlist] = useState(false)
   const [showSpecifications, setShowSpecifications] = useState(true)
-  const [reviewSortBy, setReviewSortBy] = useState<"recent" | "highest" | "lowest">("recent")
-  const [likedReviews, setLikedReviews] = useState<Set<number>>(new Set())
-  const [animatingReviews, setAnimatingReviews] = useState<Set<number>>(new Set())
   const [activeTab, setActiveTab] = useState<"details" | "specs" | "reviews">("details")
 
-  // Inventory state
-  const [inventoryData, setInventoryData] = useState<{
-    available_quantity: number
-    is_in_stock: boolean
-    is_low_stock: boolean
-    stock_status: "in_stock" | "low_stock" | "out_of_stock"
-    last_updated?: string
-  }>({
-    available_quantity: initialProduct?.stock || 0,
-    is_in_stock: (initialProduct?.stock || 0) > 0,
-    is_low_stock: (initialProduct?.stock || 0) > 0 && (initialProduct?.stock || 0) <= 5,
-    stock_status:
-      (initialProduct?.stock || 0) === 0
-        ? "out_of_stock"
-        : (initialProduct?.stock || 0) <= 5
-          ? "low_stock"
-          : "in_stock",
-    last_updated: undefined,
-  })
-  const [isLoadingInventory, setIsLoadingInventory] = useState(false)
-  const [inventoryError, setInventoryError] = useState<string | null>(null)
+  // Hooks - Replace inventory state with custom hook
+  const { inventoryData, isLoading: isLoadingInventory, error: inventoryError } = useProductInventory(
+    product?.id ? Number(product.id) : undefined,
+    selectedVariant?.id,
+  )
 
-  const [reviews, setReviews] = useState<Review[]>(initialReviews || [])
-  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null)
-  const [isLoadingReviews, setIsLoadingReviews] = useState(true)
-  const [reviewError, setReviewError] = useState<string | null>(null)
+  // Reviews hook - replaces all review-related state
+  const {
+    reviews,
+    reviewSummary,
+    isLoading: isLoadingReviews,
+    error: reviewError,
+    showAllReviews,
+    setShowAllReviews,
+    sortBy: reviewSortBy,
+    setSortBy: setReviewSortBy,
+    likedReviews,
+    animatingReviews,
+    handleMarkHelpful,
+  } = useProductReviews(product?.id ? Number(product.id) : undefined)
+
+  // Explore products hook - replaces explore products state
+  const {
+    products: exploreProducts,
+    hasMore: exploreHasMore,
+    isLoading: exploreLoading,
+  } = useExploreProducts(product, similarProducts)
 
   // Refs
   const addToCartInProgress = useRef(false)
@@ -167,98 +159,9 @@ export default memo(function ProductDetailsEnhanced({
   const discountPercentage =
     originalPrice > currentPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0
 
-  // Helpers
-  const getProductImageUrl = (p: any, index = 0, highQuality = false): string => {
-    // Try thumbnail_url first for grid items
-    if (
-      !highQuality &&
-      p?.thumbnail_url &&
-      typeof p.thumbnail_url === "string" &&
-      !p.thumbnail_url.startsWith("blob:")
-    ) {
-      return p.thumbnail_url
-    }
-
-    if (p?.image_urls && p.image_urls.length > index) {
-      const url = p.image_urls[index]
-      if (typeof url === "string" && url.startsWith("blob:")) {
-        return "/generic-product-display.png"
-      }
-      if (typeof url === "string" && url.trim() !== "" && !url.startsWith("http")) {
-        if (highQuality) {
-          return cloudinaryService.generateOptimizedUrl(url, {
-            width: 2048,
-            height: 2048,
-            quality: 100,
-            format: "auto",
-            crop: "fit",
-          })
-        }
-        return cloudinaryService.generateOptimizedUrl(url)
-      }
-      if (typeof url === "string" && url.startsWith("http")) {
-        return url
-      }
-    }
-
-    // Fallback to thumbnail_url
-    if (p?.thumbnail_url && typeof p.thumbnail_url === "string" && !p.thumbnail_url.startsWith("blob:")) {
-      return p.thumbnail_url
-    }
-
-    return "/generic-product-display.png"
-  }
-
-  const getProductImages = (p: any): string[] => {
-    let imageUrls: string[] = []
-    if (p?.image_urls) {
-      if (Array.isArray(p.image_urls)) {
-        if (p.image_urls.length > 0 && typeof p.image_urls[0] === "string" && p.image_urls[0].length === 1) {
-          try {
-            const reconstructed = p.image_urls.join("")
-            const parsed = JSON.parse(reconstructed)
-            if (Array.isArray(parsed)) {
-              imageUrls = parsed
-                .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-                .map((u: string) => (u.startsWith("http") ? u : cloudinaryService.generateOptimizedUrl(u)))
-            }
-          } catch {
-            imageUrls = []
-          }
-        } else {
-          imageUrls = p.image_urls
-            .filter((u: string): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-            .map((u: string) => (u.startsWith("http") ? u : cloudinaryService.generateOptimizedUrl(u)))
-        }
-      } else if (typeof p.image_urls === "string") {
-        try {
-          const parsed = JSON.parse(p.image_urls)
-          if (Array.isArray(parsed)) {
-            imageUrls = parsed
-              .filter((u): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-              .map((u) => (u.startsWith("http") ? u : cloudinaryService.generateOptimizedUrl(u)))
-          }
-        } catch {
-          if (!p.image_urls.startsWith("blob:")) {
-            imageUrls = [
-              p.image_urls.startsWith("http") ? p.image_urls : cloudinaryService.generateOptimizedUrl(p.image_urls),
-            ]
-          }
-        }
-      }
-    }
-    const valid = imageUrls.filter((u): u is string => Boolean(u && typeof u === "string" && u.trim() !== ""))
-    // Fallback to thumbnail_url if no image_urls found
-    if (valid.length === 0 && p?.thumbnail_url && typeof p.thumbnail_url === "string") {
-      return [p.thumbnail_url]
-    }
-    // Final fallback to generic placeholder
-    return valid.length ? valid : ["/generic-product-display.png"]
-  }
-
+  // Image utilities are now imported from lib/product-image-utils.ts
   const productImages = useMemo(() => {
-    const images = getProductImages(product)
-    return images
+    return getProductImages(product)
   }, [product])
 
   // Effects
@@ -272,16 +175,16 @@ export default memo(function ProductDetailsEnhanced({
     }
   }, [actualWishlistState, optimisticWishlistState])
 
-  // Real-time product updates via WebSocket and polling
+  // Real-time product updates via WebSocket (removed polling for performance)
   useEffect(() => {
     if (!product?.id) return
 
     const productId = String(product.id)
-    
+
     // Subscribe to product updates
     const handleProductUpdate = (updatedProduct: any) => {
       if (String(updatedProduct.id) === productId) {
-        console.log("[v0] Real-time product update received from admin:", updatedProduct)
+        console.log("[v0] Real-time product update received:", updatedProduct)
         setProduct(updatedProduct)
       }
     }
@@ -289,295 +192,57 @@ export default memo(function ProductDetailsEnhanced({
     // Listen for product_updated events
     websocketService.on("product_updated", handleProductUpdate)
 
-    // Polling fallback for guaranteed instant updates
-    const pollInterval = setInterval(async () => {
-      try {
-        const latestProduct = await productService.getProduct(productId)
-        if (latestProduct) {
-          // Check if key product info changed (description, images, price, name)
-          if (
-            latestProduct.description !== product.description ||
-            latestProduct.name !== product.name ||
-            latestProduct.price !== product.price ||
-            latestProduct.sale_price !== product.sale_price ||
-            JSON.stringify(latestProduct.image_urls) !== JSON.stringify(product.image_urls)
-          ) {
-            console.log("[v0] Product changes detected via polling, updating display instantly")
-            setProduct(latestProduct)
-          }
-        }
-      } catch (error) {
-        console.error("[v0] Error polling for product updates:", error)
-      }
-    }, 3000) // Poll every 3 seconds for instant updates
-
     return () => {
       websocketService.off("product_updated", handleProductUpdate)
-      clearInterval(pollInterval)
     }
   }, [product?.id])
 
-  const fetchInventoryData = useCallback(async () => {
-    if (!product?.id) return
-    setInventoryError(null)
+  // Inventory is now managed by useProductInventory hook
+
+  // Related products are now fetched by useExploreProducts hook
+  
+  // Recently viewed and product sync effect
+  useEffect(() => {
+    // Add to recently viewed in localStorage
     try {
-      const summary = await inventoryService.getProductInventorySummary(Number(product.id), selectedVariant?.id)
-      const available = summary.total_available_quantity ?? 0
-      const stock_status: "in_stock" | "low_stock" | "out_of_stock" =
-        available === 0 ? "out_of_stock" : summary.is_low_stock ? "low_stock" : "in_stock"
-      setInventoryData({
-        available_quantity: available,
-        is_in_stock: !!summary.is_in_stock,
-        is_low_stock: !!summary.is_low_stock,
-        stock_status,
-        last_updated: summary.items?.[0]?.last_updated,
-      })
-    } catch (error: any) {
-      console.error("[v0] Background inventory fetch error:", error)
+      const recentItems = JSON.parse(localStorage.getItem("recentlyViewed") || "[]")
+      const exists = recentItems.some((i: any) => i.id === product.id)
+      if (!exists) {
+        const updated = [
+          {
+            id: product.id,
+            name: product.name,
+            price: currentPrice,
+            image: productImages[0] || "/placeholder.png",
+            slug: product.slug || product.id,
+            image_urls: productImages,
+            thumbnail_url: product.thumbnail_url,
+          },
+          ...recentItems,
+        ].slice(0, 6)
+        localStorage.setItem("recentlyViewed", JSON.stringify(updated))
+        setRecentlyViewed(updated)
+      } else {
+        setRecentlyViewed(recentItems)
+      }
+    } catch (e) {
+      console.error("[v0] Error saving recently viewed:", e)
     }
-  }, [product?.id, product?.stock, selectedVariant?.id])
+  }, [product?.id, product?.name, currentPrice, productImages, product?.slug, product?.thumbnail_url])
 
-  useEffect(() => {
-    fetchInventoryData()
-  }, [fetchInventoryData])
-
-  useEffect(() => {
-    const fetchRelatedProducts = async () => {
-      // If we already have similar products from props, use them
-      if (similarProducts && similarProducts.length > 0) {
-        const sliced = similarProducts.slice(0, 12)
-        setExploreProducts(sliced)
-        setExploreHasMore(similarProducts.length > 12)
-        setExploreLoading(false)
-        return
-      }
-
-      // Only fetch if we don't have products already
-      if (exploreProducts.length >= 12) {
-        setExploreLoading(false)
-        return
-      }
-
-      setExploreLoading(true)
-      try {
-        let allProducts: any[] = []
-
-        // First: Try to get products from the same category
-        if (product?.category_id) {
-          try {
-            const categoryProducts = await productService.getProductsByCategory(String(product.category_id))
-            allProducts = categoryProducts.filter((p: any) => p.id !== product.id)
-          } catch (e) {
-            console.error("[v0] Error fetching category products:", e)
-          }
-        }
-
-        // If not enough from category, fetch more general products
-        if (allProducts.length < 12) {
-          try {
-            const response = await fetch(`/api/products?limit=30&page=1`)
-            const data = await response.json()
-            
-            // Safely extract products array from various response formats
-            let productsArray: any[] = []
-            if (Array.isArray(data)) {
-              productsArray = data
-            } else if (Array.isArray(data?.products)) {
-              productsArray = data.products
-            } else if (Array.isArray(data?.items)) {
-              productsArray = data.items
-            } else if (Array.isArray(data?.data)) {
-              productsArray = data.data
-            }
-            
-            if (Array.isArray(productsArray)) {
-              const generalProducts = productsArray.filter(
-                (p: any) => p?.id && p.id !== product.id && !allProducts.some((ap: any) => ap.id === p.id),
-              )
-              allProducts = [...allProducts, ...generalProducts]
-            }
-          } catch (e) {
-            console.error("[v0] Error fetching general products:", e)
-          }
-        }
-
-        // Smart sorting: prioritize by category match, then price similarity, then rating
-        const productPrice = product?.sale_price || product?.price || 0
-        const sortedProducts = allProducts.sort((a: any, b: any) => {
-          const aCategoryMatch = a.category_id === product?.category_id ? 1 : 0
-          const bCategoryMatch = b.category_id === product?.category_id ? 1 : 0
-          if (aCategoryMatch !== bCategoryMatch) return bCategoryMatch - aCategoryMatch
-
-          const aPriceDiff = Math.abs((a.sale_price || a.price || 0) - productPrice)
-          const bPriceDiff = Math.abs((b.sale_price || b.price || 0) - productPrice)
-          if (aPriceDiff !== bPriceDiff) return aPriceDiff - bPriceDiff
-
-          return (b.rating || 0) - (a.rating || 0)
-        })
-
-        // Set initial 12 items and flag if more exist
-        setExploreProducts(sortedProducts.slice(0, 12))
-        setExploreHasMore(sortedProducts.length > 12)
-      } catch (error) {
-        console.error("[v0] Error loading explore products:", error)
-        setExploreHasMore(false)
-      } finally {
-        setExploreLoading(false)
-      }
-    }
-
-    if (product?.id && exploreProducts.length < 12) {
-      fetchRelatedProducts()
-    } else if (!product?.id) {
-      setExploreLoading(false)
-    }
-  }, [product?.id, product?.category_id, product?.price, product?.sale_price])
-
-  useEffect(() => {
-    const run = async () => {
-      // Removed redundant check for similarProducts.length > 0 as initial state handles it.
-      // The fetchRelatedProducts hook now handles populating exploreProducts.
-      if (!product?.category_id && exploreProducts.length === 0) {
-        setExploreLoading(false)
-        return
-      }
-      // Set loading true only if we actually need to fetch
-      if (exploreProducts.length < 12 && !exploreLoading) {
-        setExploreLoading(true)
-      }
-
-      // The logic for fetching 'exploreProducts' is now handled by the 'fetchRelatedProducts' effect.
-      // This block is kept for the 'recently viewed' logic.
-      try {
-        const recentItems = JSON.parse(localStorage.getItem("recentlyViewed") || "[]")
-        const exists = recentItems.some((i: any) => i.id === product.id)
-        if (!exists) {
-          const updated = [
-            {
-              id: product.id,
-              name: product.name,
-              price: currentPrice,
-              image: productImages[0] || "/placeholder-rhtiu.png",
-              slug: product.slug || product.id,
-              image_urls: productImages,
-              thumbnail_url: product.thumbnail_url,
-            },
-            ...recentItems,
-          ].slice(0, 6)
-          localStorage.setItem("recentlyViewed", JSON.stringify(updated)) // Fixed typo JSON.JSON to JSON
-          setRecentlyViewed(updated)
-        } else {
-          setRecentlyViewed(recentItems)
-        }
-      } catch {}
-    }
-    run()
-  }, [
-    product?.id,
-    product?.category_id,
-    product?.name,
-    currentPrice,
-    product?.slug,
-    product?.thumbnail_url,
-    productImages,
-  ])
-
+  // Custom event listeners for real-time updates from admin panel
   useEffect(() => {
     const handleProductUpdate = (event: CustomEvent) => {
       const { id, product: updatedProduct } = event.detail
       if (id === product?.id?.toString()) {
-        fetchInventoryData()
-      }
-    }
-
-    const handleInventoryUpdate = (event: CustomEvent) => {
-      const { product_id, stock, is_low_stock } = event.detail
-      if (product_id === product?.id) {
-        setInventoryData((prev) => ({
-          ...prev,
-          available_quantity: stock,
-          is_in_stock: stock > 0,
-          is_low_stock: is_low_stock,
-          stock_status: stock === 0 ? "out_of_stock" : is_low_stock ? "low_stock" : "in_stock",
-          last_updated: new Date().toISOString(),
-        }))
+        setProduct(updatedProduct)
       }
     }
 
     window.addEventListener("product-updated", handleProductUpdate as EventListener)
-    window.addEventListener("inventory-updated", handleInventoryUpdate as EventListener)
 
     return () => {
       window.removeEventListener("product-updated", handleProductUpdate as EventListener)
-      window.removeEventListener("inventory-updated", handleInventoryUpdate as EventListener)
-    }
-  }, [product?.id, fetchInventoryData])
-
-  useEffect(() => {
-    const handleProductImagesUpdated = (event: CustomEvent) => {
-      const { productId: updatedProductId } = event.detail || {}
-
-      if (updatedProductId && updatedProductId.toString() === product.id.toString()) {
-        imageBatchService.invalidateCache(product.id.toString())
-        fetchInventoryData()
-
-        productService
-          .getProduct(product.id.toString())
-          .then((updatedProduct) => {
-            if (updatedProduct) {
-              return imageBatchService.fetchProductImages(product.id.toString()).then((images: any[]) => {
-                if (images && images.length > 0) {
-                  updatedProduct.image_urls = images.map((img: any) => img.url || img.image_url).filter(Boolean)
-                }
-                setProduct(updatedProduct)
-                setSelectedImage(0)
-              })
-            }
-          })
-          .catch((error) => {
-            console.error("[v0] Error refreshing product:", error)
-          })
-      }
-    }
-
-    window.addEventListener("productImagesUpdated", handleProductImagesUpdated as EventListener)
-
-    return () => {
-      window.removeEventListener("productImagesUpdated", handleProductImagesUpdated as EventListener)
-    }
-  }, [product.id, fetchInventoryData])
-
-  useEffect(() => {
-    const fetchAllProductImages = async () => {
-      try {
-        imageBatchService.invalidateCache(product.id.toString())
-
-        const images: any[] = await imageBatchService.fetchProductImages(product.id.toString())
-
-        if (images && images.length > 0) {
-          const imageUrls = images.map((img: any) => img.url || img.image_url).filter(Boolean)
-
-          setProduct((prev: any) => ({
-            ...prev,
-            image_urls: imageUrls,
-          }))
-        } else {
-          setProduct((prev: any) => ({
-            ...prev,
-            image_urls: [],
-          }))
-        }
-      } catch (error) {
-        console.error("[v0] Error fetching product images:", error)
-        setProduct((prev: any) => ({
-          ...prev,
-          image_urls: [],
-        }))
-      }
-    }
-
-    if (product?.id) {
-      fetchAllProductImages()
     }
   }, [product?.id])
 
@@ -624,91 +289,7 @@ export default memo(function ProductDetailsEnhanced({
     )
   }
 
-  const fetchReviews = useCallback(async () => {
-    if (!product?.id) return
-    setIsLoadingReviews(true)
-    setReviewError(null)
-    try {
-      const [reviewsResponse, summaryResponse] = await Promise.all([
-        reviewService.getProductReviews(Number(product.id), {
-          page: 1,
-          per_page: showAllReviews ? 50 : 5,
-          sort_by: reviewSortBy === "recent" ? "created_at" : "rating",
-          sort_order: reviewSortBy === "lowest" ? "asc" : "desc",
-        }),
-        reviewService.getProductReviewSummary(Number(product.id)),
-      ])
-      setReviews(reviewsResponse.items)
-      setReviewSummary(summaryResponse)
-    } catch (error: any) {
-      console.error("[v0] Error fetching reviews:", error)
-      setReviewError(error?.message || "Failed to load reviews")
-      setReviews([])
-      setReviewSummary({
-        total_reviews: 0,
-        average_rating: 0,
-        verified_reviews: 0,
-        rating_distribution: { "5": 0, "4": 0, "3": 0, "2": 0, "1": 0 },
-      })
-    } finally {
-      setIsLoadingReviews(false)
-    }
-  }, [product?.id, showAllReviews, reviewSortBy])
-
-  useEffect(() => {
-    if (product?.id) {
-      fetchReviews()
-    }
-  }, [fetchReviews, product?.id])
-
-  const handleMarkHelpful = useCallback(
-    async (reviewId: number) => {
-      if (animatingReviews.has(reviewId)) return
-
-      setAnimatingReviews((prev) => new Set(prev).add(reviewId))
-
-      const isCurrentlyLiked = likedReviews.has(reviewId)
-      setLikedReviews((prev) => {
-        const newSet = new Set(prev)
-        if (isCurrentlyLiked) {
-          newSet.delete(reviewId)
-        } else {
-          newSet.add(reviewId)
-        }
-        return newSet
-      })
-
-      try {
-        await reviewService.markReviewHelpful(reviewId)
-        await fetchReviews()
-      } catch (error: any) {
-        console.error("[v0] Error marking review helpful:", error)
-        setLikedReviews((prev) => {
-          const newSet = new Set(prev)
-          if (isCurrentlyLiked) {
-            newSet.add(reviewId)
-          } else {
-            newSet.delete(reviewId)
-          }
-          return newSet
-        })
-        toast({
-          title: "Error",
-          description: error?.message || "Failed to mark review as helpful",
-          variant: "destructive",
-        })
-      } finally {
-        setTimeout(() => {
-          setAnimatingReviews((prev) => {
-            const newSet = new Set(prev)
-            newSet.delete(reviewId)
-            return newSet
-          })
-        }, 300)
-      }
-    },
-    [animatingReviews, likedReviews, fetchReviews, toast],
-  )
+  // Reviews are now managed by useProductReviews hook
 
   const handleAddToCart = async (): Promise<boolean> => {
     if (!inventoryData?.is_in_stock) {
@@ -718,12 +299,7 @@ export default memo(function ProductDetailsEnhanced({
     try {
       const fresh = await inventoryService.checkAvailability(Number(product.id), quantity, selectedVariant?.id)
       if (!fresh.is_available || quantity > fresh.available_quantity) {
-        setInventoryData({
-          available_quantity: fresh.available_quantity,
-          is_in_stock: fresh.available_quantity > 0,
-          is_low_stock: !!fresh.is_low_stock,
-          stock_status: fresh.available_quantity === 0 ? "out_of_stock" : fresh.is_low_stock ? "low_stock" : "in_stock",
-        })
+        // Inventory is auto-refreshed by the hook, just show toast
         toast({
           title: "Stock Updated",
           description:
@@ -769,7 +345,7 @@ export default memo(function ProductDetailsEnhanced({
         typeof selectedVariant?.id === "number" ? selectedVariant.id : undefined,
       )
       if (result.success) {
-        await fetchInventoryData()
+        // Inventory is auto-refreshed by the hook on product changes
         setCartNotificationData({
           name: product.name,
           price: currentPrice,
