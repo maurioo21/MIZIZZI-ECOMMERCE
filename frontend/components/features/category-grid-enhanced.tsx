@@ -95,6 +95,13 @@ export function CategoryGrid({ categories = [] }: CategoryGridProps) {
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
+    console.log("[v0] CategoryGrid received categories:", categories.length)
+    if (categories.length > 0) {
+      console.log("[v0] First category Cloudinary URL:", categories[0].image_url)
+    }
+  }, [categories])
+
+  useEffect(() => {
     // Listen for category cache updates from admin
     const unsubscribe = onCategoriesUpdated(() => {
       console.log("[v0] Categories updated event received, refreshing...")

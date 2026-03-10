@@ -55,7 +55,7 @@ class CategorySchema(ma.SQLAlchemyAutoSchema):
         # Only use backend endpoint if no Cloudinary URL is stored
         if obj.image_data:
             return f'/api/admin/shop-categories/categories/{obj.id}/image'
-        return None
+        return ""
 
     def get_banner_url(self, obj):
         """Generate banner URL - prioritize Cloudinary URL, fallback to database endpoint."""
@@ -65,7 +65,7 @@ class CategorySchema(ma.SQLAlchemyAutoSchema):
         # Only use backend endpoint if no Cloudinary URL is stored
         if obj.banner_data:
             return f'/api/admin/shop-categories/categories/{obj.id}/banner'
-        return None
+        return ""
 
 category_schema = CategorySchema()
 categories_schema = CategorySchema(many=True)

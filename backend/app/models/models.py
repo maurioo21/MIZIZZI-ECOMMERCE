@@ -634,9 +634,11 @@ class Category(db.Model):
             'name': self.name,
             'slug': self.slug,
             'description': self.description,
-            'image_url': f'/api/admin/shop-categories/categories/{self.id}/image' if self.image_data else self.image_url,
+            # PRIORITY: Use Cloudinary URL directly if available, fallback to backend endpoint
+            'image_url': self.image_url if self.image_url else (f'/api/admin/shop-categories/categories/{self.id}/image' if self.image_data else None),
             'image_public_id': self.image_public_id,
-            'banner_url': f'/api/admin/shop-categories/categories/{self.id}/banner' if self.banner_data else self.banner_url,
+            # PRIORITY: Use Cloudinary URL directly if available, fallback to backend endpoint
+            'banner_url': self.banner_url if self.banner_url else (f'/api/admin/shop-categories/categories/{self.id}/banner' if self.banner_data else None),
             'banner_public_id': self.banner_public_id,
             'parent_id': self.parent_id,
             'is_featured': self.is_featured,

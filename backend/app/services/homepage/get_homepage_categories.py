@@ -14,14 +14,7 @@ CACHE_TTL = 300  # 5 minutes
 def get_homepage_categories(limit: int = 20) -> List[Dict[str, Any]]:
     """
     Fetch categories for homepage with Redis caching.
-    OPTIMIZATION: Uses column-specific query to load only 5 needed fields (no full model).
-    This avoids loading large binary image_data, banner_data, and relationships.
-    
-    Args:
-        limit: Maximum number of categories to return
-        
-    Returns:
-        List of category dictionaries with id, name, slug, image, description
+    OPTIMIZATION: Uses full model to serialize properly with Cloudinary URLs
     """
     try:
         # Try to get from Redis cache
@@ -32,41 +25,37 @@ def get_homepage_categories(limit: int = 20) -> List[Dict[str, Any]]:
                 logger.debug("[Homepage] Categories loaded from cache")
                 return cached
         
-        # OPTIMIZATION: Query only 5 needed columns, not full model
-        # This avoids loading image_data (LargeBinary), banner_data, and subcategories relationship
-        # Explicit filter for active categories for future index support
-        categories = db.session.query(
-            Category.id,
-            Category.name,
-            Category.slug,
-            Category.image_url,
-            Category.description
-        ).filter(Category.is_active == True)\
+        # Query full Category models and use their to_dict() method
+        # This ensures proper URL handling (Cloudinary > backend endpoint)
+        categories = db.session.query(Category)\
+         .filter(Category.is_active == True)\
          .order_by(Category.sort_order.asc(), Category.created_at.desc())\
          .limit(limit)\
          .all()
         
-        # Serialize from tuples directly with full image support
+        # Serialize using the model's to_dict() which handles URL priority correctly
         result = [
             {
-                "id": row[0],
-                "name": row[1],
-                "slug": row[2],
-                "image": row[3] or "",  # Direct image_url from query
-                "image_url": row[3] or "",  # Standard field name
-                "description": row[4] or "",
+                "id": cat.id,
+                "name": cat.name,
+                "slug": cat.slug,
+                "image": cat.image_url or "",  # Direct Cloudinary URL from model
+                "image_url": cat.image_url or "",  # Cloudinary URL (not backend endpoint)
+                "banner_url": cat.banner_url or "",  # Cloudinary URL (not backend endpoint)
+                "description": cat.description or "",
                 "is_active": True
             }
-            for row in categories
+            for cat in categories
         ]
         
         # Cache result
         if product_cache:
             product_cache.set(CACHE_KEY, result, CACHE_TTL)
         
-        logger.debug(f"[Homepage] Loaded {len(result)} categories")
+        logger.debug(f"[Homepage] Loaded {len(result)} categories with Cloudinary URLs")
         return result
         
     except Exception as e:
         logger.error(f"[Homepage] Error loading categories: {e}")
         return []
+
