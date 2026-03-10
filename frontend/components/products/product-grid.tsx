@@ -7,6 +7,7 @@ import { productService } from "@/services/product"
 import { ShoppingBag, Star, Package } from "lucide-react"
 import type { Product } from "@/types"
 import { cloudinaryService } from "@/services/cloudinary-service"
+import { useMediaQuery } from "@/hooks/use-media-query"
 
 type ProductImageLike = {
   url?: string
@@ -131,13 +132,16 @@ const ProductCard = memo(
     const [primaryImageLoaded, setPrimaryImageLoaded] = useState(false)
     const [secondaryImageLoaded, setSecondaryImageLoaded] = useState(false)
 
+    // Media query hook to detect desktop
+    const isDesktop = useMediaQuery("(min-width: 1024px)")
+
     const discountPercentage = product.sale_price
       ? Math.round(((product.price - product.sale_price) / product.price) * 100)
       : 0
 
     const primaryImage = useMemo(() => resolvePrimaryImage(product), [product])
     const secondaryImage = useMemo(() => resolveSecondaryImage(product, primaryImage), [product, primaryImage])
-    const hasHoverImage = Boolean(secondaryImage)
+    const hasHoverImage = Boolean(secondaryImage) && isDesktop
 
     const handlePrimaryImageLoad = useCallback(() => {
       setPrimaryImageLoaded(true)
@@ -191,7 +195,7 @@ const ProductCard = memo(
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          whileHover={{ y: -2, transition: { duration: 0.2 } }}
+          whileHover={isDesktop ? { y: -2, transition: { duration: 0.2 } } : undefined}
           className="h-full"
         >
           <div className="group h-full overflow-hidden bg-white border-b border-r border-gray-100 transition-all duration-200 hover:shadow-sm">
@@ -216,7 +220,7 @@ const ProductCard = memo(
               {primaryImage && (
                 <motion.div
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: primaryImageLoaded && !isHovering ? 1 : 0 }}
+                  animate={{ opacity: primaryImageLoaded && !(isDesktop && isHovering) ? 1 : 0 }}
                   transition={{ duration: 0.4, ease: "easeInOut" }}
                   className="absolute inset-0"
                 >
@@ -233,8 +237,8 @@ const ProductCard = memo(
                 </motion.div>
               )}
 
-              {/* Secondary Image - shows on hover */}
-              {secondaryImage && (
+              {/* Secondary Image - shows on hover only on desktop */}
+              {secondaryImage && isDesktop && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: isHovering && secondaryImageLoaded ? 1 : 0 }}
@@ -245,7 +249,7 @@ const ProductCard = memo(
                     src={secondaryImage}
                     alt={`${product.name} - alternate view`}
                     fill
-                    sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                    sizes="16vw"
                     className="object-cover transition-transform duration-300 group-hover:scale-105"
                     loading="lazy"
                     quality={75}
