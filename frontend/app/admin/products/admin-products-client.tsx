@@ -1191,33 +1191,35 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
 
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <div className="flex flex-col gap-4 md:gap-6">
+            {/* Search and Filters Row - Stack on mobile */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center">
+              <div className="relative flex-1 min-w-0 sm:w-auto">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 flex-shrink-0" />
                 <Input
                   placeholder="Search products..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="pl-10 w-80 rounded-full border-gray-200 focus:border-gray-300"
+                  className="pl-10 w-full sm:w-80 rounded-full border-gray-200 focus:border-gray-300 text-sm"
                 />
               </div>
               <Sheet open={uiState.isFilterSheetOpen} onOpenChange={(open) => setUiState((prev) => ({ ...prev, isFilterSheetOpen: open }))}>
                 <SheetTrigger asChild>
                   <Button
                     variant="outline"
+                    size="sm"
                     className={cn(
-                      "rounded-full border-gray-200 hover:bg-gray-50 transition-all duration-200",
+                      "rounded-full border-gray-200 hover:bg-gray-50 transition-all duration-200 whitespace-nowrap",
                       uiState.isFilterActive && "bg-blue-50 border-blue-200 text-blue-700",
                     )}
                   >
-                    <Filter className="mr-2 h-4 w-4" />
-                    Filters{" "}
+                    <Filter className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span className="hidden sm:inline">Filters</span>
                     {uiState.isFilterActive &&
                       `(${Object.values({ searchQuery: filterState.debouncedSearchQuery, filterOption: filterState.filterOption, categoryFilter: filterState.categoryFilter }).filter(Boolean).length})`}
                   </Button>
                 </SheetTrigger>
-                <SheetContent className="w-96">
+                <SheetContent className="w-full sm:w-96">
                   <SheetHeader>
                     <SheetTitle className="text-xl font-semibold">Filter Products</SheetTitle>
                     <SheetDescription className="text-gray-600">
@@ -1433,99 +1435,109 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                 </SheetContent>
               </Sheet>
 
-              {uiState.isFilterActive && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={resetFilters}
-                  className="rounded-full border-gray-200 hover:bg-gray-50 bg-transparent"
-                >
-                  <X className="h-4 w-4 mr-1" /> Clear Filters
-                </Button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              {selectedProducts.length > 0 && (
-                <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-200">
-                  <Checkbox checked={true} className="h-4 w-4" onChange={handleSelectAll} title="Select all products on page" />
-                  <span className="text-sm font-medium text-blue-900">{selectedProducts.length} selected</span>
+            {/* Second row - Sort, Selection, and View Mode - Stack on mobile */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-stretch sm:items-center justify-between">
+              <div className="flex gap-2 flex-wrap">
+                {uiState.isFilterActive && (
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => setSelectedProducts([])}
-                    className="h-6 px-2 rounded-full"
+                    onClick={resetFilters}
+                    className="rounded-full border-gray-200 hover:bg-gray-50 bg-transparent whitespace-nowrap text-xs sm:text-sm"
                   >
-                    Clear
+                    <X className="h-4 w-4 mr-1" /> Clear Filters
+                  </Button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
+                <Select value={filterState.sortOption} onValueChange={(value: SortOption) => handleFilterChange("sortOption", value)}>
+                  <SelectTrigger className="w-auto sm:w-[180px] rounded-full border-gray-200 text-xs sm:text-sm h-9">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="newest">Newest First</SelectItem>
+                    <SelectItem value="oldest">Oldest First</SelectItem>
+                    <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                    <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+                    <SelectItem value="price_high">Price (High to Low)</SelectItem>
+                    <SelectItem value="price_low">Price (Low to High)</SelectItem>
+                    <SelectItem value="stock_high">Stock (High to Low)</SelectItem>
+                    <SelectItem value="stock_low">Stock (Low to High)</SelectItem>
+                    <SelectItem value="sales_high">Best Selling</SelectItem>
+                    <SelectItem value="rating_high">Highest Rated</SelectItem>
+                    <SelectItem value="profit_high">Most Profitable</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* View Mode Toggle - Responsive */}
+                <div className="flex items-center space-x-1 bg-gray-50 p-1 rounded-lg">
+                  <Button
+                    variant={uiState.viewMode === "list" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleUIStateChange("viewMode", "list")}
+                    className="rounded-md h-8 px-2 text-xs"
+                    title="List view"
+                  >
+                    <FileText className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant={uiState.viewMode === "grid" ? "default" : "outline"}
                     size="sm"
-                    onClick={handleBulkDelete}
-                    disabled={uiState.isDeleting}
-                    className="rounded-full"
+                    onClick={() => handleUIStateChange("viewMode", "grid")}
+                    className="rounded-md h-8 px-2 text-xs hidden sm:inline-flex"
+                    title="Grid view"
                   >
-                    <Trash2 className="mr-1 h-3 w-3" />
-                    Delete ({selectedProducts.length})
+                    <Package className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={uiState.viewMode === "analytics" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleUIStateChange("viewMode", "analytics")}
+                    className="rounded-md h-8 px-2 text-xs hidden md:inline-flex"
+                    title="Analytics view"
+                  >
+                    <TrendingUp className="h-4 w-4" />
                   </Button>
                 </div>
-              )}
-
-              <Select value={filterState.sortOption} onValueChange={(value: SortOption) => handleFilterChange("sortOption", value)}>
-                <SelectTrigger className="w-[180px] rounded-full border-gray-200">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl">
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="oldest">Oldest First</SelectItem>
-                  <SelectItem value="name_asc">Name (A-Z)</SelectItem>
-                  <SelectItem value="name_desc">Name (Z-A)</SelectItem>
-                  <SelectItem value="price_high">Price (High to Low)</SelectItem>
-                  <SelectItem value="price_low">Price (Low to High)</SelectItem>
-                  <SelectItem value="stock_high">Stock (High to Low)</SelectItem>
-                  <SelectItem value="stock_low">Stock (Low to High)</SelectItem>
-                  <SelectItem value="sales_high">Best Selling</SelectItem>
-                  <SelectItem value="rating_high">Highest Rated</SelectItem>
-                  <SelectItem value="profit_high">Most Profitable</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* View Mode Toggle - Hide grid/analytics on mobile */}
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant={uiState.viewMode === "list" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleUIStateChange("viewMode", "list")}
-                  className="rounded-full"
-                >
-                  <FileText className="h-4 w-4" />
-                </Button>
-                {/* Grid button - hidden on mobile */}
-                <Button
-                  variant={uiState.viewMode === "grid" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleUIStateChange("viewMode", "grid")}
-                  className="rounded-full hidden sm:inline-flex"
-                >
-                  <Package className="h-4 w-4" />
-                </Button>
-                {/* Analytics button - hidden on mobile */}
-                <Button
-                  variant={uiState.viewMode === "analytics" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleUIStateChange("viewMode", "analytics")}
-                  className="rounded-full hidden sm:inline-flex"
-                >
-                  <TrendingUp className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Selection Bar - Full width on mobile, compact on desktop */}
+        {selectedProducts.length > 0 && (
+          <div className="px-6 py-3 bg-blue-50 border-b border-blue-200 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Checkbox checked={true} className="h-4 w-4" onChange={handleSelectAll} title="Select all products on page" />
+              <span className="text-sm font-medium text-blue-900">{selectedProducts.length} selected</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedProducts([])}
+                className="h-8 px-3 rounded-full text-xs"
+              >
+                Clear
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={uiState.isDeleting}
+                className="rounded-full text-xs h-8"
+              >
+                <Trash2 className="mr-1 h-3 w-3" />
+                Delete ({selectedProducts.length})
+              </Button>
+            </div>
+          </div>
+        )}
+
         <Tabs defaultValue="all" value={uiState.activeTab} onValueChange={(value) => setUiState((prev) => ({ ...prev, activeTab: value }))}>
-          <div className="px-6 py-4 border-b border-gray-100">
-            <TabsList className="grid grid-cols-4 md:grid-cols-8 gap-1 bg-gray-50 p-1 rounded-2xl">
+          <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 overflow-x-auto">
+            <TabsList className="grid grid-cols-4 md:grid-cols-8 gap-0.5 sm:gap-1 bg-gray-50 p-1 rounded-2xl w-max md:w-full inline-flex md:grid">
               {[
                 { value: "all", label: "All", count: allProducts.length, icon: Package },
                 { value: "in_stock", label: "In Stock", count: productStats?.inStock || 0, icon: CheckCircle2 },
@@ -1533,18 +1545,18 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                 { value: "featured", label: "Featured", count: productStats?.featured || 0, icon: Star },
                 { value: "on_sale", label: "On Sale", count: productStats?.onSale || 0, icon: Percent },
                 { value: "new", label: "New", count: productStats?.newProducts || 0, icon: Sparkles },
-                { value: "trending", label: "Trending", count: 0, icon: TrendingUp }, // Placeholder count
-                { value: "luxury_deal", label: "Luxury", count: productStats?.luxuryDeal || 0, icon: Crown }, // Use luxuryDeal count
+                { value: "trending", label: "Trending", count: 0, icon: TrendingUp },
+                { value: "luxury_deal", label: "Luxury", count: productStats?.luxuryDeal || 0, icon: Crown },
               ].map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="text-xs md:text-sm rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-2"
+                  className="text-xs md:text-sm rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 md:gap-2 px-1 sm:px-2 md:px-3 py-1.5 md:py-2 whitespace-nowrap md:whitespace-normal"
                 >
-                  <tab.icon className="h-3 w-3" />
-                  <span className="hidden md:inline">{tab.label}</span>
-                  <span className="md:hidden">{tab.label.slice(0, 3)}</span>
-                  <Badge variant="secondary" className="ml-1 text-xs">
+                  <tab.icon className="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
+                  <span className="hidden sm:inline text-xs md:text-sm">{tab.label}</span>
+                  <span className="sm:hidden text-xs">{tab.label.slice(0, 2)}</span>
+                  <Badge variant="secondary" className="ml-0 sm:ml-1 text-xs px-1.5 py-0 h-5">
                     {tab.count}
                   </Badge>
                 </TabsTrigger>
@@ -1552,7 +1564,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
             </TabsList>
           </div>
 
-          <div className="p-6">
+          <div className="p-3 sm:p-6">
             {dialogState.errorMessage ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <AlertCircle className="h-16 w-16 text-red-500 mb-6" />
