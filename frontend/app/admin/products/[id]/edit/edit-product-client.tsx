@@ -1,710 +1,1724 @@
+
 "use client"
 
-import { useEffect, useState, useRef, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { useAdminAuth } from "@/contexts/admin/auth-context"
-import { toast } from "@/components/ui/use-toast"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { ArrowLeft } from "lucide-react"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ProductBasicInfoTab } from "@/components/admin/products/product-basic-info-tab"
-import { ProductPricingInventoryTab } from "@/components/admin/products/product-pricing-inventory-tab"
-import { ProductImagesTab } from "@/components/admin/products/product-images-tab"
-import { ProductVariantsTab } from "@/components/admin/products/product-variants-tab"
-import { ProductSeoTab } from "@/components/admin/products/product-seo-tab"
-import { ProductSpecificationsHighlightsTab } from "@/components/admin/products/product-specifications-highlights-tab"
-import { useProductForm } from "@/hooks/use-product-form"
-import type { Product } from "@/types"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuGroup,
+} from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { toast } from "@/hooks/use-toast"
+import { adminService } from "@/services/admin"
+import { useAdminAuth } from "@/contexts/admin/auth-context"
+import { useMobile } from "@/hooks/use-mobile"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+  SheetFooter,
+} from "@/components/ui/sheet"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { OptimizedImage } from "@/components/ui/optimized-image"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { imageBatchService } from "@/services/image-batch-service"
 import { websocketService } from "@/services/websocket"
-// Update imports at the top of the file to include our new hooks
-import { useProduct, useProductImages, useCategories, useBrands } from "@/hooks/use-swr-product"
-import { FormProvider } from "react-hook-form"
-// Add import for NetworkDetector
-import { NetworkDetector } from "@/components/network-detector"
-import { productService } from "@/services/product"
+import type { Product } from "@/types"
+import { ProductRow } from "@/components/admin/product-row"
+import { ProductCard } from "@/components/admin/product-card"
+import { ProductList } from "@/components/admin/product-list"
+import { Button } from "@/components/ui/button"
+import {
+  Package,
+  Star,
+  Zap,
+  MoreHorizontal,
+  Eye,
+  Edit,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  Tag,
+  Sparkles,
+  DollarSign,
+  TrendingUp,
+  Crown,
+  Search,
+  Filter,
+  X,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  Download,
+  Upload,
+  Plus,
+  XCircle,
+  Percent,
+  AlertCircle,
+  PieChart,
+} from "lucide-react"
 
-// Function to check if productId is a valid number
-const isValidProductId = (productId: string): boolean => {
-  return !isNaN(Number(productId)) && Number(productId) > 0
+// Define the filter and sort options
+type SortOption =
+  | "newest"
+  | "oldest"
+  | "name_asc"
+  | "name_desc"
+  | "price_high"
+  | "price_low"
+  | "stock_high"
+  | "stock_low"
+  | "sales_high"
+  | "sales_low"
+  | "rating_high"
+  | "rating_low"
+  | "views_high"
+  | "views_low"
+  | "profit_high"
+  | "profit_low"
+type FilterOption =
+  | "all"
+  | "in_stock"
+  | "out_of_stock"
+  | "featured"
+  | "on_sale"
+  | "new"
+  | "flash_sale"
+  | "luxury_deal"
+  | "trending"
+  | "low_stock"
+  | "high_performing"
+  | "needs_attention"
+  | "draft"
+  | "archived"
+type ViewMode = "list" | "grid" | "analytics" // Added grid and analytics to ViewMode
+
+// Product Type (Redeclared, removed to avoid lint error)
+// interface Product {
+//   id: number | string
+//   name: string
+//   slug?: string
+//   category?: { id: string | number; name: string } | string
+//   category_id?: string | number
+//   price: number
+//   sale_price?: number | null
+//   stock?: number
+//   is_featured?: boolean
+//   is_new?: boolean
+//   is_sale?: boolean
+//   is_flash_sale?: boolean
+//   is_luxury_deal?: boolean
+//   image_urls?: string[]
+//   thumbnail_url?: string | null
+//   description?: string
+//   short_description?: string
+//   created_at?: string
+//   updated_at?: string
+//   brand?: { id: string | number; name: string } | string
+//   sku?: string
+//   weight?: number
+//   dimensions?: { length: number; width: number; height: number }
+//   tags?: string[]
+//   seo_title?: string
+//   seo_description?: string
+//   meta_keywords?: string[]
+//   rating?: number
+//   review_count?: number
+//   total_sales?: number
+//   views?: number
+//   wishlist_count?: number
+//   conversion_rate?: number
+//   profit_margin?: number
+//   cost_price?: number
+//   supplier?: string
+//   warranty?: string
+//   return_policy?: string
+//   shipping_class?: string
+//   tax_class?: string
+//   status?: "active" | "inactive" | "draft" | "archived"
+//   visibility?: "public" | "private" | "password_protected"
+//   featured_image?: string
+//   gallery_images?: string[]
+//   video_url?: string
+//   downloadable?: boolean
+//   virtual?: boolean
+//   manage_stock?: boolean
+//   stock_status?: "in_stock" | "out_of_stock" | "on_backorder"
+//   backorders?: "no" | "notify" | "yes"
+//   low_stock_threshold?: number
+//   sold_individually?: boolean
+//   purchase_note?: string
+//   menu_order?: number
+//   cross_sell_ids?: string[]
+//   upsell_ids?: string[]
+//   grouped_products?: string[]
+//   external_url?: string
+//   button_text?: string
+//   attributes?: Array<{
+//     name: string
+//     value: string
+//     visible: boolean
+//     variation: boolean
+//   }>
+//   variations?: Array<{
+//     id: string
+//     attributes: Record<string, string>
+//     price: number
+//     sale_price?: number
+//     stock?: number
+//     image?: string
+//   }>
+//   // New properties for updated ProductStats calculation
+//   stock_quantity?: number
+//   discount_percentage?: number
+//   // Added properties for the new table view
+//   category_name?: string
+//   compare_at_price?: number
+// }
+
+// Categories Type (Redeclared, removed to avoid lint error)
+// interface Category {
+//   id: number | string
+//   name: string
+//   slug?: string
+// }
+
+interface ProductStats {
+  totalProducts: number
+  inStock: number
+  outOfStock: number
+  lowStock: number
+  onSale: number
+  featured: number
+  newProducts: number
+  totalInventoryValue: number
+  averagePrice: number
+  categoriesCount: number
+  luxuryDeal: number // Added luxuryDeal to ProductStats
 }
 
-// Client component that receives the unwrapped productId as a prop
-export function EditProductClient({ 
-  productId,
-  initialProduct,
-  initialCategories = [],
-  initialBrands = [],
-  initialImages = [],
-}: { 
-  productId: string
-  initialProduct?: any
-  initialCategories?: any[]
-  initialBrands?: any[]
-  initialImages?: any[]
-}) {
+const LoadingOverlay = ({ message }: { message: string }) => (
+  <div className="fixed inset-0 bg-white/90 backdrop-blur-md z-50 flex items-center justify-center">
+    <div className="bg-white rounded-3xl shadow-2xl border border-gray-100 p-8 flex flex-col items-center gap-6 max-w-sm mx-4">
+      <div className="relative">
+        <div className="w-12 h-12 border-3 border-gray-200 border-t-gray-900 rounded-full animate-spin" />
+        <div
+          className="absolute inset-0 w-12 h-12 border-3 border-transparent border-r-blue-500 rounded-full animate-spin"
+          style={{ animationDirection: "reverse", animationDuration: "1.5s" }}
+        />
+      </div>
+      <div className="text-center">
+        <p className="text-gray-900 font-semibold text-lg">{message}</p>
+        <p className="text-gray-500 text-sm mt-1">Please wait...</p>
+      </div>
+    </div>
+  </div>
+)
+
+const MiniSpinner = () => (
+  <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+)
+
+const StatsCard = ({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  colorClass = "bg-blue-500",
+}: {
+  title: string
+  value: string | number
+  subtitle: string
+  icon: any
+  colorClass?: string
+}) => (
+  <div className={`${colorClass} rounded-lg p-4 shadow-md hover:shadow-lg transition-all duration-200 text-white`}>
+    <div className="flex items-start justify-between mb-3">
+      <div className="p-2 bg-white/20 rounded-lg">
+        <Icon className="h-4 w-4 text-white" strokeWidth={1.5} />
+      </div>
+    </div>
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-white/85 uppercase tracking-wide">{title}</p>
+      <p className="text-lg sm:text-xl font-bold text-white tracking-tight">{value}</p>
+      <p className="text-xs text-white/70">{subtitle}</p>
+    </div>
+  </div>
+)
+
+const EnhancedProductCard = ({
+  product,
+  isSelected,
+  onSelect,
+  onEdit,
+  onView,
+  onDelete,
+}: {
+  product: Product
+  isSelected: boolean
+  onSelect: () => void
+  onEdit: () => void
+  onView: () => void
+  onDelete: () => void
+}) => (
+  <div className="bg-white rounded-lg border border-gray-100 overflow-hidden shadow-sm hover:shadow-md">
+    <div className="relative aspect-square bg-gray-50">
+      <OptimizedImage
+        src={product.thumbnail_url || product.featured_image || "/placeholder.svg?height=300&width=300&query=product"}
+        alt={product.name}
+        className="w-full h-full object-cover"
+        fallback={
+          <div className="w-full h-full flex items-center justify-center bg-gray-100">
+            <Package className="h-16 w-16 text-gray-400" />
+          </div>
+        }
+      />
+
+      {/* Selection checkbox */}
+      <div className="absolute top-3 right-3">
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={onSelect}
+          className="bg-white border-gray-300 shadow"
+        />
+      </div>
+
+      {/* Status badges */}
+      <div className="absolute top-3 left-3 flex flex-col gap-1">
+        {product.is_featured && (
+          <Badge className="bg-blue-500 text-white rounded-full text-xs px-2 py-0.5">
+            <Star className="h-2.5 w-2.5 mr-0.5 fill-current" /> Featured
+          </Badge>
+        )}
+        {product.is_flash_sale && (
+          <Badge className="bg-amber-500 text-white rounded-full text-xs px-2 py-0.5">
+            <Zap className="h-2.5 w-2.5 mr-0.5" /> Flash Sale
+          </Badge>
+        )}
+      </div>
+    </div>
+
+    <div className="p-4">
+      <div className="flex items-start justify-between mb-2">
+        <h3 className="font-medium text-gray-900 line-clamp-2 text-sm">{product.name}</h3>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuLabel className="text-xs">Actions</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={onView} className="text-xs">
+                <Eye className="mr-2 h-3 w-3" />
+                View
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onEdit} className="text-xs">
+                <Edit className="mr-2 h-3 w-3" />
+                Edit
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Pricing */}
+      <div className="mb-3">
+        <div className="text-sm font-semibold text-gray-900">KSh {product.price?.toLocaleString() || 0}</div>
+        {product.sale_price && product.sale_price < product.price && (
+          <div className="text-xs text-gray-500 line-through">KSh {product.sale_price?.toLocaleString()}</div>
+        )}
+      </div>
+
+      {/* Quick info */}
+      <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+        <div className="bg-gray-50 p-2 rounded">
+          <div className="font-medium text-gray-900">{product.total_sales || 0}</div>
+          <div className="text-gray-500">Sales</div>
+        </div>
+        <div className="bg-gray-50 p-2 rounded">
+          <div className="font-medium text-gray-900">{product.stock || 0}</div>
+          <div className="text-gray-500">Stock</div>
+        </div>
+      </div>
+
+      {/* Status badges */}
+      <div className="flex gap-1">
+        {(product.stock || 0) > 0 ? (
+          <Badge className="bg-green-50 text-green-700 text-xs rounded">In Stock</Badge>
+        ) : (
+          <Badge className="bg-red-50 text-red-700 text-xs rounded">Out of Stock</Badge>
+        )}
+      </div>
+    </div>
+  </div>
+)
+
+interface AdminProductsClientProps {
+  initialProducts: Product[]
+}
+
+export default function AdminProductsClient({ initialProducts }: AdminProductsClientProps) {
   const router = useRouter()
-  const { isAuthenticated, isLoading: authLoading, logout, refreshAccessToken, getToken } = useAdminAuth()
+  const { isAuthenticated, isLoading: authLoading, isAdmin } = useAdminAuth()
+  const isMobile = useMobile()
 
-  const [isLoading, setIsLoading] = useState(!initialProduct || initialCategories.length === 0 || initialBrands.length === 0)
-  // Use SWR with initial data from SSR
-  const { product, isLoading: isLoadingProduct, isError: productError, mutate: mutateProduct } = useProduct(productId, { fallbackData: initialProduct })
-  const { images: productImages, mutate: mutateImages } = useProductImages(
-    isValidProductId(productId) ? productId : undefined,
-    { fallbackData: initialImages }
-  )
-  const {
-    categories,
-    isLoading: isLoadingCategories,
-    isError: categoriesError,
-    mutate: mutateCategories,
-  } = useCategories({ fallbackData: initialCategories })
-  const { brands, isLoading: isLoadingBrands, isError: brandsError } = useBrands({ fallbackData: initialBrands })
-  const [activeTab, setActiveTab] = useState("basic")
-  const [unsavedChangesDialog, setUnsavedChangesDialog] = useState(false)
-  const [navigateTo, setNavigateTo] = useState("")
-  const [saveSuccess, setSaveSuccess] = useState(false)
-  const [brandError, setBrandError] = useState(false)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [lastSaved, setLastSaved] = useState<string | null>(null)
-  const [dataFetched, setDataFetched] = useState(false)
-  const [formReady, setFormReady] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const isUpdatingForm = useRef(false)
-  const [lastAutoSave, setLastAutoSave] = useState<string | null>(null)
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const fetchAttemptRef = useRef(0)
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
-  // Add isOnline state
-  const [isOnline, setIsOnline] = useState(true)
+  // Consolidated state management - reduced from 16+ to 8 main state objects
+  // Separate search input state from filter state for better debouncing
+  const [searchInput, setSearchInput] = useState("")
+  const [allProducts, setAllProducts] = useState<Product[]>(initialProducts)
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [categories, setCategories] = useState<any[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
 
-  // Initialize form with custom hook
-  const {
-    form,
-    formState,
-    isSubmitting: isFormSubmitting,
-    formChanged,
-    setFormChanged,
-    images,
-    setImages,
-    variants,
-    setVariants,
-    resetForm,
-    handleSubmit,
-  } = useProductForm({
-    productId,
-    onSuccess: (updatedProduct: Product) => {
-      // setProduct(updatedProduct)
-      setSaveSuccess(true)
-      setLastSaved(new Date().toLocaleTimeString())
-      setFormChanged(false)
-
-      toast({
-        title: "Product Updated Successfully",
-        description: `${updatedProduct.name} has been updated with the latest information.`,
-      })
-
-      // Hide success message after 3 seconds
-      setTimeout(() => {
-        setSaveSuccess(false)
-      }, 3000)
-      mutateProduct()
-      mutateImages()
-    },
-    onError: (error: string) => {
-      setApiError(error)
-      toast({
-        title: "Update Failed",
-        description: error,
-        variant: "destructive",
-      })
-    },
+  // Combined UI state
+  const [uiState, setUiState] = useState({
+    viewMode: "list" as "list" | "grid" | "analytics",
+    isFilterSheetOpen: false,
+    isRefreshing: false,
+    isLoading: false,
+    isDeleting: false,
+    isLoadingCategories: true,
+    isFilterActive: false,
+    activeTab: "all",
   })
 
-  // Update the handleAutoSave function to check network status
-  const handleAutoSave = async () => {
-    if (!formChanged || isSubmitting || !isOnline) return
+  // Combined filter/search state
+  const [filterState, setFilterState] = useState({
+    debouncedSearchQuery: "",
+    sortOption: "newest" as SortOption,
+    filterOption: "all" as FilterOption,
+    categoryFilter: null as number | null,
+    pageSize: isMobile ? 8 : 10,
+  })
 
-    try {
-      if (await ensureValidToken()) {
-        setIsSubmitting(true)
+  // Combined dialog state
+  const [dialogState, setDialogState] = useState({
+    productToDelete: null as string | null,
+    errorMessage: null as string | null,
+    operationMessage: "",
+    operationType: null as "refresh" | "fetch_images" | "bulk" | null,
+    isBulkDeleteDialogOpen: false,
+  })
 
-        const values = form.getValues()
+  // Image and loading states
+  const [productImages, setProductImages] = useState<Record<string, string>>({})
+  const [itemLoadingStates, setItemLoadingStates] = useState<Record<string, boolean>>({})
 
-        await handleSubmit(values)
-
-        setLastAutoSave(new Date().toLocaleTimeString())
-
-        setIsSubmitting(false)
-      }
-    } catch (error) {
-      console.error("Auto-save failed:", error)
-      setIsSubmitting(false)
-    }
-  }
-
-  // Set up auto-save timer when enabled
+  // Auto-switch to list view on mobile
   useEffect(() => {
-    if (autoSaveEnabled && formChanged) {
-      // Auto-save every 2 minutes if there are changes
-      if (autoSaveTimerRef.current) {
-        clearInterval(autoSaveTimerRef.current)
-      }
-      autoSaveTimerRef.current = setInterval(handleAutoSave, 2 * 60 * 1000)
-    } else if (autoSaveTimerRef.current) {
-      clearInterval(autoSaveTimerRef.current)
-      autoSaveTimerRef.current = null
+    if (isMobile && uiState.viewMode === "grid") {
+      setUiState(prev => ({ ...prev, viewMode: "list" }))
+    } else if (!isMobile && uiState.viewMode === "list" && !searchInput) {
+      // Optional: switch back to grid on desktop (only if grid is preferred)
+      // setUiState(prev => ({ ...prev, viewMode: "grid" }))
     }
+  }, [isMobile])
 
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearInterval(autoSaveTimerRef.current)
-      }
-    }
-  }, [autoSaveEnabled, formChanged, isSubmitting, isOnline])
+  // Debounce search input (using ref for proper debouncing)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilterState(prev => ({ ...prev, debouncedSearchQuery: searchInput }))
+    }, 300)
 
-  // Redirect if not authenticated
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [filterState.debouncedSearchQuery, filterState.sortOption, filterState.filterOption, filterState.categoryFilter, uiState.activeTab])
+
+  // Set page size based on screen size
+  useEffect(() => {
+    setFilterState(prev => ({ ...prev, pageSize: isMobile ? 8 : 10 }))
+  }, [isMobile])
+
+  // Auth check
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.push("/admin/products")
+      router.push("/admin/login")
     }
   }, [isAuthenticated, authLoading, router])
 
-  // Update the resetForm call to use the SWR product data when it becomes available
+  // Fetch categories - only after authentication
   useEffect(() => {
-    // only reset if we haven't initialized the form yet
-    if (product && !isLoadingProduct && !formReady) {
-      console.log("SWR product data loaded, resetting form:", product)
-      resetForm(product)
-      setFormReady(true)
-      setDataFetched(true)
-      setIsLoading(false)
-    }
-  }, [product, isLoadingProduct, resetForm, formReady])
+    const fetchCategories = async () => {
+      // Only fetch if authenticated and not already loading
+      if (!isAuthenticated || authLoading) return
 
-  const ensureValidToken = async (): Promise<boolean> => {
-    try {
-      // Check if we have any token at all
-      const currentToken = getToken()
-      if (!currentToken) {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to continue.",
-          variant: "destructive",
-        })
-        logout()
-        router.push("/admin/login?reason=authentication_required")
-        return false
-      }
-
-      // If we have a current token, use it directly without forcing refresh
-      // This prevents unnecessary redirects during save operations
-      // Only attempt refresh if the API call itself fails with 401
-      return true
-    } catch (error: any) {
-      console.error("[v0] Token validation error:", error)
-      toast({
-        title: "Authentication Error",
-        description: "Unable to verify your session. Please log in again.",
-        variant: "destructive",
-      })
-      logout()
-      router.push("/admin/login?reason=authentication_error")
-      return false
-    }
-  }
-
-  // Handle navigation with unsaved changes check
-  const handleNavigation = (path: string) => {
-    if (formChanged) {
-      setNavigateTo(path)
-      setUnsavedChangesDialog(true)
-    } else {
-      router.push(path)
-    }
-  }
-
-  const saveSectionChanges = useCallback(
-    async (section: string): Promise<boolean> => {
       try {
-        // Show saving toast
-        toast({
-          title: `Saving ${section}`,
-          description: "Please wait while your changes are being saved...",
-        })
-
-        setIsSubmitting(true)
-        setApiError(null)
-
-        // Ensure we have a valid token before proceeding
-        if (!(await ensureValidToken())) {
-          setIsSubmitting(false)
-          return false
+        setUiState((prev) => ({ ...prev, isLoadingCategories: true }))
+        const response = await adminService.getCategories({ per_page: 10000 })
+        if (response && response.items) {
+          setCategories(Array.isArray(response.items) ? response.items : [])
         }
+      } catch (error) {
+        // Silently handle errors (categories are optional)
+        console.debug("Failed to fetch categories:", error instanceof Error ? error.message : "Unknown error")
+        setCategories([])
+      } finally {
+        setUiState(prev => ({ ...prev, isLoadingCategories: false }))
+      }
+    }
 
-        // Get current form values
-        const formValues = form.getValues()
+    fetchCategories()
+  }, [isAuthenticated, authLoading])
 
-        // Prepare product data for submission
-        const productData = {
-          ...formValues,
-          image_urls: images,
-          thumbnail_url: images.length > 0 ? images[0] : null,
-          variants: variants,
-        }
+  // Memoized product filtering and sorting - compute derived values efficiently
+  const filteredProducts = useMemo(() => {
+    let result = [...allProducts]
 
-        // If the brand_id is 0 (from the "None" option), set it to null
-        if (productData.brand_id === 0) {
-          productData.brand_id = null
-        }
+    // Apply search filter
+    if (filterState.debouncedSearchQuery) {
+      const query = filterState.debouncedSearchQuery.toLowerCase()
+      result = result.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(query) ||
+          p.sku?.toLowerCase().includes(query) ||
+          p.description?.toLowerCase().includes(query),
+      )
+    }
 
-        // Remove fields that the backend doesn't handle
-        // The backend only handles specific fields defined in the update_product route
-        // NOTE: SKU is excluded as it's auto-generated and read-only
-        const allowedFields = [
-          'name', 'slug', 'description', 'price', 'sale_price', 'stock',
-          'category_id', 'brand_id', 'weight',
-          'is_featured', 'is_new', 'is_sale', 'is_flash_sale', 'is_luxury_deal',
-          'meta_title', 'meta_description', 'material',
-          'image_urls', 'thumbnail_url', 'tags'
-        ]
+    // Apply status filter
+    switch (filterState.filterOption) {
+      case "in_stock":
+        result = result.filter((p) => (p.stock || 0) > 0)
+        break
+      case "out_of_stock":
+        result = result.filter((p) => (p.stock || 0) <= 0)
+        break
+      case "featured":
+        result = result.filter((p) => p.is_featured)
+        break
+      case "on_sale":
+        result = result.filter((p) => p.is_sale)
+        break
+      case "new":
+        result = result.filter((p) => p.is_new)
+        break
+      case "low_stock":
+        result = result.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) <= 10)
+        break
+      case "draft":
+        result = result.filter((p) => p.status === "draft")
+        break
+    }
 
-        const cleanedData = Object.keys(productData).reduce((acc: Record<string, any>, key) => {
-          if (allowedFields.includes(key)) {
-            acc[key] = productData[key]
-          }
-          return acc
-        }, {})
+    // Apply category filter
+    if (filterState.categoryFilter) {
+      result = result.filter((p) => p.category_id === filterState.categoryFilter)
+    }
 
-        console.log(`[v0] Submitting ${section} data for product ID: ${productId}`)
-        console.log("[v0] Cleaned payload being sent:", JSON.stringify(cleanedData, null, 2))
+    // Apply sorting
+    switch (filterState.sortOption) {
+      case "newest":
+        result.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        break
+      case "oldest":
+        result.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+        break
+      case "name_asc":
+        result.sort((a, b) => a.name.localeCompare(b.name))
+        break
+      case "name_desc":
+        result.sort((a, b) => b.name.localeCompare(a.name))
+        break
+      case "price_high":
+        result.sort((a, b) => b.price - a.price)
+        break
+      case "price_low":
+        result.sort((a, b) => a.price - b.price)
+        break
+      case "stock_high":
+        result.sort((a, b) => (b.stock || 0) - (a.stock || 0))
+        break
+      case "stock_low":
+        result.sort((a, b) => (a.stock || 0) - (b.stock || 0))
+        break
+    }
 
-        // Dispatch event to notify that update is starting
-        if (typeof window !== "undefined") {
-          const startEvent = new CustomEvent("product-update-start", {
-            detail: { id: productId, section },
-          })
-          window.dispatchEvent(startEvent)
-        }
+    return result
+  }, [
+    allProducts,
+    filterState.debouncedSearchQuery,
+    filterState.filterOption,
+    filterState.categoryFilter,
+    filterState.sortOption,
+  ])
 
-        const token = getToken()
-        if (!token) {
-          console.log("[v0] Token not available after refresh attempt")
-          throw new Error("Authentication token not found. Please log in again.")
-        }
+  // Calculate stats from filtered products
+  const productStats = useMemo(() => {
+    const stats: ProductStats = {
+      totalProducts: allProducts.length,
+      inStock: allProducts.filter((p) => (p.stock || 0) > 0).length,
+      outOfStock: allProducts.filter((p) => (p.stock || 0) <= 0).length,
+      lowStock: allProducts.filter((p) => (p.stock || 0) > 0 && (p.stock || 0) <= 10).length,
+      onSale: allProducts.filter((p) => p.is_sale).length,
+      featured: allProducts.filter((p) => p.is_featured).length,
+      newProducts: allProducts.filter((p) => p.is_new).length,
+      totalInventoryValue: allProducts.reduce((sum, p) => sum + (p.price || 0) * ((p.stock || 0) as number), 0),
+      averagePrice: allProducts.length > 0 ? allProducts.reduce((sum, p) => sum + (p.price || 0), 0) / allProducts.length : 0,
+      categoriesCount: categories.length,
+      luxuryDeal: allProducts.filter((p) => p.is_luxury_deal).length,
+    }
+    return stats
+  }, [allProducts, categories.length]) // Added categories.length as dependency
 
-        // Set up headers with authentication
-        const headers = {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        }
+  const fetchProductImages = useCallback(async (products: Product[]) => {
+    if (!products.length) return
 
-        // Add a timeout to ensure the request doesn't hang
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+    console.log("[v0] Starting to fetch images for", products.length, "products")
 
-        try {
-          // Make the API call with proper headers and timeout
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/admin/products/${productId}`, {
-            method: "PUT",
-            headers: headers,
-            body: JSON.stringify(cleanedData),
-            signal: controller.signal,
-          })
+    // Get product IDs that need images
+    const productIds = products.map((p) => p.id.toString())
 
-          clearTimeout(timeoutId)
+    // Use imageBatchService to prefetch all images (this handles batching and caching)
+    imageBatchService.prefetchProductImages(productIds)
 
-          if (response.status === 401) {
-            console.log("[v0] Received 401, attempting token refresh and retry")
+    // Also fetch images individually and update state as we go for immediate feedback
+    const newImages: Record<string | number, string> = {}
 
-            // Try refreshing token one more time
-            const refreshSuccess = await ensureValidToken()
-            if (refreshSuccess) {
-              const newToken = getToken()
-              if (newToken) {
-                // Retry the request with new token
-                const retryResponse = await fetch(
-                  `${process.env.NEXT_PUBLIC_API_URL || ""}/api/admin/products/${productId}`,
-                  {
-                    method: "PUT",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${newToken}`,
-                    },
-                    body: JSON.stringify(cleanedData),
-                  },
-                )
+    // Process in smaller batches to update UI incrementally
+    const batchSize = 5
+    for (let i = 0; i < products.length; i += batchSize) {
+      const batch = products.slice(i, i + batchSize)
 
-                if (retryResponse.ok) {
-                  const updatedProduct = await retryResponse.json()
-                  console.log(
-                    `[v0] ${section} updated successfully for product ID: ${productId} (${updatedProduct.name})`,
-                  )
+      await Promise.all(
+        batch.map(async (product) => {
+          try {
+            // First check if imageBatchService already has cached images
+            const cachedImages = imageBatchService.getCachedImages(product.id.toString())
 
-                  // Update the UI
-                  setSaveSuccess(true)
-                  setLastSaved(new Date().toLocaleTimeString())
-                  setFormChanged(false)
+            if (cachedImages && cachedImages.length > 0) {
+              const primaryImage = cachedImages.find((img: any) => img.is_primary)
+              const selectedImage = primaryImage || cachedImages[0]
+              if (selectedImage && selectedImage.url) {
+                newImages[product.id] = selectedImage.url
+                console.log(`[v0] Got cached image for product ${product.id}: ${selectedImage.url}`)
+              }
+            } else {
+              // Fetch from imageBatchService (which handles API calls and caching)
+              const images = await imageBatchService.fetchProductImages(product.id.toString())
 
-                  toast({
-                    title: `${section} Updated Successfully`,
-                    description: `${updatedProduct.name} has been updated.`,
-                  })
-
-                  setTimeout(() => setSaveSuccess(false), 3000)
-
-                  try {
-                    localStorage.setItem(`product_${productId}_last_saved`, new Date().toISOString())
-                  } catch (storageError) {
-                    console.warn("[v0] Could not save to localStorage:", storageError)
-                  }
-
-                  // Notify about product update
-                  try {
-                    websocketService.emit("product_updated", {
-                      id: productId,
-                      timestamp: Date.now(),
-                      section: section,
-                      product: updatedProduct,
-                    })
-                    console.log(`[v0] WebSocket notification sent for product ID: ${productId}`)
-
-                    if (typeof window !== "undefined") {
-                      const event = new CustomEvent("product-updated", {
-                        detail: { id: productId, product: updatedProduct, section },
-                      })
-                      window.dispatchEvent(event)
-                      console.log(`[v0] Custom event dispatched for product ID: ${productId}`)
-                    }
-                  } catch (notifyError) {
-                    console.warn("[v0] Failed to notify about product update:", notifyError)
-                  }
-
-                  productService.invalidateProductCache(productId)
-                  await new Promise((resolve) => setTimeout(resolve, 500))
-
-                  mutateProduct(undefined, { revalidate: true })
-                  mutateImages(undefined, { revalidate: true })
-                  return true
-                } else {
-                  // Retry also failed
-                  let retryErrorData = {}
-                  try {
-                    const retryErrorText = await retryResponse.text()
-                    retryErrorData = JSON.parse(retryErrorText)
-                  } catch {
-                    retryErrorData = { status: retryResponse.status }
-                  }
-                  console.error("[v0] Retry request also failed:", retryErrorData)
+              if (images && images.length > 0) {
+                const primaryImage = images.find((img: any) => img.is_primary)
+                const selectedImage = primaryImage || images[0]
+                if (selectedImage && selectedImage.url) {
+                  newImages[product.id] = selectedImage.url
+                  console.log(`[v0] Fetched image for product ${product.id}: ${selectedImage.url}`)
                 }
               }
             }
-
-            // If retry failed, throw authentication error
-            throw new Error("Authentication failed. Your session has expired. Please log in again.")
+          } catch (error) {
+            console.error(`[v0] Error fetching images for product ${product.id}:`, error)
           }
+        }),
+      )
 
-          // Check if the response is ok
-          if (!response.ok) {
-            let errorData = {}
-            let errorText = ""
-            try {
-              errorText = await response.text()
-              errorData = JSON.parse(errorText)
-            } catch {
-              errorData = { raw_error: errorText }
-            }
-            console.error("[v0] API error response status:", response.status)
-            console.error("[v0] API error response data:", errorData)
-            throw new Error(errorData.message || errorData.error || `Failed to update product. Status: ${response.status}`)
-          }
+      // Update state after each batch for incremental loading
+      if (Object.keys(newImages).length > 0) {
+        setProductImages((prev) => ({ ...prev, ...newImages }))
+      }
+    }
 
-          // Parse the response
-          const updatedProduct = await response.json()
-          const productName = formValues.name || product?.name || "Product"
-          console.log(`[v0] ${section} updated successfully for product ID: ${productId} (${productName})`)
+    console.log("[v0] Finished fetching images for", Object.keys(newImages).length, "products")
+  }, [])
 
-          // Update the UI
-          setSaveSuccess(true)
-          setLastSaved(new Date().toLocaleTimeString())
-          setFormChanged(false)
+  const fetchProducts = useCallback(async () => {
+    // Renamed from fetchAllProducts
+    if (!isAuthenticated) return
 
-          toast({
-            title: `${section} Updated Successfully`,
-            description: `${productName} has been updated with the latest information.`,
-          })
+    try {
+      setUiState((prev) => ({ ...prev, isLoading: true }))
+      setDialogState((prev) => ({ ...prev, errorMessage: null }))
 
-          // Hide success message after 3 seconds
-          setTimeout(() => {
-            setSaveSuccess(false)
-          }, 3000)
+      // Fetch all products with a very large limit
+      console.log("Fetching all products from database...")
+      const response = await adminService.getProducts({ per_page: 10000 })
 
-          // Update local storage to track last saved time
-          try {
-            localStorage.setItem(`product_${productId}_last_saved`, new Date().toISOString())
-          } catch (storageError) {
-            console.warn("[v0] Could not save to localStorage:", storageError)
-          }
+      const fetchedProducts = response.items || []
+      console.log(`Successfully fetched ${fetchedProducts.length} products from database`)
 
-          // Notify about product update via WebSocket
-          try {
-            websocketService.emit("product_updated", {
-              id: productId,
-              timestamp: Date.now(),
-              section: section,
-              product: updatedProduct,
-            })
-            console.log(`[v0] WebSocket notification sent for product ID: ${productId}`)
+      setAllProducts(fetchedProducts)
+      // productStats will be computed by useMemo from the fetched products
 
-            // Don't dispatch custom event here to prevent infinite loops
-            // SWR revalidation is sufficient for data sync
-          } catch (notifyError) {
-            console.warn("[v0] Failed to notify about product update:", notifyError)
-          }
+      // Fetch images for the products (in batches to avoid too many requests)
+      if (fetchedProducts.length > 0) {
+        // setOperationLoading({ type: "fetch_images", message: "Loading product images..." })
 
-          productService.invalidateProductCache(productId)
-          
-          // Shorter delay before revalidation
-          await new Promise((resolve) => setTimeout(resolve, 300))
-
-          // Soft revalidate in background without triggering events
-          mutateProduct()
-          mutateImages()
-
-          return true
-        } catch (fetchError: any) {
-          clearTimeout(timeoutId)
-
-          if (fetchError.name === "AbortError") {
-            console.error("[v0] Update request timed out")
-            throw new Error("Request timed out. Please try again.")
-          }
-
-          throw fetchError
+        try {
+          // Pass the actual product objects to fetchProductImages
+          await fetchProductImages(fetchedProducts)
+        } finally {
+          // setOperationLoading({ type: null, message: "" })
         }
-      } catch (error: any) {
-        console.error("[v0] Error in saveSectionChanges:", error)
+      }
 
-        toast({
-          title: "Error Saving Changes",
-          description: error.message || "An unexpected error occurred. Please try again.",
-          variant: "destructive",
+      // Removed analytics fetching as it's no longer used
+    } catch (error: any) {
+      console.error("Error fetching products:", error)
+      setDialogState((prev) => ({ ...prev, errorMessage: error.message || "Failed to load products. Please try again." }))
+      toast({
+        title: "Error",
+        description: "Failed to load products. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setUiState((prev) => ({ ...prev, isLoading: false, isRefreshing: false }))
+    }
+  }, [isAuthenticated, fetchProductImages])
+
+  // Fetch products when authenticated - REMOVED since data is passed as props for SSR
+  // useEffect(() => {
+  //   if (isAuthenticated) {
+  //     fetchProducts() // Use the renamed function
+  //   }
+  // }, [isAuthenticated, fetchProducts])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const handleWebSocketProductUpdate = async (data: any) => {
+      const productId = data.product_id || data.productId
+      const eventType = data.type || data.event_type || data.action
+
+      // Skip refetch for delete events — already handled client-side by handleDeleteProductFromList
+      if (eventType === "delete" || eventType === "deleted" || eventType === "product_deleted") {
+        if (productId) {
+          setProductImages((prev) => {
+            const updated = { ...prev }
+            delete updated[productId]
+            return updated
+          })
+          imageBatchService.invalidateCache(productId)
+        }
+        return
+      }
+
+      if (productId) {
+        setProductImages((prev) => {
+          const updated = { ...prev }
+          delete updated[productId]
+          return updated
         })
 
-        // Check if this is an authentication error
-        if (
-          error.response?.status === 401 ||
-          error.message?.includes("Authentication") ||
-          error.message?.includes("session")
-        ) {
-          logout()
-          router.push("/admin/login?reason=authentication_failed")
+        imageBatchService.invalidateCache(productId)
+
+        if (typeof localStorage !== "undefined") {
+          try {
+            localStorage.removeItem(`product_images_${productId}`)
+          } catch (error) {
+            // Ignore localStorage errors
+          }
         }
-
-        return false
-      } finally {
-        setIsSubmitting(false)
       }
-    },
-    [
-      productId,
-      form,
-      images,
-      variants,
-      isAuthenticated,
-      refreshAccessToken,
-      getToken,
-      logout,
-      router,
-      toast,
-      resetForm,
-      setFormChanged,
-      mutateProduct,
-      mutateImages,
-    ],
-  )
 
-  // Add useEffect to listen for online/offline events
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
+      // Wait a moment for backend to finish processing
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
-    window.addEventListener("online", handleOnline)
-    window.addEventListener("offline", handleOffline)
+      // Refetch all products to get updated data
+      await fetchProducts()
+    }
 
-    // Set initial state
-    setIsOnline(navigator.onLine)
+    // Subscribe to WebSocket product_update events
+    const unsubscribe = websocketService.on("product_update", handleWebSocketProductUpdate)
 
     return () => {
-      window.removeEventListener("online", handleOnline)
-      window.removeEventListener("offline", handleOffline)
+      unsubscribe()
+    }
+  }, [isAuthenticated])
+
+  // Add event listener for product image updates
+  useEffect(() => {
+    const handleProductImagesUpdated = async (event: Event) => {
+      const customEvent = event as CustomEvent<any>
+      const { productId } = customEvent.detail || {}
+
+      if (productId) {
+        setProductImages((prev) => {
+          const updated = { ...prev }
+          delete updated[productId]
+          return updated
+        })
+
+        imageBatchService.invalidateCache(productId)
+
+        if (typeof localStorage !== "undefined") {
+          try {
+            localStorage.removeItem(`product_images_${productId}`)
+          } catch (error) {
+            // Ignore localStorage errors
+          }
+        }
+      }
+
+      // Wait a moment for backend to process image update
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // Refetch all products to get updated data
+      await fetchProducts()
+    }
+    window.addEventListener("productImagesUpdated", handleProductImagesUpdated)
+
+    return () => {
+      window.removeEventListener("productImagesUpdated", handleProductImagesUpdated)
     }
   }, [])
 
-  // Add the NetworkDetector component to the return JSX
-  // Add this right after the opening div in your component's return
+  // Calculate total pages
+  const totalPages = Math.ceil(filteredProducts.length / filterState.pageSize)
+
+  // Helper functions
+  const getProductImage = (product: Product): string => {
+    // First check cached images from state
+    if (productImages[product.id]) {
+      return productImages[product.id]
+    }
+
+    // Then check product.thumbnail_url
+    if (product.thumbnail_url) {
+      return product.thumbnail_url
+    }
+
+    // Check product.image_urls array
+    if (product.image_urls && Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+      return product.image_urls[0]
+    }
+
+    // Check product.images array
+    if (product.images && product.images.length > 0) {
+      const firstImage = product.images[0]
+      if (typeof firstImage === "string") {
+        return firstImage
+      }
+      // handle { url: string } style image objects
+      return (firstImage && (firstImage as any).url) || "/placeholder-product.png"
+    }
+
+    return "/placeholder-product.png"
+  }
+
+  const getCategoryName = (categoryId?: number | null): string => {
+    if (!categoryId) return "Uncategorized"
+    const category = categories.find((c: any) => c.id === categoryId)
+    return category?.name || "Uncategorized"
+  }
+
+  // Get stock status with color
+  const getStockStatus = (stock?: number) => {
+    if (stock === undefined || stock <= 0) {
+      return { label: "Out of Stock", color: "text-destructive bg-destructive/10 border-destructive/20" }
+    } else if (stock < 10) {
+      return { label: `Low: ${stock}`, color: "text-amber-600 bg-amber-50 border-amber-200" }
+    } else {
+      return { label: `${stock}`, color: "text-emerald-600 bg-emerald-50 border-emerald-200" }
+    }
+  }
+
+  // Handle pagination
+  const goToPage = (page: number) => {
+    if (page < 1 || page > totalPages) return
+    setCurrentPage(page)
+  }
+
+  // Generate pagination items
+  const getPaginationItems = () => {
+    const items = []
+    const maxVisiblePages = isMobile ? 3 : 5
+
+    // Always show first page
+    items.push(1)
+
+    // Calculate range of pages to show
+    let startPage = Math.max(2, currentPage - Math.floor(maxVisiblePages / 2))
+    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 3)
+
+    // Adjust if we're near the beginning
+    if (startPage === 2) {
+      endPage = Math.min(totalPages - 1, maxVisiblePages - 1)
+    }
+
+    // Adjust if we're near the end
+    if (endPage === totalPages - 1) {
+      startPage = Math.max(2, totalPages - maxVisiblePages + 2)
+    }
+
+    // Add ellipsis after first page if needed
+    if (startPage > 2) {
+      items.push("ellipsis-start")
+    }
+
+    // Add middle pages
+    for (let i = startPage; i <= endPage; i++) {
+      items.push(i)
+    }
+
+    // Add ellipsis before last page if needed
+    if (endPage < totalPages - 1) {
+      items.push("ellipsis-end")
+    }
+
+    // Always show last page if there is more than one page
+    if (totalPages > 1) {
+      items.push(totalPages)
+    }
+
+    return items
+  }
+
+  // Check if any filters are active
+  useEffect(() => {
+    const isActive =
+      filterState.debouncedSearchQuery !== "" ||
+      uiState.activeTab !== "all" ||
+      filterState.filterOption !== "all" ||
+      filterState.categoryFilter !== null ||
+      filterState.sortOption !== "newest"
+
+    setUiState((prev: typeof uiState) => ({ ...prev, isFilterActive: isActive }))
+  }, [filterState.debouncedSearchQuery, uiState.activeTab, filterState.filterOption, filterState.categoryFilter, filterState.sortOption])
+
+  // Handler functions
+  const handleRefresh = useCallback(async () => {
+    setUiState((prev) => ({ ...prev, isRefreshing: true }))
+    try {
+      await fetchProducts()
+      toast({
+        title: "Success",
+        description: "Products refreshed successfully.",
+      })
+    } finally {
+      setUiState((prev) => ({ ...prev, isRefreshing: false }))
+    }
+  }, [fetchProducts])
+
+  const handleFilterChange = useCallback((field: string, value: any) => {
+    setFilterState((prev: any) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }, [])
+
+  const handleToggleTab = useCallback((tab: string) => {
+    setUiState((prev) => ({ ...prev, activeTab: tab }))
+  }, [])
+
+  const handleUIStateChange = useCallback((field: string, value: any) => {
+    setUiState((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }, [])
+
+  const resetFilters = useCallback(() => {
+    setSearchInput("")
+    setFilterState((prev) => ({
+      ...prev,
+      debouncedSearchQuery: "",
+      filterOption: "all",
+      categoryFilter: null,
+      sortOption: "newest",
+      pageSize: isMobile ? 8 : 10,
+    }))
+    setUiState((prev) => ({ ...prev, activeTab: "all" }))
+    setCurrentPage(1)
+  }, [isMobile])
+
+  const handleSelectProduct = useCallback(
+    (productId: string) => {
+      setSelectedProducts((prev) =>
+        prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+      )
+    },
+    []
+  )
+
+  const handleEditProduct = useCallback(
+    (productId: string) => {
+      router.push(`/admin/products/${productId}/edit`)
+    },
+    [router]
+  )
+
+  const handleViewProduct = useCallback(
+    (productId: string) => {
+      window.open(`/products/${productId}`, "_blank")
+    },
+    []
+  )
+
+  const handleOpenDeleteDialog = useCallback((productId: string) => {
+    setDialogState((prev) => ({ ...prev, productToDelete: productId }))
+  }, [])
+
+  const handleCloseDeleteDialog = useCallback(() => {
+    setDialogState((prev) => ({ ...prev, productToDelete: null }))
+  }, [])
+
+  // Handle product deletion from ProductRow
+  const handleDeleteProductFromList = useCallback((productId: string | number) => {
+    const id = String(productId)
+
+    // Remove product from all products list
+    setAllProducts((prev) => prev.filter((p) => String(p.id) !== id))
+
+    // Remove from selected products if it was selected
+    setSelectedProducts((prev) => prev.filter((pId) => pId !== id))
+
+    // Reset pagination if the current page would be empty after deletion
+    setCurrentPage((prevPage) => {
+      // Since we can't access allProducts here, we'll check if we need to go back
+      // The ProductList will re-render with the filtered products anyway
+      if (prevPage > 1) {
+        return Math.max(1, prevPage - 1)
+      }
+      return prevPage
+    })
+  }, [filterState.pageSize])
+
+  // Bulk delete selected products
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedProducts.length === 0) {
+      toast({ title: "No products selected", description: "Please select at least one product to delete" })
+      return
+    }
+
+    setUiState((prev) => ({ ...prev, isBulkDeleteDialogOpen: true }))
+  }, [selectedProducts.length])
+
+  const confirmBulkDelete = useCallback(async () => {
+    if (selectedProducts.length === 0) return
+
+    try {
+      setUiState((prev) => ({ ...prev, isDeleting: true, operationType: "bulk", operationMessage: "Deleting products..." }))
+
+      // Delete each product
+      for (const productId of selectedProducts) {
+        await adminService.deleteProduct(productId)
+      }
+
+      // Remove from state
+      setAllProducts((prev) =>
+        prev.filter((p) => !selectedProducts.includes(p.id.toString()))
+      )
+      setSelectedProducts([])
+      setUiState((prev) => ({ ...prev, isBulkDeleteDialogOpen: false, isDeleting: false, operationType: null }))
+
+      toast({
+        title: "Success",
+        description: `${selectedProducts.length} product(s) deleted successfully`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete products",
+        variant: "destructive",
+      })
+      setUiState((prev) => ({ ...prev, isDeleting: false, operationType: null }))
+    }
+  }, [selectedProducts])
+
+  const handleSelectAll = useCallback(() => {
+    // Compute current page items directly to avoid referencing paginatedProducts (defined later)
+    const startIndex = (currentPage - 1) * filterState.pageSize
+    const endIndex = startIndex + filterState.pageSize
+    const currentPageItems = filteredProducts.slice(startIndex, endIndex)
+
+    if (selectedProducts.length === currentPageItems.length && selectedProducts.length > 0) {
+      setSelectedProducts([])
+    } else {
+      setSelectedProducts(currentPageItems.map((p) => p.id.toString()))
+    }
+  }, [selectedProducts.length, filteredProducts, currentPage, filterState.pageSize])
+
+  // Duplicate handleSelectProduct removed — original definition is retained above.
+
+  const handleDeleteProduct = useCallback(async () => {
+    if (!dialogState.productToDelete) return
+
+    try {
+      setUiState((prev) => ({ ...prev, isDeleting: true }))
+      await adminService.deleteProduct(dialogState.productToDelete)
+
+      setAllProducts((prev) => prev.filter((p) => p.id?.toString() !== dialogState.productToDelete))
+
+      toast({
+        title: "Success",
+        description: "Product deleted successfully.",
+      })
+
+      setDialogState((prev) => ({ ...prev, productToDelete: null }))
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to delete product",
+        variant: "destructive",
+      })
+    } finally {
+      setUiState((prev) => ({ ...prev, isDeleting: false }))
+    }
+  }, [dialogState.productToDelete])
+
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * filterState.pageSize
+    const endIndex = startIndex + filterState.pageSize
+    return filteredProducts.slice(startIndex, endIndex)
+  }, [filteredProducts, currentPage, filterState.pageSize])
+
   return (
-    <div className="container mx-auto py-6 px-4 space-y-6">
-      <NetworkDetector />
-      {/* ...rest of your JSX... */}
-      <Card className="border-none shadow-md overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100 pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center space-x-3">
-              <Button variant="outline" size="sm" onClick={() => handleNavigation("/admin/products")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Products
-              </Button>
-              <CardTitle className="text-xl sm:text-2xl font-bold text-gray-800">
-                Edit Product: {product?.name}
-              </CardTitle>
+    <div className="min-h-screen bg-gray-50 px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-3 md:py-4 lg:py-6 space-y-3 sm:space-y-4 md:space-y-6">
+      {/* Header Section */}
+      <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-3 sm:p-4 md:p-5 lg:p-6 shadow-sm border border-gray-100">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 md:gap-6">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 truncate">Products</h1>
+            <p className="text-xs sm:text-sm md:text-base text-gray-600 mt-1">Manage your product catalog efficiently</p>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap flex-shrink-0">
+            {!isMobile && (
+              <>
+                <Button variant="outline" size="sm" className="rounded-lg text-xs h-8 sm:h-9 whitespace-nowrap">
+                  <Download className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline text-xs">Export</span>
+                </Button>
+                <Button variant="outline" size="sm" className="rounded-lg text-xs h-8 sm:h-9 whitespace-nowrap">
+                  <Upload className="mr-1 h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline text-xs">Import</span>
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={uiState.isLoading}
+              className="rounded-lg text-xs h-8 sm:h-9 whitespace-nowrap"
+            >
+              {uiState.isLoading ? <MiniSpinner /> : <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />}
+              <span className="ml-0.5 sm:ml-1 hidden xs:inline text-xs">Refresh</span>
+            </Button>
+            <Button
+              onClick={() => router.push("/admin/products/new")}
+              size="sm"
+              className="rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-xs h-8 sm:h-9 whitespace-nowrap"
+            >
+              <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="ml-0.5 sm:ml-1 hidden sm:inline">Add Product</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Grid - Fully Responsive */}
+      <div className="grid grid-cols-2 gap-2 xs:gap-2.5 sm:gap-3 md:gap-4">
+        <StatsCard
+          title="Total Products"
+          value={productStats?.totalProducts || 0}
+          subtitle={`${productStats?.categoriesCount || 0} categories`}
+          icon={Package}
+          colorClass="bg-blue-600 hover:bg-blue-700"
+        />
+        <StatsCard
+          title="In Stock"
+          value={productStats?.inStock || 0}
+          subtitle="Available products"
+          icon={CheckCircle2}
+          colorClass="bg-green-600 hover:bg-green-700"
+        />
+        <StatsCard
+          title="Low Stock"
+          value={productStats?.lowStock || 0}
+          subtitle="Need attention"
+          icon={AlertTriangle}
+          colorClass="bg-amber-500 hover:bg-amber-600"
+        />
+        <StatsCard
+          title="On Sale"
+          value={productStats?.onSale || 0}
+          subtitle={`${productStats?.featured || 0} featured`}
+          icon={Tag}
+          colorClass="bg-purple-600 hover:bg-purple-700"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 xs:gap-2.5 sm:gap-3 md:gap-4">
+        <StatsCard
+          title="New Products"
+          value={productStats?.newProducts || 0}
+          subtitle="Recently added"
+          icon={Sparkles}
+          colorClass="bg-indigo-600 hover:bg-indigo-700"
+        />
+        <StatsCard
+          title="Inventory Value"
+          value={`KSh ${(productStats?.totalInventoryValue || 0).toLocaleString()}`}
+          subtitle="Total stock value"
+          icon={DollarSign}
+          colorClass="bg-emerald-600 hover:bg-emerald-700"
+        />
+        <StatsCard
+          title="Average Price"
+          value={`KSh ${(productStats?.averagePrice || 0).toLocaleString()}`}
+          subtitle="Per product"
+          icon={TrendingUp}
+          colorClass="bg-rose-600 hover:bg-rose-700"
+        />
+        <StatsCard
+          title="Luxury Deals"
+          value={productStats?.luxuryDeal || 0}
+          subtitle="Exclusive offers"
+          icon={Crown}
+          colorClass="bg-cyan-600 hover:bg-cyan-700"
+        />
+      </div>
+
+      <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        {/* Search & Filters Section */}
+        <div className="p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6 border-b border-gray-100">
+          <div className="flex flex-col gap-2 xs:gap-3 sm:gap-4">
+            {/* Search Bar - Full width on mobile */}
+            <div className="flex flex-col xs:flex-row gap-2 xs:gap-3 items-stretch xs:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 xs:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 xs:h-4 w-3.5 xs:w-4 pointer-events-none flex-shrink-0" />
+                <Input
+                  placeholder="Search products..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="pl-8 xs:pl-10 w-full rounded-lg sm:rounded-full border-gray-200 focus:border-gray-400 text-xs xs:text-sm h-8 xs:h-9 sm:h-10"
+                />
+              </div>
+              <Sheet open={uiState.isFilterSheetOpen} onOpenChange={(open) => setUiState((prev) => ({ ...prev, isFilterSheetOpen: open }))}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      "rounded-lg sm:rounded-full border-gray-200 hover:bg-gray-50 transition-all duration-200 h-8 xs:h-9 sm:h-10 whitespace-nowrap text-xs xs:text-sm",
+                      uiState.isFilterActive && "bg-blue-50 border-blue-200 text-blue-700",
+                    )}
+                  >
+                    <Filter className="h-3.5 xs:h-4 w-3.5 xs:w-4 mr-1 flex-shrink-0" />
+                    <span className="hidden xs:inline">Filters</span>
+                    {uiState.isFilterActive && (
+                      <span className="ml-1 text-xs font-semibold">
+                        ({Object.values({
+                          searchQuery: filterState.debouncedSearchQuery,
+                          filterOption: filterState.filterOption,
+                          categoryFilter: filterState.categoryFilter,
+                        }).filter(Boolean).length})
+                      </span>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-full sm:w-96 p-0">
+                  <SheetHeader className="p-4 sm:p-6 border-b border-gray-100">
+                    <SheetTitle className="text-lg sm:text-xl font-semibold">Filter Products</SheetTitle>
+                    <SheetDescription className="text-xs sm:text-sm text-gray-600">
+                      Customize your product view
+                    </SheetDescription>
+                  </SheetHeader>
+                  <div className="py-4 sm:py-6 px-4 sm:px-6 space-y-4 sm:space-y-6 max-h-[calc(100vh-150px)] overflow-y-auto">
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Category</h3>
+                      <Select
+                        value={filterState.categoryFilter?.toString() || "all"}
+                        onValueChange={(value) =>
+                          handleFilterChange("categoryFilter", value === "all" ? null : Number.parseInt(value))
+                        }
+                      >
+                        <SelectTrigger className="w-full rounded-lg sm:rounded-full border-gray-200 text-xs sm:text-sm h-9">
+                          <SelectValue placeholder="All Categories" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-lg sm:rounded-xl">
+                          <SelectItem value="all">All Categories</SelectItem>
+                          {categories.map((category) => (
+                            <SelectItem key={category.id} value={category.id.toString()}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Product Status</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-in-stock"
+                            checked={uiState.activeTab === "in_stock"}
+                            onCheckedChange={() => {
+                              const newTab = uiState.activeTab === "in_stock" ? "all" : "in_stock"
+                              setUiState((prev) => ({ ...prev, activeTab: newTab }))
+                              handleFilterChange("filterOption", newTab === "all" ? "all" : "in_stock")
+                            }}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-in-stock" className="ml-2 text-sm text-gray-700">
+                            In Stock
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-out-of-stock"
+                            checked={uiState.activeTab === "out_of_stock"}
+                            onCheckedChange={() => handleToggleTab("out_of_stock")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-out-of-stock" className="ml-2 text-sm text-gray-700">
+                            Out of Stock
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-featured"
+                            checked={uiState.activeTab === "featured"}
+                            onCheckedChange={() => handleToggleTab("featured")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-featured" className="ml-2 text-sm text-gray-700">
+                            Featured
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-on-sale"
+                            checked={uiState.activeTab === "on_sale"}
+                            onCheckedChange={() => handleToggleTab("on_sale")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-on-sale" className="ml-2 text-sm text-gray-700">
+                            On Sale
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-new"
+                            checked={uiState.activeTab === "new"}
+                            onCheckedChange={() => handleToggleTab(uiState.activeTab === "new" ? "all" : "new")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-new" className="ml-2 text-sm text-gray-700">
+                            New Arrivals
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-flash-sale"
+                            checked={uiState.activeTab === "flash_sale"}
+                            onCheckedChange={() => handleToggleTab(uiState.activeTab === "flash_sale" ? "all" : "flash_sale")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-flash-sale" className="ml-2 text-sm text-gray-700">
+                            Flash Sale
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-luxury-deal"
+                            checked={uiState.activeTab === "luxury_deal"}
+                            onCheckedChange={() => handleToggleTab(uiState.activeTab === "luxury_deal" ? "all" : "luxury_deal")}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-purple-50 text-purple-700 border border-purple-200">
+                            <Crown className="h-3 w-3 mr-1" /> Luxury Deals ({productStats?.luxuryDeal || 0})
+                          </Badge>
+                          <Checkbox
+                            checked={uiState.activeTab === "luxury_deal"}
+                            onCheckedChange={() => handleToggleTab(uiState.activeTab === "trending" ? "all" : "trending")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-trending" className="ml-2 text-sm text-gray-700">
+                            Trending
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-low-stock"
+                            checked={uiState.activeTab === "low_stock"}
+                            onCheckedChange={() => handleToggleTab(uiState.activeTab === "low_stock" ? "all" : "low_stock")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-low-stock" className="ml-2 text-sm text-gray-700">
+                            Low Stock
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-high-performing"
+                            checked={uiState.activeTab === "high_performing"}
+                            onCheckedChange={() =>
+                              handleToggleTab(uiState.activeTab === "high_performing" ? "all" : "high_performing")
+                            }
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-high-performing" className="ml-2 text-sm text-gray-700">
+                            High Performing
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-needs-attention"
+                            checked={uiState.activeTab === "needs_attention"}
+                            onCheckedChange={() =>
+                              handleToggleTab(uiState.activeTab === "needs_attention" ? "all" : "needs_attention")
+                            }
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-needs-attention" className="ml-2 text-sm text-gray-700">
+                            Needs Attention
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-draft"
+                            checked={uiState.activeTab === "draft"}
+                            onCheckedChange={() => handleToggleTab(uiState.activeTab === "draft" ? "all" : "draft")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-draft" className="ml-2 text-sm text-gray-700">
+                            Draft
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <Checkbox
+                            id="filter-archived"
+                            checked={uiState.activeTab === "archived"}
+                            onCheckedChange={() => handleToggleTab(uiState.activeTab === "archived" ? "all" : "archived")}
+                            className="h-4 w-4 rounded-md border-gray-300"
+                          />
+                          <label htmlFor="filter-archived" className="ml-2 text-sm text-gray-700">
+                            Archived
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Sort By</h3>
+                      <Select value={filterState.sortOption} onValueChange={(value: SortOption) => handleFilterChange("sortOption", value)}>
+                        <SelectTrigger className="w-full rounded-full border-gray-200">
+                          <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="newest">Newest First</SelectItem>
+                          <SelectItem value="oldest">Oldest First</SelectItem>
+                          <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                          <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+                          <SelectItem value="price_high">Price (High to Low)</SelectItem>
+                          <SelectItem value="price_low">Price (Low to High)</SelectItem>
+                          <SelectItem value="stock_high">Stock (High to Low)</SelectItem>
+                          <SelectItem value="stock_low">Stock (Low to High)</SelectItem>
+                          <SelectItem value="sales_high">Best Selling</SelectItem>
+                          <SelectItem value="rating_high">Highest Rated</SelectItem>
+                          <SelectItem value="profit_high">Most Profitable</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <SheetFooter className="gap-2 pt-4 border-t border-gray-100">
+                    <Button variant="outline" onClick={resetFilters} className="rounded-full bg-transparent">
+                      Reset Filters
+                    </Button>
+                    <SheetClose asChild>
+                      <Button className="rounded-full bg-gray-900 hover:bg-gray-800">Apply Filters</Button>
+                    </SheetClose>
+                  </SheetFooter>
+                </SheetContent>
+              </Sheet>
+
+              {uiState.isFilterActive && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="rounded-full border-gray-200 hover:bg-gray-50 bg-transparent"
+                >
+                  <X className="h-4 w-4 mr-1" /> Clear Filters
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              {selectedProducts.length > 0 && (
+                <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-full border border-blue-200">
+                  <Checkbox checked={true} className="h-4 w-4" onChange={handleSelectAll} title="Select all products on page" />
+                  <span className="text-sm font-medium text-blue-900">{selectedProducts.length} selected</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedProducts([])}
+                    className="h-6 px-2 rounded-full"
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={uiState.isDeleting}
+                    className="rounded-full"
+                  >
+                    <Trash2 className="mr-1 h-3 w-3" />
+                    Delete ({selectedProducts.length})
+                  </Button>
+                </div>
+              )}
+
+              <Select value={filterState.sortOption} onValueChange={(value: SortOption) => handleFilterChange("sortOption", value)}>
+                <SelectTrigger className="w-[180px] rounded-full border-gray-200">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                  <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+                  <SelectItem value="price_high">Price (High to Low)</SelectItem>
+                  <SelectItem value="price_low">Price (Low to High)</SelectItem>
+                  <SelectItem value="stock_high">Stock (High to Low)</SelectItem>
+                  <SelectItem value="stock_low">Stock (Low to High)</SelectItem>
+                  <SelectItem value="sales_high">Best Selling</SelectItem>
+                  <SelectItem value="rating_high">Highest Rated</SelectItem>
+                  <SelectItem value="profit_high">Most Profitable</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* View Mode Toggle - Hide grid/analytics on mobile */}
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant={uiState.viewMode === "list" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleUIStateChange("viewMode", "list")}
+                  className="rounded-full"
+                >
+                  <FileText className="h-4 w-4" />
+                </Button>
+                {/* Grid button - hidden on mobile */}
+                <Button
+                  variant={uiState.viewMode === "grid" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleUIStateChange("viewMode", "grid")}
+                  className="rounded-full hidden sm:inline-flex"
+                >
+                  <Package className="h-4 w-4" />
+                </Button>
+                {/* Analytics button - hidden on mobile */}
+                <Button
+                  variant={uiState.viewMode === "analytics" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleUIStateChange("viewMode", "analytics")}
+                  className="rounded-full hidden sm:inline-flex"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
-        </CardHeader>
+        </div>
 
-        {apiError && (
-          <div className="px-6 pt-2">
-            <Alert variant="destructive" className="mb-4">
-              <AlertDescription>{apiError}</AlertDescription>
-            </Alert>
+        <Tabs defaultValue="all" value={uiState.activeTab} onValueChange={(value) => setUiState((prev) => ({ ...prev, activeTab: value }))}>
+          {/* Responsive Tabs - Scrollable on mobile */}
+          <div className="px-2 xs:px-3 sm:px-4 md:px-5 lg:px-6 py-1.5 xs:py-2 sm:py-3 border-b border-gray-100 overflow-x-auto scrollbar-hide">
+            <TabsList className="inline-flex md:grid md:grid-cols-8 gap-0.5 xs:gap-1 bg-gray-50 p-0.5 xs:p-1 rounded-lg sm:rounded-2xl w-max md:w-full">
+              {[
+                { value: "all", label: "All", count: allProducts.length, icon: Package },
+                { value: "in_stock", label: "In Stock", count: productStats?.inStock || 0, icon: CheckCircle2 },
+                { value: "out_of_stock", label: "Out of Stock", count: productStats?.outOfStock || 0, icon: XCircle },
+                { value: "featured", label: "Featured", count: productStats?.featured || 0, icon: Star },
+                { value: "on_sale", label: "On Sale", count: productStats?.onSale || 0, icon: Percent },
+                { value: "new", label: "New", count: productStats?.newProducts || 0, icon: Sparkles },
+                { value: "trending", label: "Trending", count: 0, icon: TrendingUp },
+                { value: "luxury_deal", label: "Luxury", count: productStats?.luxuryDeal || 0, icon: Crown },
+              ].map((tab) => (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="text-xs sm:text-sm rounded-md md:rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-0.5 xs:gap-1 md:gap-2 px-1 xs:px-1.5 sm:px-2 md:px-3 py-1 xs:py-1.5 md:py-2 whitespace-nowrap flex-shrink-0 md:flex-shrink"
+                >
+                  <tab.icon className="h-3 xs:h-3.5 w-3 xs:w-3.5 md:h-4 md:w-4 flex-shrink-0" />
+                  <span className="hidden sm:inline text-xs md:text-sm font-medium">{tab.label}</span>
+                  <span className="sm:hidden text-xs font-semibold">{tab.label.slice(0, 1)}</span>
+                  <Badge variant="secondary" className="ml-0 xs:ml-0.5 text-xs px-1 py-0 h-5 hidden sm:inline-flex">
+                    {tab.count}
+                  </Badge>
+                </TabsTrigger>
+              ))}
+            </TabsList>
           </div>
-        )}
 
-        <CardContent className="p-0">
-          <FormProvider {...form}>
-            <Tabs defaultValue="basic" value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <div className="border-b">
-                <TabsList className="bg-transparent h-auto p-0 w-full flex overflow-x-auto">
-                  <TabsTrigger
-                    value="basic"
-                    className="flex-1 data-[state=active]:bg-orange-50 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none py-3 px-4"
-                  >
-                    Basic Info
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="pricing"
-                    className="flex-1 data-[state=active]:bg-orange-50 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none py-3 px-4"
-                  >
-                    Pricing & Inventory
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="images"
-                    className="flex-1 data-[state=active]:bg-orange-50 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none py-3 px-4"
-                  >
-                    Images
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="variants"
-                    className="flex-1 data-[state=active]:bg-orange-50 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none py-3 px-4"
-                  >
-                    Variants
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="seo"
-                    className="flex-1 data-[state=active]:bg-orange-50 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none py-3 px-4"
-                  >
-                    SEO
-                  </TabsTrigger>
-                  {/* Added new tab trigger for specifications and highlights */}
-                  <TabsTrigger
-                    value="specs"
-                    className="flex-1 data-[state=active]:bg-orange-50 data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none py-3 px-4"
-                  >
-                    Specs & Highlights
-                  </TabsTrigger>
-                </TabsList>
+          <div className="p-3 sm:p-4 md:p-5 lg:p-6">
+            {dialogState.errorMessage ? (
+              <div className="flex flex-col items-center justify-center py-12 sm:py-20 px-4 text-center">
+                <AlertCircle className="h-12 sm:h-16 w-12 sm:w-16 text-red-500 mb-4 sm:mb-6" />
+                <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-3 text-gray-900">Failed to load products</h3>
+                <p className="text-xs sm:text-base text-gray-600 mb-4 sm:mb-6 max-w-md">{dialogState.errorMessage || "Failed to load products."}</p>
+                <Button onClick={fetchProducts} className="rounded-lg sm:rounded-full bg-gray-900 hover:bg-gray-800 text-xs sm:text-sm h-8 sm:h-10">
+                  <RefreshCw className="mr-2 h-3 sm:h-4 w-3 sm:w-4" />
+                  Try Again
+                </Button>
               </div>
-
-              <div className="p-6">
-                <TabsContent value="basic" className="mt-0">
-                  <ProductBasicInfoTab
-                    form={form}
-                    categories={categories}
-                    brands={brands}
-                    isLoadingCategories={isLoadingCategories}
-                    isLoadingBrands={isLoadingBrands}
-                    brandError={brandError}
-                    saveSectionChanges={saveSectionChanges}
-                    mutateCategories={mutateCategories}
-                  />
-                </TabsContent>
-
-                <TabsContent value="pricing" className="mt-0">
-                  <ProductPricingInventoryTab
-                    form={form}
-                    saveSectionChanges={saveSectionChanges}
-                    productId={Number(productId)}
-                  />
-                </TabsContent>
-
-                <TabsContent value="images" className="mt-0">
-                  <ProductImagesTab
-                    images={images}
-                    setImages={(imgs) => setImages(imgs as string[])}
-                    setFormChanged={setFormChanged}
-                    saveSectionChanges={saveSectionChanges}
-                    productId={Number(productId)}
-                  />
-                </TabsContent>
-
-                <TabsContent value="variants" className="mt-0">
-                  <ProductVariantsTab
-                    variants={variants}
-                    setVariants={setVariants}
-                    productId={Number(productId)}
-                    setFormChanged={setFormChanged}
-                    productPrice={product?.price || 0}
-                    saveSectionChanges={saveSectionChanges}
-                  />
-                </TabsContent>
-
-                <TabsContent value="seo" className="mt-0">
-                  <ProductSeoTab form={form} saveSectionChanges={saveSectionChanges} />
-                </TabsContent>
-
-                {/* Added new tab content for specifications and highlights */}
-                <TabsContent value="specs" className="mt-0">
-                  <ProductSpecificationsHighlightsTab form={form} saveSectionChanges={saveSectionChanges} />
-                </TabsContent>
+            ) : filteredProducts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 sm:py-20 px-4 text-center">
+                <Package className="h-12 sm:h-16 w-12 sm:w-16 text-gray-400 mb-4 sm:mb-6" />
+                <h3 className="text-lg sm:text-2xl font-bold mb-2 sm:mb-3 text-gray-900">No products found</h3>
+                <p className="text-xs sm:text-base text-gray-600 mb-4 sm:mb-6 max-w-md">
+                  {uiState.isFilterActive
+                    ? "Try adjusting your filters to see more results"
+                    : "Get started by adding your first product to the catalog"}
+                </p>
+                <div className="flex gap-2 sm:gap-3 flex-wrap justify-center">
+                  {uiState.isFilterActive && (
+                    <Button variant="outline" onClick={resetFilters} className="rounded-lg sm:rounded-full bg-transparent text-xs sm:text-sm h-8 sm:h-10">
+                      <X className="mr-1 h-3 sm:h-4 w-3 sm:w-4" />
+                      Reset Filters
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => router.push("/admin/products/new")}
+                    className="rounded-lg sm:rounded-full bg-gradient-to-r from-gray-900 to-gray-800 hover:from-gray-800 hover:to-gray-700 text-xs sm:text-sm h-8 sm:h-10"
+                  >
+                    <Plus className="mr-1 h-3 sm:h-4 w-3 sm:w-4" /> Add Product
+                  </Button>
+                </div>
               </div>
-            </Tabs>
-          </FormProvider>
-        </CardContent>
-      </Card>
+            ) : uiState.viewMode === "analytics" ? (
+              <div className="space-y-4 sm:space-y-6 md:space-y-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 md:gap-8">
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-3 sm:pb-4">
+                      <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                        Sales Performance
+                      </CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">Overview of your sales over time.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-48 sm:h-64 bg-gray-50 rounded-lg sm:rounded-xl flex items-center justify-center">
+                        <p className="text-xs sm:text-base text-gray-500">Sales chart visualization</p>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-      {/* Unsaved Changes Dialog */}
-      <AlertDialog open={unsavedChangesDialog} onOpenChange={setUnsavedChangesDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved changes. Are you sure you want to leave this page? Your changes will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setUnsavedChangesDialog(false)
-                router.push(navigateTo)
-              }}
-            >
-              Leave Page
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                  <Card className="border-0 shadow-sm">
+                    <CardHeader className="pb-3 sm:pb-4">
+                      <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                        <PieChart className="h-4 w-4 sm:h-5 sm:w-5" />
+                        Category Distribution
+                      </CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">Breakdown of products by category.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-48 sm:h-64 bg-gray-50 rounded-lg sm:rounded-xl flex items-center justify-center">
+                        <p className="text-xs sm:text-base text-gray-500">Category chart visualization</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            ) : (
+              <ProductList
+                products={paginatedProducts}
+                selectedProducts={selectedProducts}
+                viewMode={uiState.viewMode}
+                isMobile={isMobile}
+                productImages={productImages}
+                onSelectProduct={handleSelectProduct}
+                onEditProduct={handleEditProduct}
+                onDeleteProduct={handleDeleteProductFromList}
+                onViewProduct={handleViewProduct}
+                getProductImage={getProductImage}
+              />
+            )}
+
+            {/* Responsive Pagination */}
+            {filteredProducts.length > 0 && totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 mt-4 sm:mt-6 md:mt-8 pt-3 sm:pt-4 md:pt-6 pb-2 border-t border-gray-100">
+                <div className="hidden sm:block text-xs sm:text-sm text-gray-600">
+                  Showing <span className="font-semibold">{(currentPage - 1) * filterState.pageSize + 1}</span> to{" "}
+                  <span className="font-semibold">{Math.min(currentPage * filterState.pageSize, filteredProducts.length)}</span> of{" "}
+                  <span className="font-semibold">{filteredProducts.length}</span> products
+                </div>
+
+                <div className="sm:hidden text-xs text-gray-600 text-center w-full">
+                  Page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalPages}</span>
+                </div>
+
+                <div className="flex items-center justify-center sm:justify-end gap-1 sm:gap-2 w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="rounded-lg h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 sm:rounded-full p-0 text-xs flex-shrink-0"
+                  >
+                    <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
+                  </Button>
+
+                  <div className="hidden sm:flex gap-1">
+                    {getPaginationItems().map((pageItem, index) =>
+                      pageItem === "ellipsis-start" || pageItem === "ellipsis-end" ? (
+                        <span
+                          key={pageItem + index}
+                          className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 text-xs text-gray-500"
+                        >
+                          ...
+                        </span>
+                      ) : (
+                        <Button
+                          key={pageItem}
+                          variant={currentPage === pageItem ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(pageItem as number)}
+                          className="rounded-lg md:rounded-full w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 p-0 text-xs"
+                        >
+                          {pageItem}
+                        </Button>
+                      ),
+                    )}
+                  </div>
+
+                  <div className="sm:hidden flex items-center justify-center h-8 min-w-8 rounded-lg bg-primary text-white text-xs font-semibold flex-shrink-0">
+                    {currentPage}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="rounded-lg h-8 w-8 sm:h-9 sm:w-9 md:h-10 md:w-10 sm:rounded-full p-0 text-xs flex-shrink-0"
+                  >
+                    <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Tabs>
+      </div>
+
+      {/* Loading overlay - no AnimatePresence for better performance */}
+      {dialogState.operationType && <LoadingOverlay message={dialogState.operationMessage || "Processing..."} />}
     </div>
   )
 }
