@@ -20,6 +20,7 @@ class CarouselBanner(db.Model):
         index=True
     )  # homepage, category_page, flash_sales, luxury_deals
     image_url = db.Column(db.String(500), nullable=False)
+    image_public_id = db.Column(db.String(255), nullable=True)  # Cloudinary public_id for deletion
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
     badge_text = db.Column(db.String(100))
@@ -49,7 +50,8 @@ class CarouselBanner(db.Model):
             'id': self.id,
             'name': self.name,
             'position': self.position,
-            'image_url': self.image_url,
+            'image_url': self.image_url,  # Direct Cloudinary URL
+            'image_public_id': self.image_public_id,  # For Cloudinary deletion
             'title': self.title,
             'description': self.description,
             'badge_text': self.badge_text,

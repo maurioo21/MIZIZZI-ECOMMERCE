@@ -31,6 +31,7 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
     button_text: banner?.button_text || "VIEW COLLECTION",
     link_url: banner?.link_url || "",
     image_url: banner?.image_url || "",
+    image_public_id: banner?.image_public_id || "",  // Store Cloudinary public_id
     is_active: banner?.is_active ?? true,
     start_date: banner?.start_date || "",
     end_date: banner?.end_date || "",
@@ -39,6 +40,7 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [imageUrl, setImageUrl] = useState(banner?.image_url || "")
+  const [imagePublicId, setImagePublicId] = useState(banner?.image_public_id || "")
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -48,15 +50,18 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
     }))
   }
 
-  const handleImageUpload = async (url: string) => {
+  const handleImageUpload = async (url: string, publicId?: string) => {
     // Use Cloudinary URL directly - it's already optimized for CDN delivery
     const optimizedUrl = url || ""
-    console.log(`[v0] Image uploaded with Cloudinary URL: ${optimizedUrl}`)
+    const cloudinaryPublicId = publicId || ""
+    console.log(`[v0] Image uploaded with Cloudinary URL: ${optimizedUrl}, public_id: ${cloudinaryPublicId}`)
     
     setImageUrl(optimizedUrl)
+    setImagePublicId(cloudinaryPublicId)
     const updatedFormData = {
       ...formData,
       image_url: optimizedUrl,
+      image_public_id: cloudinaryPublicId,
     }
     setFormData(updatedFormData)
     
@@ -65,7 +70,11 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
       console.log(`[v0] Auto-saving image for banner ID: ${banner.id}`)
       setIsSubmitting(true)
       try {
-        await onSubmit({ image_url: optimizedUrl })
+        await onSubmit({ 
+          image_url: optimizedUrl,
+          image_public_id: cloudinaryPublicId,
+          delete_old_image: true,  // Flag to delete old Cloudinary image
+        })
         toast({
           title: "Image Saved",
           description: "Banner image updated successfully",

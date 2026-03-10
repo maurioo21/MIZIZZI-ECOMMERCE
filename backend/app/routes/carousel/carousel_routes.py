@@ -12,10 +12,21 @@ from functools import wraps
 import requests
 import os
 from ...services.image_optimization_service import ImageOptimizationService
+from ...services.cloudinary_service import CloudinaryService
+from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
 
 carousel_routes = Blueprint('carousel_routes', __name__)
+
+# Initialize Cloudinary service
+cloudinary_service = CloudinaryService()
+
+# Allowed file extensions
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 try:
     from ...utils.redis_cache import (
@@ -306,6 +317,7 @@ def create_carousel_item():
             button_text=data['button_text'],
             link_url=data.get('link_url', ''),
             image_url=data['image_url'],
+            image_public_id=data.get('image_public_id'),  # Store Cloudinary public_id
             position=data['position'],
             is_active=data.get('is_active', True),
             sort_order=max_sort + 1
@@ -372,7 +384,17 @@ def update_carousel_item(item_id):
         if 'link_url' in data:
             item.link_url = data['link_url']
         if 'image_url' in data:
+            # Delete old image from Cloudinary if replacing
+            if data.get('delete_old_image') and item.image_public_id:
+                try:
+                    cloudinary_service.delete_image(item.image_public_id)
+                    logger.info(f"Old carousel image deleted from Cloudinary: {item.image_public_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete old image: {str(e)}")
+            
             item.image_url = data['image_url']
+            item.image_public_id = data.get('image_public_id')  # Store Cloudinary public_id
+            logger.info(f"Carousel image updated: {data['image_url']} (public_id: {data.get('image_public_id')})")
         if 'is_active' in data:
             item.is_active = data['is_active']
         if 'sort_order' in data:
@@ -402,6 +424,59 @@ def update_carousel_item(item_id):
         }), 500
 
 
+@carousel_routes.route('/admin/upload-image', methods=['POST'])
+@jwt_required()
+def upload_carousel_image():
+    """Upload carousel image to Cloudinary CDN"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Allowed: png, jpg, jpeg, gif, webp'}), 400
+        
+        logger.info(f"Uploading carousel image to Cloudinary: {file.filename}")
+        
+        # Get carousel position from request if provided
+        position = request.form.get('position', 'homepage')
+        
+        # Upload to Cloudinary using carousel folder
+        result = cloudinary_service.upload_image(
+            file=file,
+            folder=f"mizizzi/carousel/{position}",
+            alt_text=file.filename
+        )
+        
+        if not result.get('success'):
+            logger.error(f"Cloudinary upload failed: {result.get('error')}")
+            return jsonify({'error': result.get('error', 'Upload failed')}), 500
+        
+        logger.info(f"Carousel image uploaded to Cloudinary: {result.get('public_id')}")
+        
+        return jsonify({
+            'message': 'Image uploaded successfully to CDN',
+            'success': True,
+            'url': result.get('secure_url'),
+            'secure_url': result.get('secure_url'),
+            'public_id': result.get('public_id'),
+            'width': result.get('width'),
+            'height': result.get('height'),
+            'format': result.get('format'),
+            'bytes': result.get('bytes'),
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error uploading carousel image: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({'error': f'Failed to upload image: {str(e)}'}), 500
+
+
 @carousel_routes.route('/admin/<int:item_id>', methods=['DELETE'])
 @jwt_required()
 @invalidate_on_change(["carousel_items", "carousel_item"])
@@ -422,6 +497,14 @@ def delete_carousel_item(item_id):
             }), 404
         
         position = item.position
+        
+        # Delete image from Cloudinary if exists
+        if item.image_public_id:
+            try:
+                cloudinary_service.delete_image(item.image_public_id)
+                logger.info(f"Carousel image deleted from Cloudinary: {item.image_public_id}")
+            except Exception as e:
+                logger.warning(f"Failed to delete carousel image from Cloudinary: {str(e)}")
         
         db.session.delete(item)
         db.session.commit()

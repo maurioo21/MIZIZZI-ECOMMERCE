@@ -8,7 +8,7 @@ import { Upload, X, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 interface ImageUploaderProps {
-  onUpload: (url: string) => void | Promise<void>
+  onUpload: (url: string, publicId?: string) => void | Promise<void>
   currentImage?: string
   type?: "carousel" | "product" // Type determines compression level
 }
@@ -169,19 +169,25 @@ export function ImageUploader({ onUpload, currentImage, type = "product" }: Imag
       
       // Extract URL from backend response structure
       let cloudinaryUrl = ""
+      let cloudinaryPublicId = ""
       
       // Try different response structures from backend
       if (data.uploaded_images && data.uploaded_images.length > 0) {
         cloudinaryUrl = data.uploaded_images[0].secure_url || data.uploaded_images[0].url
+        cloudinaryPublicId = data.uploaded_images[0].public_id
       } else if (data.uploaded && data.uploaded.length > 0) {
         cloudinaryUrl = data.uploaded[0].secure_url || data.uploaded[0].url
+        cloudinaryPublicId = data.uploaded[0].public_id
       } else if (data.secure_url) {
         cloudinaryUrl = data.secure_url
+        cloudinaryPublicId = data.public_id
       } else if (data.url) {
         cloudinaryUrl = data.url
+        cloudinaryPublicId = data.public_id
       }
       
       console.log(`[v0] Image uploaded successfully: ${cloudinaryUrl}`)
+      console.log(`[v0] Cloudinary public_id: ${cloudinaryPublicId}`)
       console.log(`[v0] Backend response:`, data)
       
       if (!cloudinaryUrl) {
@@ -190,8 +196,8 @@ export function ImageUploader({ onUpload, currentImage, type = "product" }: Imag
       
       console.log(`[v0] Using Cloudinary CDN URL: ${cloudinaryUrl}`)
       
-      // Call onUpload and await if it's async
-      await Promise.resolve(onUpload(cloudinaryUrl))
+      // Call onUpload with both URL and public_id
+      await Promise.resolve(onUpload(cloudinaryUrl, cloudinaryPublicId))
       setUploadProgress(100)
       setIsUploading(false)
     } catch (error) {
