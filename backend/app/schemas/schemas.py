@@ -48,16 +48,24 @@ class CategorySchema(ma.SQLAlchemyAutoSchema):
     banner_url = fields.Method("get_banner_url")
 
     def get_image_url(self, obj):
-        """Generate image URL - use database endpoint if image_data exists, otherwise use stored URL."""
+        """Generate image URL - prioritize Cloudinary URL, fallback to database endpoint."""
+        # Always prioritize the stored Cloudinary URL for better performance and reliability
+        if obj.image_url:
+            return obj.image_url
+        # Only use backend endpoint if no Cloudinary URL is stored
         if obj.image_data:
             return f'/api/admin/shop-categories/categories/{obj.id}/image'
-        return obj.image_url
+        return None
 
     def get_banner_url(self, obj):
-        """Generate banner URL - use database endpoint if banner_data exists, otherwise use stored URL."""
+        """Generate banner URL - prioritize Cloudinary URL, fallback to database endpoint."""
+        # Always prioritize the stored Cloudinary URL for better performance and reliability
+        if obj.banner_url:
+            return obj.banner_url
+        # Only use backend endpoint if no Cloudinary URL is stored
         if obj.banner_data:
             return f'/api/admin/shop-categories/categories/{obj.id}/banner'
-        return obj.banner_url
+        return None
 
 category_schema = CategorySchema()
 categories_schema = CategorySchema(many=True)

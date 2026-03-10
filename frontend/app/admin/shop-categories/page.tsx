@@ -13,27 +13,37 @@ const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = f
     return "/placeholder.svg"
   }
 
+  // If it's a data URL, return as-is
   if (url.startsWith("data:")) {
     return url
   }
 
-  let finalUrl = url
+  // If it's already a Cloudinary URL, return directly (highest priority)
+  if (url.includes("res.cloudinary.com")) {
+    return url
+  }
+
+  // If it's already an http/https URL (but not Cloudinary), return as-is
   if (url.startsWith("http://") || url.startsWith("https://")) {
-    finalUrl = url
-  } else if (url.startsWith("/")) {
+    return url
+  }
+
+  // If it's a relative path starting with /, try to construct backend URL
+  if (url.startsWith("/")) {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-    finalUrl = `${baseUrl}${url}`
-  } else {
-    return "/placeholder.svg"
+    let finalUrl = `${baseUrl}${url}`
+    
+    // Add cache-busting parameter for force refresh
+    if (bustCache) {
+      const separator = finalUrl.includes("?") ? "&" : "?"
+      finalUrl = `${finalUrl}${separator}t=${Date.now()}`
+    }
+    
+    return finalUrl
   }
 
-  // Add cache-busting parameter for force refresh
-  if (bustCache) {
-    const separator = finalUrl.includes("?") ? "&" : "?"
-    finalUrl = `${finalUrl}${separator}t=${Date.now()}`
-  }
-
-  return finalUrl
+  // Fallback for anything else
+  return "/placeholder.svg"
 }
 
 interface Category {

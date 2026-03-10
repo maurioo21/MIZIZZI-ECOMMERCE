@@ -2,17 +2,33 @@ import { cache } from "react"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://mizizzi-ecommerce-1.onrender.com"
 
-// Helper to normalize image URLs and ensure they're from database
+// Helper to normalize image URLs - prioritizes Cloudinary URLs and handles backend endpoints
 function normalizeImageUrl(url: string | undefined | null): string | undefined {
   if (!url || url === "null" || url === "undefined" || url.trim() === "") {
     return undefined
   }
-  if (url.startsWith("http") || url.startsWith("data:")) {
+  
+  // If it's already a Cloudinary URL (has https and domain), return as-is (highest priority)
+  if (url.includes("res.cloudinary.com")) {
     return url
   }
+  
+  // If it's already an http/https URL (other than Cloudinary), return as-is
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url
+  }
+  
+  // If it's a data URL, return as-is
+  if (url.startsWith("data:")) {
+    return url
+  }
+  
+  // If it's a relative path starting with /, construct full backend URL
   if (url.startsWith("/")) {
     return `${API_BASE_URL}${url}`
   }
+  
+  // Fallback - return as-is
   return url
 }
 
