@@ -51,14 +51,13 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps & { resetErr
   )
 }
 
-// Memoized Logo Component
+// Memoized Logo Component - disable initial animations for performance
 const Logo = memo(() => (
   <motion.div
-    initial={{ opacity: 0, scale: 0.9 }}
-    animate={{ opacity: 1, scale: 1 }}
-    transition={{ duration: 0.6 }}
-    whileHover={{ scale: 1.08 }}
-    whileTap={{ scale: 0.96 }}
+    initial={false}
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.98 }}
+    transition={{ type: "spring", stiffness: 200, damping: 15 }}
     className="relative h-10 w-10 sm:h-12 sm:w-12 md:h-14 md:w-14 overflow-hidden rounded-xl bg-gradient-to-br from-cherry-800 to-cherry-900 p-1 shadow-lg flex-shrink-0"
   >
     <Link href="/" className="block h-full w-full" aria-label="Mizizzi Store - Go to homepage">

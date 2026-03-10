@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback, memo, useRef, useMemo } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
 import { productService } from "@/services/product"
@@ -131,6 +131,7 @@ const ProductCard = memo(
     const [isHovering, setIsHovering] = useState(false)
     const [primaryImageLoaded, setPrimaryImageLoaded] = useState(false)
     const [secondaryImageLoaded, setSecondaryImageLoaded] = useState(false)
+    const prefersReducedMotion = useReducedMotion()
 
     // Media query hook to detect desktop
     const isDesktop = useMediaQuery("(min-width: 1024px)")
@@ -146,8 +147,8 @@ const ProductCard = memo(
     const handlePrimaryImageLoad = useCallback(() => {
       setPrimaryImageLoaded(true)
       setImageLoaded(true)
-      setTimeout(() => setShowPlaceholder(false), 300)
-    }, [])
+      setTimeout(() => setShowPlaceholder(false), prefersReducedMotion ? 0 : 300)
+    }, [prefersReducedMotion])
 
     const handlePrimaryImageError = useCallback(() => {
       setImageError(true)
@@ -173,7 +174,7 @@ const ProductCard = memo(
     const cardVariants = {
       hidden: {
         opacity: 0,
-        y: 30,
+        y: prefersReducedMotion ? 0 : 30,
         scale: 0.95,
       },
       visible: {
@@ -182,8 +183,8 @@ const ProductCard = memo(
         scale: 1,
         transition: {
           type: "spring",
-          stiffness: 100,
-          damping: 15,
+          stiffness: prefersReducedMotion ? 500 : 100,
+          damping: prefersReducedMotion ? 30 : 15,
           delay: isNewlyLoaded ? index * 0.05 : index * 0.02,
         },
       },
@@ -195,7 +196,7 @@ const ProductCard = memo(
           variants={cardVariants}
           initial="hidden"
           animate="visible"
-          whileHover={isDesktop ? { y: -2, transition: { duration: 0.2 } } : undefined}
+          whileHover={isDesktop && !prefersReducedMotion ? { y: -2, transition: { duration: 0.2 } } : undefined}
           className="h-full"
         >
           <div className="group h-full overflow-hidden bg-white border-b border-r border-gray-100 transition-all duration-200 hover:shadow-sm">
@@ -208,7 +209,7 @@ const ProductCard = memo(
                 {(showPlaceholder || imageError) && (
                   <motion.div
                     initial={{ opacity: 1 }}
-                    exit={{ opacity: 0, transition: { duration: 0.3 } }}
+                    exit={{ opacity: 0, transition: { duration: prefersReducedMotion ? 0 : 0.3 } }}
                     className="absolute inset-0 z-10"
                   >
                     <LogoPlaceholder />
@@ -221,7 +222,7 @@ const ProductCard = memo(
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: primaryImageLoaded && !(isDesktop && isHovering) ? 1 : 0 }}
-                  transition={{ duration: 0.4, ease: "easeInOut" }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.4, ease: "easeInOut" }}
                   className="absolute inset-0"
                 >
                   <Image
@@ -237,8 +238,8 @@ const ProductCard = memo(
                 </motion.div>
               )}
 
-              {/* Secondary Image - shows on hover only on desktop */}
-              {secondaryImage && isDesktop && (
+              {/* Secondary Image - shows on hover only on desktop and respects reduced motion */}
+              {secondaryImage && isDesktop && !prefersReducedMotion && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: isHovering && secondaryImageLoaded ? 1 : 0 }}
@@ -292,92 +293,110 @@ const ProductCard = memo(
 
 ProductCard.displayName = "ProductCard"
 
-const ProductGridSkeleton = ({ count = 12 }: { count?: number }) => (
-  <section className="w-full">
-    <div className="w-full">
-      <div className="grid grid-cols-3 gap-[1px] bg-gray-100 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-        {[...Array(count)].map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-white p-1.5 sm:p-2 md:p-3"
-          >
-            {/* Image placeholder with shimmer */}
-            <div className="aspect-square w-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center relative overflow-hidden mb-1.5 sm:mb-2 rounded-lg">
-              {/* Shimmer effect */}
-              <div
-                className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
-                style={{
-                  background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)",
-                  animationDelay: `${i * 100}ms`,
-                }}
-              />
-              {/* Centered package icon */}
-              <motion.div
-                animate={{
-                  scale: [1, 1.05, 1],
-                  opacity: [0.4, 0.6, 0.4],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Number.POSITIVE_INFINITY,
-                  ease: "easeInOut",
-                  delay: i * 0.1,
-                }}
-                className="text-center z-10"
-              >
-                <Package className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-gray-300" />
-              </motion.div>
-            </div>
-
-            {/* Text placeholders */}
-            <div className="space-y-1.5 sm:space-y-2">
-              <div className="h-2.5 sm:h-3 md:h-3.5 w-full bg-gray-200/80 rounded-full relative overflow-hidden">
-                <div
-                  className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
-                  style={{
-                    background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.8) 50%, transparent 100%)",
-                    animationDelay: `${i * 100 + 50}ms`,
-                  }}
-                />
-              </div>
-              <div className="h-2.5 sm:h-3 md:h-3.5 w-2/3 bg-gray-200/60 rounded-full" />
-              {/* Price placeholder with brand color tint */}
-              <div className="h-3 sm:h-3.5 md:h-4 w-1/2 bg-[#8B1538]/10 rounded-full relative overflow-hidden">
-                <div
-                  className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
-                  style={{
-                    background: "linear-gradient(90deg, transparent 0%, rgba(139,21,56,0.1) 50%, transparent 100%)",
-                    animationDelay: `${i * 100 + 100}ms`,
-                  }}
-                />
-              </div>
-              {/* Star rating placeholder */}
-              <div className="flex gap-0.5 sm:gap-1">
-                {[...Array(5)].map((_, j) => (
+const ProductGridSkeleton = ({ count = 12 }: { count?: number }) => {
+  const prefersReducedMotion = useReducedMotion()
+  
+  return (
+    <section className="w-full">
+      <div className="w-full">
+        <div className="grid grid-cols-3 gap-[1px] bg-gray-100 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          {[...Array(count)].map((_, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: prefersReducedMotion ? 0 : 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.03, duration: prefersReducedMotion ? 0.1 : 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-white p-1.5 sm:p-2 md:p-3"
+            >
+              {/* Image placeholder with shimmer */}
+              <div className="aspect-square w-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center relative overflow-hidden mb-1.5 sm:mb-2 rounded-lg">
+                {/* Shimmer effect - disabled for reduced motion */}
+                {!prefersReducedMotion && (
                   <div
-                    key={j}
-                    className="h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-3.5 md:w-3.5 bg-yellow-100 rounded-full"
-                    style={{ animationDelay: `${j * 50}ms` }}
+                    className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
+                    style={{
+                      background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)",
+                      animationDelay: `${i * 100}ms`,
+                    }}
                   />
-                ))}
+                )}
+                {/* Centered package icon */}
+                <motion.div
+                  animate={
+                    prefersReducedMotion
+                      ? {}
+                      : {
+                          scale: [1, 1.05, 1],
+                          opacity: [0.4, 0.6, 0.4],
+                        }
+                  }
+                  transition={
+                    prefersReducedMotion
+                      ? {}
+                      : {
+                          duration: 2,
+                          repeat: Number.POSITIVE_INFINITY,
+                          ease: "easeInOut",
+                          delay: i * 0.1,
+                        }
+                  }
+                  className="text-center z-10"
+                >
+                  <Package className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-gray-300" />
+                </motion.div>
               </div>
-            </div>
-          </motion.div>
-        ))}
+
+              {/* Text placeholders */}
+              <div className="space-y-1.5 sm:space-y-2">
+                <div className="h-2.5 sm:h-3 md:h-3.5 w-full bg-gray-200/80 rounded-full relative overflow-hidden">
+                  {!prefersReducedMotion && (
+                    <div
+                      className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
+                      style={{
+                        background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.8) 50%, transparent 100%)",
+                        animationDelay: `${i * 100 + 50}ms`,
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="h-2.5 sm:h-3 md:h-3.5 w-2/3 bg-gray-200/60 rounded-full" />
+                {/* Price placeholder with brand color tint */}
+                <div className="h-3 sm:h-3.5 md:h-4 w-1/2 bg-[#8B1538]/10 rounded-full relative overflow-hidden">
+                  {!prefersReducedMotion && (
+                    <div
+                      className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite]"
+                      style={{
+                        background: "linear-gradient(90deg, transparent 0%, rgba(139,21,56,0.1) 50%, transparent 100%)",
+                        animationDelay: `${i * 100 + 100}ms`,
+                      }}
+                    />
+                  )}
+                </div>
+                {/* Star rating placeholder */}
+                <div className="flex gap-0.5 sm:gap-1">
+                  {[...Array(5)].map((_, j) => (
+                    <div
+                      key={j}
+                      className="h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-3.5 md:w-3.5 bg-yellow-100 rounded-full"
+                      style={{ animationDelay: `${j * 50}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
-    </div>
-    <style jsx>{`
-      @keyframes shimmer {
-        100% {
-          transform: translateX(200%);
+      <style jsx>{`
+        @keyframes shimmer {
+          100% {
+            transform: translateX(200%);
+          }
         }
-      }
-    `}</style>
-  </section>
-)
+      `}</style>
+    </section>
+  )
+}
 
 interface ProductGridProps {
   limit?: number

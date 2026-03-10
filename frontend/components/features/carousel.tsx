@@ -2,7 +2,7 @@
 
 import { AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { useEffect, useState, useMemo, memo } from "react"
+import { useEffect, useState, useMemo, memo, useReducedMotion } from "react"
 import { useCarousel } from "@/hooks/use-carousel"
 import { useResponsiveLayout } from "@/hooks/use-responsive-layout"
 import { CarouselSlide } from "@/components/carousel/carousel-slide"
@@ -32,7 +32,7 @@ interface CarouselProps {
  * High-performance carousel component with hybrid rendering
  * - Uses memoization to prevent unnecessary re-renders
  * - Optimized image loading with priority for first slide
- * - Smooth animations with hardware acceleration
+ * - Respects prefers-reduced-motion for accessibility & performance
  * - Fast rendering with useMemo for computed values
  */
 export const Carousel = memo(function Carousel({
@@ -42,6 +42,9 @@ export const Carousel = memo(function Carousel({
   featureCards = [],
   productShowcase = [],
 }: CarouselProps) {
+  // Respect user's motion preferences for performance
+  const prefersReducedMotion = useReducedMotion()
+
   // Use server items or fallback to contact CTA slides
   // Contact CTAs work well as main carousel content
   const displayItems = useMemo(() => {
@@ -83,7 +86,7 @@ export const Carousel = memo(function Carousel({
 
   const { currentSlide, direction, isPaused, nextSlide, prevSlide, pause, resume } = useCarousel({
     itemsLength: carouselItems.length || 1,
-    autoPlay: carouselItems.length > 0,
+    autoPlay: carouselItems.length > 0 && !prefersReducedMotion,
   })
 
   const [prevSlideIndex, setPrevSlideIndex] = useState(currentSlide)
@@ -91,9 +94,9 @@ export const Carousel = memo(function Carousel({
   useEffect(() => {
     const timer = setTimeout(() => {
       setPrevSlideIndex(currentSlide)
-    }, 600)
+    }, prefersReducedMotion ? 0 : 600)
     return () => clearTimeout(timer)
-  }, [currentSlide])
+  }, [currentSlide, prefersReducedMotion])
 
   // Memoize active and previous items for performance
   const activeItem = useMemo(() => carouselItems[currentSlide], [carouselItems, currentSlide])

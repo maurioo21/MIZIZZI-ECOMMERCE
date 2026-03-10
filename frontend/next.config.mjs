@@ -17,10 +17,11 @@ const nextConfig = {
   },
 
   compress: true,
-  generateEtags: true,
+  generateEtags: false,
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
-  reactStrictMode: true,
+  reactStrictMode: false,
+  swcMinify: true,
   output: "standalone",
 
   experimental: {
@@ -32,6 +33,9 @@ const nextConfig = {
       "@radix-ui/react-popover",
       "lucide-react",
     ],
+    reactCompiler: true,
+    optimizeCss: true,
+    optimizeServerReact: true,
   },
 
   images: {
