@@ -173,7 +173,10 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
               initial={{ opacity: 0 }}
               animate={{ opacity: imageLoaded ? 1 : 0 }}
               transition={{ duration: 0.3 }}
-              className={`absolute inset-0 transition-opacity duration-500 ${isHovering && hasMultipleImages ? "opacity-0" : "opacity-100"}`}
+              className="absolute inset-0 transition-opacity duration-500"
+              style={{
+                opacity: imageLoaded && (isHovering && hasMultipleImages ? 0 : 1),
+              }}
             >
               {imageUrl ? (
                 <Image
@@ -200,7 +203,10 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                 initial={{ opacity: 0 }}
                 animate={{ opacity: imageLoaded ? 1 : 0 }}
                 transition={{ duration: 0.3 }}
-                className={`absolute inset-0 transition-opacity duration-500 ${isHovering ? "opacity-100" : "opacity-0"}`}
+                className="absolute inset-0 transition-opacity duration-500"
+                style={{
+                  opacity: imageLoaded && isHovering ? 1 : 0,
+                }}
               >
                 <Image
                   src={secondaryImageUrl}

@@ -228,7 +228,10 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
                 sizes={isMobile ? "25vw" : "16vw"}
                 className={`object-cover transition-opacity duration-500 ${
                   imageLoaded ? "opacity-100" : "opacity-0"
-                } ${isHovering && hasMultipleImages ? "opacity-0" : "opacity-100"}`}
+                }`}
+                style={{
+                  opacity: isHovering && hasMultipleImages ? 0 : 1,
+                }}
                 loading="lazy"
                 priority={false}
                 onLoad={handleImageLoad}
@@ -245,9 +248,10 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
                 alt={`${product.name} - alternate view`}
                 fill
                 sizes={isMobile ? "25vw" : "16vw"}
-                className={`absolute inset-0 object-cover transition-opacity duration-500 ${
-                  isHovering ? "opacity-100" : "opacity-0"
-                }`}
+                className="absolute inset-0 object-cover transition-opacity duration-500"
+                style={{
+                  opacity: isHovering ? 1 : 0,
+                }}
                 loading="lazy"
                 priority={false}
                 crossOrigin="anonymous"
