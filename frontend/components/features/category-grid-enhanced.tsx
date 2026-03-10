@@ -97,14 +97,11 @@ export function CategoryGrid({ categories = [] }: CategoryGridProps) {
   useEffect(() => {
     // Listen for category cache updates from admin
     const unsubscribe = onCategoriesUpdated(() => {
-      console.log("[v0] CategoryGrid: Categories updated event received, performing hard refresh...")
-      // Wait a moment for all event listeners to process, then reload
-      setTimeout(() => {
-        console.log("[v0] CategoryGrid: Hard refreshing page with cache buster...")
-        const currentUrl = window.location.pathname + window.location.search
-        const separator = currentUrl.includes('?') ? '&' : '?'
-        window.location.href = `${currentUrl}${separator}_cache_bust=${Date.now()}`
-      }, 500)
+      console.log("[v0] Categories updated event received, refreshing...")
+      // Force a re-render to pick up fresh category data
+      setRefreshKey(prev => prev + 1)
+      // Reload the page to get fresh data from server
+      window.location.href = window.location.href
     })
 
     return unsubscribe

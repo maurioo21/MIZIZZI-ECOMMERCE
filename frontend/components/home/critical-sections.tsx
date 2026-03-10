@@ -1,12 +1,10 @@
 'use client'
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
 import { NetworkStatus } from "@/components/shared/network-status"
 import { CategoryGrid } from "@/components/features/category-grid-enhanced"
 import { Carousel } from "@/components/features/carousel"
 import { useCategoriesCache } from "@/hooks/use-categories-cache"
-import { onCategoriesUpdated } from "@/lib/category-cache-utils"
 import type { Product } from "@/types"
 import type { Category } from "@/lib/server/get-categories"
 import type {
@@ -48,18 +46,6 @@ export function CriticalSections({
 }: CriticalSectionsProps) {
   // Apply 3-layer cache strategy: sessionStorage > localStorage > server data
   const { categories: cachedCategories } = useCategoriesCache(categories)
-  const [categoriesRefreshKey, setCategoriesRefreshKey] = useState(0)
-
-  useEffect(() => {
-    // Listen for category updates from admin and trigger page refresh
-    const unsubscribe = onCategoriesUpdated(() => {
-      console.log("[v0] CriticalSections: Category update detected, triggering page refresh...")
-      setCategoriesRefreshKey(prev => prev + 1)
-      // The page will be reloaded by the CategoryGrid component
-    })
-
-    return unsubscribe
-  }, [])
 
   return (
     <>
