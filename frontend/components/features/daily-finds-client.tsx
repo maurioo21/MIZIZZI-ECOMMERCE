@@ -1,284 +1,244 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useCallback, useEffect, memo } from "react"
+import { useState, useCallback, memo, useRef, useEffect, useMemo } from "react"
 import { motion, AnimatePresence, type PanInfo } from "framer-motion"
-import { ChevronRight, ChevronLeft, Sparkles, Star } from "lucide-react"
-import { useRouter } from "next/navigation"
-import Image from "next/image"
 import Link from "next/link"
-
+import { ChevronRight, ChevronLeft, Sparkles, Star } from "lucide-react"
+import Image from "next/image"
 import type { Product } from "@/types"
+import { useRouter } from "next/navigation"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { cloudinaryService } from "@/services/cloudinary-service"
 
-const LogoPlaceholder = () => (
-  <div className="absolute inset-0 flex items-center justify-center bg-white">
-    <motion.div
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="relative h-12 w-12 sm:h-16 sm:w-16"
-    >
-      <Image
-        src="/images/screenshot-20from-202025-02-18-2013-30-22.png"
-        alt="Loading"
-        fill
-        sizes="48px"
-        className="object-contain"
-      />
-    </motion.div>
-  </div>
-)
+type ProductImageLike = {
+  url?: string
+  is_primary?: boolean
+}
 
-const StarRating = ({ rating = 4 }: { rating?: number }) => {
+const LogoPlaceholder = memo(function LogoPlaceholder() {
+  return (
+    <div className="absolute inset-0 flex items-center justify-center bg-white">
+      <div className="relative h-12 w-12 sm:h-16 sm:w-16">
+        <Image src="/logo.png" alt="Loading" fill sizes="64px" className="object-contain" />
+      </div>
+    </div>
+  )
+})
+
+const StarRating = memo(function StarRating({ rating = 4 }: { rating?: number }) {
+  const safeRating = Math.min(5, Math.max(1, rating))
+
   return (
     <div className="flex items-center">
       <div className="flex">
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${
-              star <= Math.floor(rating)
+            className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${star <= Math.floor(safeRating)
                 ? "fill-yellow-400 text-yellow-400"
-                : star - 0.5 <= rating
+                : star - 0.5 <= safeRating
                   ? "fill-yellow-400/50 text-yellow-400"
                   : "fill-gray-200 text-gray-200"
-            }`}
+              }`}
           />
         ))}
       </div>
     </div>
   )
+})
+
+function optimizeImageUrl(rawUrl?: string): string {
+  if (!rawUrl || typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
+    return ""
+  }
+
+  if (rawUrl.startsWith("http") || rawUrl.startsWith("/")) {
+    return rawUrl
+  }
+
+  const optimized = cloudinaryService.generateOptimizedUrl(rawUrl)
+  return optimized && optimized !== "/placeholder.svg" ? optimized : ""
 }
 
-function getProductImageUrl(product: Product): string {
-  // Priority 0: Check direct image field (from homepage API)
-  if ((product as any).image && typeof (product as any).image === "string" && (product as any).image.length > 0) {
-    return (product as any).image
+function resolvePrimaryImage(product: Product): string {
+  const directImage = optimizeImageUrl((product as any).image)
+  if (directImage) return directImage
+
+  const thumbnail = optimizeImageUrl(product.thumbnail_url)
+  if (thumbnail) return thumbnail
+
+  if (Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+    for (const url of product.image_urls) {
+      const resolved = optimizeImageUrl(url)
+      if (resolved) return resolved
+    }
   }
 
-  if (product.image_urls && product.image_urls.length > 0) {
-    if (typeof product.image_urls[0] === "string" && !product.image_urls[0].startsWith("http")) {
-      return cloudinaryService.generateOptimizedUrl(product.image_urls[0])
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    const primary = product.images.find((img: any) => img?.is_primary && img?.url)
+    const firstValid = primary || product.images.find((img: any) => img?.url)
+
+    if (firstValid?.url) {
+      const resolved = optimizeImageUrl(firstValid.url)
+      if (resolved) return resolved
     }
-    return product.image_urls[0]
   }
-  if (product.thumbnail_url) {
-    if (typeof product.thumbnail_url === "string" && !product.thumbnail_url.startsWith("http")) {
-      return cloudinaryService.generateOptimizedUrl(product.thumbnail_url)
-    }
-    return product.thumbnail_url
-  }
-  if (product.images && product.images.length > 0 && product.images[0].url) {
-    if (typeof product.images[0].url === "string" && !product.images[0].url.startsWith("http")) {
-      return cloudinaryService.generateOptimizedUrl(product.images[0].url)
-    }
-    return product.images[0].url
-  }
+
   return ""
 }
 
-const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: boolean }) => {
-  const [imageLoaded, setImageLoaded] = useState(false)
+function resolveSecondaryImage(product: Product, primaryImageUrl: string): string {
+  const seen = new Set<string>()
+  if (primaryImageUrl) {
+    seen.add(primaryImageUrl)
+  }
+
+  if (Array.isArray(product.image_urls) && product.image_urls.length > 1) {
+    for (const rawUrl of product.image_urls) {
+      const resolved = optimizeImageUrl(rawUrl)
+      if (resolved && !seen.has(resolved)) {
+        return resolved
+      }
+    }
+  }
+
+  if (Array.isArray(product.images) && product.images.length > 1) {
+    const normalizedImages = product.images
+      .map((img: ProductImageLike) => ({
+        resolved: optimizeImageUrl(img?.url),
+        isPrimary: Boolean(img?.is_primary),
+      }))
+      .filter((img) => Boolean(img.resolved))
+
+    const nonPrimaryDifferent = normalizedImages.find((img) => !img.isPrimary && img.resolved && !seen.has(img.resolved))
+    if (nonPrimaryDifferent?.resolved) {
+      return nonPrimaryDifferent.resolved
+    }
+
+    const anyDifferent = normalizedImages.find((img) => img.resolved && !seen.has(img.resolved))
+    if (anyDifferent?.resolved) {
+      return anyDifferent.resolved
+    }
+  }
+
+  return ""
+}
+
+const ProductCard = memo(function ProductCard({
+  product,
+  isMobile,
+  isAboveFold = false,
+}: {
+  product: Product
+  isMobile: boolean
+  isAboveFold?: boolean
+}) {
   const [imageError, setImageError] = useState(false)
-  const [showPlaceholder, setShowPlaceholder] = useState(true)
-  const [isHovering, setIsHovering] = useState(false)
-  const imageContainerRef = useRef<HTMLDivElement>(null)
 
-  const discountPercentage = product.sale_price
-    ? Math.round(((product.price - product.sale_price) / product.price) * 100)
-    : 0
+  const imageUrl = useMemo(() => resolvePrimaryImage(product), [product])
+  const secondaryImageUrl = useMemo(() => resolveSecondaryImage(product, imageUrl), [product, imageUrl])
 
-  const handleImageLoad = () => {
-    setImageLoaded(true)
-    setTimeout(() => setShowPlaceholder(false), 300)
-  }
+  const hasValidImage = imageUrl.length > 0
+  const hasMultipleImages = !isMobile && secondaryImageUrl.length > 0
 
-  const handleImageError = () => {
+  const discountPercentage =
+    typeof product.sale_price === "number" && product.price > 0
+      ? Math.round(((product.price - product.sale_price) / product.price) * 100)
+      : 0
+
+  const rating = typeof product.rating === "number" ? product.rating : 4
+
+  const handleImageError = useCallback(() => {
     setImageError(true)
-    setImageLoaded(false)
-  }
-
-  useEffect(() => {
-    setImageLoaded(false)
-    setImageError(false)
-    setShowPlaceholder(true)
-  }, [product.id])
-
-  const imageUrl = getProductImageUrl(product)
-  
-  // Get secondary image URL from image_urls array
-  const getSecondaryImageUrl = (): string => {
-    const imgArray = product.image_urls
-    if (imgArray && Array.isArray(imgArray) && imgArray.length > 1 && imgArray[1]) {
-      const secondUrl = imgArray[1]
-      if (typeof secondUrl === "string" && secondUrl.length > 0) {
-        if (secondUrl.startsWith("http") || secondUrl.startsWith("/")) {
-          return secondUrl
-        }
-        return cloudinaryService.generateOptimizedUrl(secondUrl)
-      }
-    }
-    
-    // TEMPORARY: If no secondary image in array, use a slight variation of primary for demo
-    if (imgArray && Array.isArray(imgArray) && imgArray.length > 0) {
-      const primaryUrl = imgArray[0]
-      if (typeof primaryUrl === "string" && primaryUrl.length > 0) {
-        if (primaryUrl.includes("?")) {
-          return primaryUrl + "&angle=2"
-        }
-        return primaryUrl + "?angle=2"
-      }
-    }
-    
-    return ""
-  }
-  
-  const secondaryImageUrl = getSecondaryImageUrl()
-  const hasMultipleImages = Boolean(secondaryImageUrl)
-  const rating = product.rating || 3 + Math.random() * 2
-
-  // Preload secondary image when component mounts for smooth hover
-  useEffect(() => {
-    if (hasMultipleImages && secondaryImageUrl && !isMobile) {
-      const link = document.createElement("link")
-      link.rel = "preload"
-      link.as = "image"
-      link.href = secondaryImageUrl
-      document.head.appendChild(link)
-    }
-  }, [secondaryImageUrl, hasMultipleImages, isMobile])
+  }, [])
 
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        whileHover={{ y: -2 }}
-        className="h-full"
-      >
-        <div className="group h-full overflow-hidden bg-white border-r border-gray-100 transition-all duration-200 hover:shadow-sm">
-          <div 
-            ref={imageContainerRef}
-            className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
-            onMouseEnter={() => !isMobile && hasMultipleImages && setIsHovering(true)}
-            onMouseLeave={() => setIsHovering(false)}
-          >
-            <AnimatePresence>
-              {(showPlaceholder || imageError) && (
-                <motion.div
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0, transition: { duration: 0.3 } }}
-                  className="absolute inset-0 z-10"
-                >
-                  <LogoPlaceholder />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            
-            {/* Primary Image */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: imageLoaded ? 1 : 0 }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-0 transition-opacity duration-500 will-change-opacity"
-              style={{
-                opacity: imageLoaded && (isHovering && hasMultipleImages ? 0 : 1),
-                transitionProperty: "opacity",
-                transitionDuration: "500ms",
-                transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
-              }}
-            >
-              {imageUrl ? (
+      <div className="h-full">
+        <div className="group h-full overflow-hidden border-r border-gray-100 bg-white transition-shadow duration-200 hover:shadow-sm">
+          <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
+            {(imageError || !hasValidImage) && <LogoPlaceholder />}
+
+            {hasValidImage && (
+              <>
                 <Image
-                  src={imageUrl || "/placeholder.svg"}
+                  src={imageUrl}
                   alt={product.name}
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="eager"
-                  priority={true}
-                  onLoad={handleImageLoad}
+                  className={`object-cover transition-opacity duration-500 ${hasMultipleImages ? "group-hover:opacity-0" : ""
+                    }`}
+                  loading={isAboveFold ? "eager" : "lazy"}
+                  priority={isAboveFold}
                   onError={handleImageError}
-                  crossOrigin="anonymous"
                 />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-                  <Image src="/logo.png" alt="Placeholder" width={48} height={48} className="opacity-30" />
-                </div>
-              )}
-            </motion.div>
 
-            {/* Secondary Image - overlay for hover swap */}
-            {hasMultipleImages && secondaryImageUrl && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: imageLoaded ? 1 : 0 }}
-                transition={{ duration: 0.3 }}
-                className="absolute inset-0 transition-opacity duration-500 will-change-opacity"
-                style={{
-                  opacity: imageLoaded && isHovering ? 1 : 0,
-                  transitionProperty: "opacity",
-                  transitionDuration: "500ms",
-                  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              >
-                <Image
-                  src={secondaryImageUrl}
-                  alt={`${product.name} - alternate view`}
-                  fill
-                  sizes={isMobile ? "25vw" : "16vw"}
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="eager"
-                  priority={false}
-                  crossOrigin="anonymous"
-                />
-              </motion.div>
+                {hasMultipleImages && (
+                  <Image
+                    src={secondaryImageUrl}
+                    alt={`${product.name} alternate view`}
+                    fill
+                    sizes={isMobile ? "25vw" : "16vw"}
+                    className="absolute inset-0 object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                    loading="lazy"
+                    priority={false}
+                    onError={handleImageError}
+                  />
+                )}
+              </>
             )}
+
             {product.sale_price && discountPercentage > 0 && (
-              <div className="absolute top-1 left-1 bg-[#8B1538] text-white text-[10px] sm:text-xs font-medium px-1.5 py-0.5 rounded-sm z-20">
+              <div className="pointer-events-none absolute left-1 top-1 z-20 rounded-sm bg-[#8B1538] px-1.5 py-0.5 text-[10px] font-medium text-white sm:text-xs">
                 -{discountPercentage}%
               </div>
             )}
           </div>
+
           <div className={isMobile ? "p-2" : "p-3"}>
             <h3
-              className={`text-gray-800 line-clamp-2 leading-tight mb-1.5 ${isMobile ? "text-xs min-h-[32px]" : "text-sm min-h-[40px]"}`}
+              className={`mb-1.5 line-clamp-2 leading-tight text-gray-800 ${isMobile ? "min-h-[32px] text-xs" : "min-h-[40px] text-sm"
+                }`}
             >
               {product.name}
             </h3>
+
             <div className="mb-1.5">
               <span className={`font-semibold text-[#8B1538] ${isMobile ? "text-sm" : "text-base"}`}>
                 KSh {(product.sale_price || product.price).toLocaleString()}
               </span>
               {product.sale_price && (
-                <span className={`text-gray-400 line-through ml-1.5 ${isMobile ? "text-[10px]" : "text-xs"}`}>
+                <span className={`ml-1.5 text-gray-400 line-through ${isMobile ? "text-[10px]" : "text-xs"}`}>
                   KSh {product.price.toLocaleString()}
                 </span>
               )}
             </div>
+
             <StarRating rating={rating} />
           </div>
         </div>
-      </motion.div>
+      </div>
     </Link>
   )
 })
-
-ProductCard.displayName = "ProductCard"
 
 interface DailyFindsClientProps {
   initialProducts: Product[]
 }
 
 export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
+  const products = initialProducts ?? []
+
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isHovering, setIsHovering] = useState(false)
   const [hoverSide, setHoverSide] = useState<"left" | "right" | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+
   const carouselRef = useRef<HTMLDivElement>(null)
+  const hoverSideRef = useRef<"left" | "right" | null>(null)
+  const dragVelocityRef = useRef(0)
+
   const router = useRouter()
 
   const isMobile = useMediaQuery("(max-width: 640px)")
@@ -287,8 +247,8 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
 
   const itemsPerView = isSmallMobile ? 3 : isMobile ? 3 : isTablet ? 5 : 6
   const mobileItemWidth = "calc((100vw - 32px) / 3)"
-
-  const maxIndex = Math.max(0, initialProducts.length - itemsPerView)
+  const desktopItemWidth = isTablet ? 20 : 16.666
+  const maxIndex = Math.max(0, products.length - itemsPerView)
 
   const goToPrevious = useCallback(() => {
     setCurrentIndex((prev) => Math.max(0, prev - 1))
@@ -301,10 +261,15 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!carouselRef.current || isDragging || isMobile) return
+
       const rect = carouselRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
-      const width = rect.width
-      setHoverSide(x < width / 2 ? "left" : "right")
+      const nextSide: "left" | "right" = x < rect.width / 2 ? "left" : "right"
+
+      if (hoverSideRef.current !== nextSide) {
+        hoverSideRef.current = nextSide
+        setHoverSide(nextSide)
+      }
     },
     [isDragging, isMobile],
   )
@@ -316,23 +281,27 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
   const handleMouseLeave = useCallback(() => {
     setIsHovering(false)
     setHoverSide(null)
+    hoverSideRef.current = null
   }, [])
 
   const handleDragStart = useCallback(() => {
     if (isMobile) return
     setIsDragging(true)
     setHoverSide(null)
+    hoverSideRef.current = null
   }, [isMobile])
 
   const handleDragEnd = useCallback(
-    (event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
       if (isMobile) return
+
       setIsDragging(false)
-      const threshold = 50
+
       const velocity = info.velocity.x
       const offset = info.offset.x
+      dragVelocityRef.current = velocity
 
-      if (Math.abs(offset) > threshold || Math.abs(velocity) > 300) {
+      if (Math.abs(offset) > 20 || Math.abs(velocity) > 150) {
         if (offset > 0 || velocity > 0) {
           if (currentIndex > 0) goToPrevious()
         } else {
@@ -340,51 +309,61 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
         }
       }
     },
-    [currentIndex, maxIndex, goToPrevious, goToNext, isMobile],
+    [currentIndex, goToNext, goToPrevious, isMobile, maxIndex],
   )
 
   useEffect(() => {
     const currentCarousel = carouselRef.current
     if (!currentCarousel || isMobile) return
+
     const handleWheelEvent = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) {
         e.preventDefault()
-        const threshold = 10
+
         const delta = e.deltaX || e.deltaY
-        if (Math.abs(delta) > threshold) {
-          if (delta > 0 && currentIndex < maxIndex) {
-            goToNext()
-          } else if (delta < 0 && currentIndex > 0) {
-            goToPrevious()
-          }
-        }
+        if (Math.abs(delta) <= 10) return
+
+        setCurrentIndex((prevIndex) => {
+          const nextMaxIndex = Math.max(0, products.length - itemsPerView)
+
+          if (delta > 0 && prevIndex < nextMaxIndex) return prevIndex + 1
+          if (delta < 0 && prevIndex > 0) return prevIndex - 1
+          return prevIndex
+        })
       }
     }
+
     currentCarousel.addEventListener("wheel", handleWheelEvent, { passive: false })
     return () => currentCarousel.removeEventListener("wheel", handleWheelEvent)
-  }, [currentIndex, maxIndex, goToPrevious, goToNext, isMobile])
+  }, [isMobile, itemsPerView, products.length])
 
-  const handleViewAll = (e: React.MouseEvent) => {
-    e.preventDefault()
-    router.push("/daily-finds")
+  const handleViewAll = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      router.push("/daily-finds")
+    },
+    [router],
+  )
+
+  if (!products.length) {
+    return null
   }
 
   return (
-    <section className="w-full mb-4 sm:mb-8">
+    <section className="mb-4 w-full sm:mb-8">
       <div className="w-full">
-        <div className="bg-[#8B1538] text-white flex items-center justify-between px-2 sm:px-4 py-1.5 sm:py-2">
+        <div className="flex items-center justify-between bg-[#8B1538] px-2 py-1.5 text-white sm:px-4 sm:py-2">
           <div className="flex items-center gap-1 sm:gap-2">
-            <Sparkles className={`text-yellow-300 ${isMobile ? "h-4 w-4" : "h-5 w-5"}`} />
-            <h2 className={`font-bold whitespace-nowrap ${isMobile ? "text-sm" : "text-base sm:text-lg"}`}>
+            <Sparkles className={`h-4 w-4 text-yellow-300 sm:h-5 sm:w-5`} />
+            <h2 className={`whitespace-nowrap font-bold ${isMobile ? "text-sm" : "text-base sm:text-lg"}`}>
               {isMobile ? "Daily Finds" : "Daily Finds | Great Deals Every Day!"}
             </h2>
           </div>
 
           <button
             onClick={handleViewAll}
-            className={`flex items-center gap-0.5 sm:gap-1 font-medium hover:underline whitespace-nowrap ${
-              isMobile ? "text-xs" : "text-sm"
-            }`}
+            className={`flex items-center gap-0.5 whitespace-nowrap font-medium hover:underline sm:gap-1 ${isMobile ? "text-xs" : "text-sm"
+              }`}
           >
             See All
             <ChevronRight className={isMobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
@@ -394,28 +373,24 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
         <div className={isMobile ? "p-1" : "p-2"}>
           <div
             ref={carouselRef}
-            className={`relative bg-gray-100 ${isMobile ? "overflow-hidden" : "overflow-hidden"}`}
-            style={{
-              maxWidth: isMobile ? "100%" : undefined,
-              width: isMobile ? "100%" : undefined,
-            }}
+            className="relative overflow-hidden bg-gray-100"
             onMouseMove={handleMouseMove}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           >
             {isMobile ? (
               <div
-                className="flex gap-1 w-full overflow-x-auto scrollbar-hide px-2"
+                className="scrollbar-hide flex w-full gap-1 overflow-x-auto px-2"
                 style={{
                   scrollSnapType: "x mandatory",
                   WebkitOverflowScrolling: "touch",
                   paddingBottom: "8px",
                 }}
               >
-                {initialProducts.map((product) => (
+                {products.map((product, index) => (
                   <div
                     key={product.id}
-                    className="flex-shrink-0 pointer-events-auto"
+                    className="pointer-events-auto flex-shrink-0"
                     style={{
                       width: mobileItemWidth,
                       minWidth: isSmallMobile ? "100px" : "110px",
@@ -423,7 +398,7 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
                       scrollSnapAlign: "start",
                     }}
                   >
-                    <ProductCard product={product} isMobile={true} />
+                    <ProductCard product={product} isMobile={true} isAboveFold={index < 3} />
                   </div>
                 ))}
               </div>
@@ -432,33 +407,36 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
                 className="flex gap-[1px]"
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0.1}
+                dragElastic={0}
+                dragTransition={{ power: 0.1, timeConstant: 80 }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
-                animate={{
-                  x: `-${currentIndex * (isTablet ? 20 : 16.666)}%`,
-                }}
+                animate={{ x: `-${currentIndex * desktopItemWidth}%` }}
                 transition={{
                   type: "spring",
-                  stiffness: 300,
-                  damping: 30,
-                  mass: 0.8,
+                  stiffness: 350,
+                  damping: 35,
+                  mass: 1,
+                  velocity: dragVelocityRef.current,
                 }}
                 style={{
                   cursor: isDragging ? "grabbing" : "grab",
+                  willChange: "transform",
+                  transform: "translateZ(0)",
+                  backfaceVisibility: "hidden",
+                  perspective: 1000,
+                  WebkitFontSmoothing: "antialiased",
+                  WebkitBackfaceVisibility: "hidden",
                 }}
               >
-                {initialProducts.map((product, index) => (
-                  <motion.div
+                {products.map((product, index) => (
+                  <div
                     key={product.id}
-                    className="flex-shrink-0 pointer-events-auto"
-                    style={{ width: `${isTablet ? 20 : 16.666}%` }}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
+                    className="pointer-events-auto flex-shrink-0"
+                    style={{ width: `${desktopItemWidth}%` }}
                   >
-                    <ProductCard product={product} isMobile={false} />
-                  </motion.div>
+                    <ProductCard product={product} isMobile={false} isAboveFold={index < itemsPerView} />
+                  </div>
                 ))}
               </motion.div>
             )}
@@ -466,28 +444,29 @@ export function DailyFindsClient({ initialProducts }: DailyFindsClientProps) {
             <AnimatePresence>
               {!isMobile && isHovering && !isDragging && hoverSide === "left" && currentIndex > 0 && (
                 <motion.button
-                  initial={{ opacity: 0, x: -20, scale: 0.8 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: -20, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ duration: 0.2 }}
                   onClick={goToPrevious}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/95 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110 transition-all z-20"
+                  className="pointer-events-auto absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/95 p-2 shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-white"
                 >
-                  <ChevronLeft className="w-5 h-5 text-gray-700" />
+                  <ChevronLeft className="h-5 w-5 text-gray-700" />
                 </motion.button>
               )}
             </AnimatePresence>
+
             <AnimatePresence>
               {!isMobile && isHovering && !isDragging && hoverSide === "right" && currentIndex < maxIndex && (
                 <motion.button
-                  initial={{ opacity: 0, x: 20, scale: 0.8 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: 20, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ duration: 0.2 }}
                   onClick={goToNext}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/95 backdrop-blur-sm rounded-full p-2 shadow-lg hover:bg-white hover:scale-110 transition-all z-20"
+                  className="pointer-events-auto absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/95 p-2 shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-white"
                 >
-                  <ChevronRight className="w-5 h-5 text-gray-700" />
+                  <ChevronRight className="h-5 w-5 text-gray-700" />
                 </motion.button>
               )}
             </AnimatePresence>
