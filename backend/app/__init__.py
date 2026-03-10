@@ -775,6 +775,10 @@ def create_app(config_name=None, enable_socketio=True):
             ('app.routes.products.products_routes', 'products_routes'),
             ('routes.products.products_routes', 'products_routes')
         ],
+        'product_details_routes': [
+            ('app.routes.products.product_details_api', 'product_details_bp'),
+            ('routes.products.product_details_api', 'product_details_bp')
+        ],
         'categories_routes': [
             ('app.routes.categories.categories_routes', 'categories_routes'),
             ('routes.categories.categories_routes', 'categories_routes')
@@ -1147,6 +1151,7 @@ def create_app(config_name=None, enable_socketio=True):
                 'user_wishlist_routes': '/api/wishlist/user',
                 'admin_wishlist_routes': '/api/admin/wishlist',
                 'products_routes': '/api/products',
+                'product_details_routes': '/api/product-details',
                 'categories_routes': '/api/categories',
                 'user_address_routes': '/api/addresses/user',
                 'admin_address_routes': '/api/admin/addresses',
