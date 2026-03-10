@@ -84,7 +84,7 @@ const appleVariants = {
   },
 }
 
-export default function ProductDetailsEnhanced({
+export default memo(function ProductDetailsEnhanced({
   product: initialProduct,
   initialReviews,
   similarProducts,
@@ -107,7 +107,6 @@ export default function ProductDetailsEnhanced({
     (similarProducts && similarProducts.length > 12) || false,
   )
   const [exploreLoading, setExploreLoading] = useState(false)
-  const [newlyLoadedStartIndex, setNewlyLoadedStartIndex] = useState<number | null>(null)
 
   const [recentlyViewed, setRecentlyViewed] = useState<any[]>(recentlyViewedProducts || [])
   const [isImageZoomModalOpen, setIsImageZoomModalOpen] = useState(false)
@@ -1084,10 +1083,7 @@ export default function ProductDetailsEnhanced({
         .slice(0, 12 - exploreProducts.length)
 
       if (filteredData.length > 0) {
-        setExploreProducts((prev) => {
-          setNewlyLoadedStartIndex(prev.length)
-          return [...prev, ...filteredData]
-        })
+        setExploreProducts((prev) => [...prev, ...filteredData])
         setExploreHasMore(false)
       } else {
         setExploreHasMore(false)
@@ -1847,7 +1843,7 @@ export default function ProductDetailsEnhanced({
           </div>
         </motion.div>
 
-        {exploreProducts.length > 0 && (
+        {(exploreProducts.length > 0 || exploreLoading) && (
           <motion.div {...appleVariants.fadeIn} className="mt-8">
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
               {/* Header */}
@@ -1862,70 +1858,77 @@ export default function ProductDetailsEnhanced({
                 </Link>
               </div>
 
-              {/* Products Grid - Same as product-grid.tsx */}
-              {/* Changed grid columns to reflect 12 products (2 rows of 6) */}
+              {/* Products Grid */}
               <div className="grid grid-cols-2 gap-[1px] bg-gray-100 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {exploreProducts.map((item, index) => {
-                  const itemDiscount = item.sale_price
-                    ? Math.round(((item.price - item.sale_price) / item.price) * 100)
-                    : 0
-                  const itemRating = item.rating || 3 + Math.random() * 2
-                  const isNewlyLoaded = newlyLoadedStartIndex !== null && index >= newlyLoadedStartIndex
+                {exploreLoading && exploreProducts.length === 0 ? (
+                  // Show 12 skeleton loaders while loading initial products
+                  [...Array(12)].map((_, index) => (
+                    <div key={`skeleton-${index}`} className="bg-white p-1.5 sm:p-2 md:p-3">
+                      <div className="aspect-square w-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg mb-1.5 sm:mb-2 animate-pulse" />
+                      <div className="h-3 bg-gray-200 rounded w-3/4 mb-2 animate-pulse" />
+                      <div className="h-3 bg-gray-200 rounded w-1/2 animate-pulse" />
+                    </div>
+                  ))
+                ) : (
+                  // Show loaded products
+                  exploreProducts.map((item, index) => {
+                    const itemDiscount = item.sale_price
+                      ? Math.round(((item.price - item.sale_price) / item.price) * 100)
+                      : 0
+                    const itemRating = item.rating || 3 + Math.random() * 2
 
-                  return (
-                    <Link key={`${item.id}-${index}`} href={`/product/${item.slug || item.id}`} prefetch={false}>
-                      <motion.div
-                        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 100,
-                          damping: 15,
-                          delay: isNewlyLoaded ? (index - (newlyLoadedStartIndex || 0)) * 0.05 : index * 0.02,
-                        }}
-                        whileHover={{ y: -8 }}
-                        className="h-full"
-                      >
-                        <div className="group h-full overflow-hidden bg-white border border-gray-100 rounded-lg transition-all duration-300 hover:shadow-lg">
-                          <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
-                            <Image
-                              src={getProductImageUrl(item) || "/logo.png"}
-                              alt={item.name}
-                              fill
-                              sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                              className="object-cover transition-transform duration-300 group-hover:scale-105"
-                              loading="lazy"
-                              onError={(e) => {
-                                // Fallback to Mizizzi logo if image fails to load
-                                const target = e.target as HTMLImageElement
-                                target.src = "/logo.png"
-                              }}
-                            />
+                    return (
+                      <Link key={`${item.id}-${index}`} href={`/product/${item.slug || item.id}`} prefetch={false}>
+                        <motion.div
+                          initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{
+                            type: "spring",
+                            stiffness: 100,
+                            damping: 15,
+                            delay: index * 0.02,
+                          }}
+                          whileHover={{ y: -8 }}
+                          className="h-full"
+                        >
+                          <div className="group h-full overflow-hidden bg-white border border-gray-100 rounded-lg transition-all duration-300 hover:shadow-lg">
+                            <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
+                              <Image
+                                src={getProductImageUrl(item) || "/logo.png"}
+                                alt={item.name}
+                                fill
+                                sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                                className="object-cover transition-transform duration-300 group-hover:scale-105"
+                                loading="lazy"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement
+                                  target.src = "/logo.png"
+                                }}
+                              />
 
-                            {item.sale_price && itemDiscount > 0 && (
-                              <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 bg-[#8B1538] text-white text-[8px] sm:text-[10px] md:text-xs font-medium px-1 sm:px-1.5 py-0.5 rounded-sm z-20">
-                                -{itemDiscount}%
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="p-1.5 sm:p-2 md:p-3">
-                            <h3 className="text-gray-800 text-[10px] sm:text-xs md:text-sm line-clamp-2 leading-tight mb-1 sm:mb-1.5 min-h-[24px] sm:min-h-[32px] md:min-h-[40px]">
-                              {item.name}
-                            </h3>
-
-                            <div className="mb-1 sm:mb-1.5">
-                              <span className="font-semibold text-[#8B1538] text-[11px] sm:text-sm md:text-base">
-                                KSh {(item.sale_price || item.price).toLocaleString()}
-                              </span>
-                              {item.sale_price && (
-                                <span className="text-gray-400 line-through ml-1 sm:ml-1.5 text-[8px] sm:text-[10px] md:text-xs">
-                                  KSh {item.price.toLocaleString()}
-                                </span>
+                              {item.sale_price && itemDiscount > 0 && (
+                                <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 bg-[#8B1538] text-white text-[8px] sm:text-[10px] md:text-xs font-medium px-1 sm:px-1.5 py-0.5 rounded-sm z-20">
+                                  -{itemDiscount}%
+                                </div>
                               )}
                             </div>
 
-                            <div className="flex items-center gap-0.5 sm:gap-1">
+                            <div className="p-1.5 sm:p-2 md:p-3">
+                              <h3 className="text-gray-800 text-[10px] sm:text-xs md:text-sm line-clamp-2 leading-tight mb-1 sm:mb-1.5 min-h-[24px] sm:min-h-[32px] md:min-h-[40px]">
+                                {item.name}
+                              </h3>
+
+                              <div className="mb-1 sm:mb-1.5">
+                                <span className="font-semibold text-[#8B1538] text-[11px] sm:text-sm md:text-base">
+                                  KSh {(item.sale_price || item.price).toLocaleString()}
+                                </span>
+                                {item.sale_price && (
+                                  <span className="text-gray-400 line-through ml-1 sm:ml-1.5 text-[8px] sm:text-[10px] md:text-xs">
+                                    KSh {item.price.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+
                               <div className="flex">
                                 {[1, 2, 3, 4, 5].map((star) => (
                                   <Star
@@ -1942,60 +1945,50 @@ export default function ProductDetailsEnhanced({
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    </Link>
-                  )
-                })}
+                        </motion.div>
+                      </Link>
+                    )
+                  })
+                )}
               </div>
 
-              {/* Show More Button - Same as product-grid.tsx with loading state */}
-              {exploreHasMore && (
+              {/* Show More Button */}
+              {exploreHasMore && !exploreLoading && (
                 <div className="flex justify-center py-6 sm:py-8 bg-white border-t border-gray-100">
                   <button
                     onClick={fetchMoreExploreProducts}
-                    disabled={exploreLoading}
-                    className="relative flex items-center justify-center px-12 sm:px-16 py-2.5 sm:py-3 bg-white text-gray-600 font-medium rounded-full border border-gray-300 hover:border-gray-400 hover:text-gray-800 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed min-w-[180px] sm:min-w-[200px] tracking-widest uppercase text-xs sm:text-sm"
+                    className="relative flex items-center justify-center px-12 sm:px-16 py-2.5 sm:py-3 bg-white text-gray-600 font-medium rounded-full border border-gray-300 hover:border-gray-400 hover:text-gray-800 transition-all duration-200 min-w-[180px] sm:min-w-[200px] tracking-widest uppercase text-xs sm:text-sm"
                     style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
                   >
-                    <AnimatePresence mode="wait">
-                      {exploreLoading ? (
-                        <motion.div
-                          key="spinner"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="flex items-center justify-center"
-                        >
-                          <div className="relative w-5 h-5">
-                            {[...Array(12)].map((_, i) => (
-                              <motion.span
-                                key={i}
-                                className="absolute left-1/2 top-0 w-[2px] h-[5px] rounded-full origin-[50%_10px]"
-                                style={{
-                                  transform: `translateX(-50%) rotate(${i * 30}deg)`,
-                                  backgroundColor: "#8B1538",
-                                }}
-                                animate={{
-                                  opacity: [0.15, 1, 0.15],
-                                }}
-                                transition={{
-                                  duration: 1,
-                                  repeat: Number.POSITIVE_INFINITY,
-                                  delay: i * (1 / 12),
-                                  ease: "linear",
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </motion.div>
-                      ) : (
-                        <motion.span key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                          Show More
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
+                    Show More
                   </button>
+                </div>
+              )}
+
+              {/* Loading Indicator for more products */}
+              {exploreLoading && exploreProducts.length > 0 && (
+                <div className="flex justify-center py-6 sm:py-8 bg-white border-t border-gray-100">
+                  <div className="relative w-5 h-5">
+                    {[...Array(12)].map((_, i) => (
+                      <motion.span
+                        key={i}
+                        className="absolute left-1/2 top-0 w-[2px] h-[5px] rounded-full origin-[50%_10px]"
+                        style={{
+                          transform: `translateX(-50%) rotate(${i * 30}deg)`,
+                          backgroundColor: "#8B1538",
+                        }}
+                        animate={{
+                          opacity: [0.15, 1, 0.15],
+                        }}
+                        transition={{
+                          duration: 1,
+                          repeat: Number.POSITIVE_INFINITY,
+                          delay: i * (1 / 12),
+                          ease: "linear",
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -2012,4 +2005,4 @@ export default function ProductDetailsEnhanced({
       />
     </div>
   )
-}
+})
