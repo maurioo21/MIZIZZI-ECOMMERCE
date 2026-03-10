@@ -368,10 +368,30 @@ export default function ProductDetailsEnhanced({
           try {
             const response = await fetch(`/api/products?limit=30&page=1`)
             const data = await response.json()
-            const generalProducts = (data?.products || data?.items || data || []).filter(
-              (p: any) => p.id !== product.id && !allProducts.some((ap: any) => ap.id === p.id),
-            )
-            allProducts = [...allProducts, ...generalProducts]
+            
+            // Safely extract products array from various response formats
+            let productsArray: any[] = []
+            if (Array.isArray(data)) {
+              // If response is directly an array
+              productsArray = data
+            } else if (Array.isArray(data?.products)) {
+              // If wrapped in products key
+              productsArray = data.products
+            } else if (Array.isArray(data?.items)) {
+              // If wrapped in items key
+              productsArray = data.items
+            } else if (Array.isArray(data?.data)) {
+              // If wrapped in data key
+              productsArray = data.data
+            }
+            
+            // Only filter if we actually have an array
+            if (Array.isArray(productsArray)) {
+              const generalProducts = productsArray.filter(
+                (p: any) => p?.id && p.id !== product.id && !allProducts.some((ap: any) => ap.id === p.id),
+              )
+              allProducts = [...allProducts, ...generalProducts]
+            }
           } catch (e) {
             console.error("[v0] Error fetching general products:", e)
           }
@@ -409,7 +429,7 @@ export default function ProductDetailsEnhanced({
       // Handle case where product might be null initially
       setExploreLoading(false)
     }
-  }, [product?.id, product?.category_id, product?.price, product?.sale_price, exploreProducts.length])
+  }, [product?.id, product?.category_id, product?.price, product?.sale_price])
 
   useEffect(() => {
     const run = async () => {
@@ -451,16 +471,13 @@ export default function ProductDetailsEnhanced({
     }
     run()
   }, [
-    product.id,
-    product.category_id,
-    product.name,
+    product?.id,
+    product?.category_id,
+    product?.name,
     currentPrice,
-    product.slug,
-    product.thumbnail_url,
+    product?.slug,
+    product?.thumbnail_url,
     productImages,
-    similarProducts, // Keep this for potential future use or if initial state needs re-evaluation
-    exploreProducts.length, // Dependency to ensure re-evaluation if exploreProducts changes
-    exploreLoading, // Dependency to manage loading state correctly
   ])
 
   useEffect(() => {
