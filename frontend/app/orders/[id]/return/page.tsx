@@ -443,7 +443,7 @@ export default function ReturnOrderPage() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border-neutral-200/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl backdrop-blur-sm bg-white/80 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-[400ms]">
+          <Card className="overflow-hidden border-neutral-200/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl backdrop-blur-sm bg-white/80 animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: "400ms" }}>
             <CardContent className="p-6 sm:p-7">
               <h2 className="text-xl font-light text-neutral-900 mb-5 tracking-tight">Refund Method</h2>
 
@@ -484,7 +484,7 @@ export default function ReturnOrderPage() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border-neutral-200/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl backdrop-blur-sm bg-white/80 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-500">
+          <Card className="overflow-hidden border-neutral-200/60 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl backdrop-blur-sm bg-white/80 animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: "600ms" }}>
             <CardContent className="p-6 sm:p-7">
               <h2 className="text-xl font-light text-neutral-900 mb-5 tracking-tight">
                 Additional Comments <span className="text-neutral-400 text-sm">(Optional)</span>
