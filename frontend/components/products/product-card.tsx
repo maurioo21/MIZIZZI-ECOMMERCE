@@ -85,7 +85,6 @@ function getFirstValidImage(product: ProductCardProps["product"]): string {
 export function ProductCard({ product, variant = "default", className = "" }: ProductCardProps) {
   const { addToCart } = useCart()
   const [isAddingToCart, setIsAddingToCart] = useState(false)
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isHovering, setIsHovering] = useState(false)
   const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
   const imageContainerRef = useRef<HTMLDivElement>(null)
@@ -97,17 +96,16 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
   const primaryImage = getFirstValidImage(product)
   const hasMultipleImages = validImages.length > 1
   
-  // Determine which image to display
-  const displayImage = isHovering && hasMultipleImages && validImages[1] ? validImages[1] : primaryImage
+  // Determine which image to display - use validImages directly for reliable swapping
+  const displayImage = isHovering && hasMultipleImages && validImages[1] 
+    ? validImages[1] 
+    : primaryImage
   
   // Preload secondary image on mount for desktop
   useEffect(() => {
     if (!isMobile && hasMultipleImages && validImages[1]) {
       const img = new window.Image()
       img.src = validImages[1]
-      img.onload = () => {
-        setPreloadedImages((prev) => new Set([...prev, validImages[1]]))
-      }
     }
   }, [validImages, hasMultipleImages, isMobile])
 
@@ -245,17 +243,33 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
       <motion.div initial="hidden" animate="visible" variants={variants} className={`group ${className}`}>
         <Card className="overflow-hidden border-cherry-100 hover:shadow-lg transition-all duration-300 h-full">
           <div className="relative aspect-[4/5] bg-white overflow-hidden">
+            {/* Primary Image */}
             <Image
-              src={displayImage}
+              src={primaryImage}
               alt={product.name}
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              className="object-cover transition-all duration-500 ease-in-out"
+              className="object-cover transition-opacity duration-500 ease-in-out group-hover:scale-105"
+              style={{ opacity: isHovering && hasMultipleImages ? 0 : 1 }}
               quality={90}
               priority={false}
               onMouseEnter={handleImageHover}
               onMouseLeave={handleImageLeave}
             />
+
+            {/* Secondary Image - overlaid, shows on hover */}
+            {hasMultipleImages && validImages[1] && (
+              <Image
+                src={validImages[1]}
+                alt={`${product.name} - alternate view`}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                className="absolute inset-0 object-cover transition-opacity duration-500 ease-in-out group-hover:scale-105"
+                style={{ opacity: isHovering ? 1 : 0 }}
+                quality={90}
+                priority={false}
+              />
+            )}
 
             {/* Image Count Indicator */}
             {hasMultipleImages && !isMobile && (
@@ -333,20 +347,31 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
               onMouseEnter={handleImageHover}
               onMouseLeave={handleImageLeave}
             >
-              {/* Primary Image with smooth fade transition */}
+              {/* Primary Image */}
               <Image
-                src={displayImage}
+                src={primaryImage}
                 alt={product.name}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                className={cn(
-                  "w-full h-full object-cover transition-all duration-500 ease-in-out",
-                  isHovering && hasMultipleImages ? "opacity-100" : "opacity-100",
-                  "group-hover:scale-105",
-                )}
+                className="w-full h-full object-cover transition-opacity duration-500 ease-in-out group-hover:scale-105"
+                style={{ opacity: isHovering && hasMultipleImages ? 0 : 1 }}
                 quality={90}
                 priority={false}
               />
+
+              {/* Secondary Image - overlaid, shows on hover */}
+              {hasMultipleImages && validImages[1] && (
+                <Image
+                  src={validImages[1]}
+                  alt={`${product.name} - alternate view`}
+                  fill
+                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                  className="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-in-out group-hover:scale-105"
+                  style={{ opacity: isHovering ? 1 : 0 }}
+                  quality={90}
+                  priority={false}
+                />
+              )}
 
               {/* Image Count Indicator - only show if multiple images and clean */}
               {hasMultipleImages && !isMobile && (
