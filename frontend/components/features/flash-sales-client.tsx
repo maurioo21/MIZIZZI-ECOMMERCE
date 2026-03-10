@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback, memo, useRef } from "react"
+import { useState, useEffect, useCallback, memo, useRef, useMemo } from "react"
 import { motion, AnimatePresence, type PanInfo } from "framer-motion"
 import Link from "next/link"
 import { ChevronRight, ChevronLeft, Zap, Star } from "lucide-react"
@@ -94,7 +94,7 @@ const StockIndicator = ({
       </p>
       <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
         <div
-          className="h-full bg-[#8B1538] rounded-full transition-all duration-200"
+          className="h-full bg-[#8B1538] rounded-full transition-[width] duration-200"
           style={{ width: isSoldOut ? "0%" : `${Math.max(progressPercentage, 5)}%`, willChange: "width" }}
         />
       </div>
@@ -170,50 +170,62 @@ const ProductCard = memo(
   const isAlmostGone = flashProduct.is_almost_gone ?? (itemsLeft > 0 && itemsLeft <= 5)
   const isSoldOut = flashProduct.is_sold_out ?? itemsLeft === 0
 
-  // Use deterministic rating fallback based on product ID to avoid hydration mismatch
-  const ratingFallback = product.rating ?? (product.id ? (parseInt(product.id.toString().slice(-1)) % 2 + 3.5) : 4)
-  const rating = typeof ratingFallback === "number" ? Math.min(5, Math.max(1, ratingFallback)) : 4
+  // Use fixed stable rating fallback to avoid hydration mismatch
+  const rating = typeof product.rating === "number" ? Math.min(5, Math.max(1, product.rating)) : 4
 
   const handleImageError = useCallback(() => {
     setImageError(true)
   }, [])
 
-  // Get secondary image URL - robust resolution from multiple sources
+  // Get secondary image URL - robust resolution from multiple sources, ensuring it differs from primary
   const getSecondaryImageUrl = (): string => {
     const product_any = product as any
+    const primaryImageUrl = imageUrl // Use the already-resolved primary image
     
-    // Priority 1: Check secondary in image_urls array
+    // Priority 1: Check secondary in image_urls array (must differ from primary)
     if (product_any.image_urls && Array.isArray(product_any.image_urls) && product_any.image_urls.length > 1) {
-      const secondUrl = product_any.image_urls[1]
-      if (typeof secondUrl === "string" && secondUrl.length > 0) {
-        if (secondUrl.startsWith("http") || secondUrl.startsWith("/")) {
-          return secondUrl
+      for (let i = 1; i < product_any.image_urls.length; i++) {
+        const secondUrl = product_any.image_urls[i]
+        if (typeof secondUrl === "string" && secondUrl.length > 0 && secondUrl !== primaryImageUrl) {
+          if (secondUrl.startsWith("http") || secondUrl.startsWith("/")) {
+            return secondUrl
+          }
+          const optimized = cloudinaryService.generateOptimizedUrl(secondUrl)
+          if (optimized && optimized !== primaryImageUrl) {
+            return optimized
+          }
         }
-        return cloudinaryService.generateOptimizedUrl(secondUrl)
       }
     }
     
     // Priority 2: Check secondary in images array (non-primary)
     if (product_any.images && Array.isArray(product_any.images) && product_any.images.length > 1) {
-      const secondaryImage = product_any.images.find((img: any) => !img.is_primary)
-      if (!secondaryImage && product_any.images.length > 1) {
-        // Fallback to second image if no non-primary exists
-        const secondImg = product_any.images[1]
-        if (secondImg && secondImg.url) {
-          if (typeof secondImg.url === "string" && secondImg.url.length > 0) {
-            if (secondImg.url.startsWith("http") || secondImg.url.startsWith("/")) {
-              return secondImg.url
-            }
-            return cloudinaryService.generateOptimizedUrl(secondImg.url)
-          }
-        }
-      }
+      // First try to find a non-primary image
+      const secondaryImage = product_any.images.find((img: any) => !img.is_primary && img.url && img.url !== primaryImageUrl)
+      
       if (secondaryImage && secondaryImage.url) {
         if (typeof secondaryImage.url === "string" && secondaryImage.url.length > 0) {
           if (secondaryImage.url.startsWith("http") || secondaryImage.url.startsWith("/")) {
             return secondaryImage.url
           }
-          return cloudinaryService.generateOptimizedUrl(secondaryImage.url)
+          const optimized = cloudinaryService.generateOptimizedUrl(secondaryImage.url)
+          if (optimized && optimized !== primaryImageUrl) {
+            return optimized
+          }
+        }
+      }
+      
+      // Fallback: Find any image that differs from primary
+      const fallbackImage = product_any.images.find((img: any) => img.url && img.url !== primaryImageUrl)
+      if (fallbackImage && fallbackImage.url) {
+        if (typeof fallbackImage.url === "string" && fallbackImage.url.length > 0) {
+          if (fallbackImage.url.startsWith("http") || fallbackImage.url.startsWith("/")) {
+            return fallbackImage.url
+          }
+          const optimized = cloudinaryService.generateOptimizedUrl(fallbackImage.url)
+          if (optimized && optimized !== primaryImageUrl) {
+            return optimized
+          }
         }
       }
     }
@@ -237,20 +249,22 @@ const ProductCard = memo(
             {(imageError || !hasValidImage) && <LogoPlaceholder />}
             {hasValidImage && (
               <>
-                {/* Primary Image - CSS hover state for smooth performance */}
+                {/* Primary Image - CSS hover state, fade only on desktop when secondary exists */}
                 <Image
                   src={imageUrl || "/placeholder.svg"}
                   alt={product.name}
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
-                  className="object-cover transition-opacity duration-500 group-hover:opacity-0"
+                  className={`object-cover transition-opacity duration-500 ${
+                    !isMobile && hasMultipleImages ? "group-hover:opacity-0" : ""
+                  }`}
                   loading={isAboveFold ? "eager" : "lazy"}
                   priority={isAboveFold || false}
                   onError={handleImageError}
                 />
 
-                {/* Secondary Image - CSS group-hover for smooth performance */}
-                {hasMultipleImages && secondaryImageUrl && (
+                {/* Secondary Image - only on desktop with secondary image available */}
+                {!isMobile && hasMultipleImages && secondaryImageUrl && (
                   <Image
                     src={secondaryImageUrl}
                     alt={`${product.name} - alternate view`}
@@ -343,7 +357,8 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
     }
   }
 
-  const initialTimeLeft = getInitialTimeLeft()
+  // Memoize initialTimeLeft so CountdownTimer gets stable prop on every render
+  const initialTimeLeft = useMemo(() => getInitialTimeLeft(), [initialEvent?.time_remaining])
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isHovering, setIsHovering] = useState(false)
@@ -396,12 +411,14 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
   const handleMouseLeave = useCallback(() => {
     setIsHovering(false)
     setHoverSide(null)
+    hoverSideRef.current = null
   }, [])
 
   const handleDragStart = useCallback(() => {
     if (isMobile) return
     setIsDragging(true)
     setHoverSide(null)
+    hoverSideRef.current = null
   }, [isMobile])
 
   const handleDragEnd = useCallback(
