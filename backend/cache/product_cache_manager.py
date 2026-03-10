@@ -60,30 +60,6 @@ class RedisProductCache:
         self.hits = 0
         self.misses = 0
     
-    def detail_key(self, product_id: int) -> str:
-        """Build exact detail cache key"""
-        return f"{self.prefix}detail:id:{product_id}"
-    
-    def slug_key(self, slug: str) -> str:
-        """Build exact slug cache key"""
-        return f"{self.prefix}slug:{slug}"
-    
-    def inventory_key(self, product_id: int) -> str:
-        """Build exact inventory cache key"""
-        return f"{CacheConfig.INVENTORY_PREFIX}{product_id}"
-    
-    def review_key(self, product_id: int) -> str:
-        """Build exact review cache key"""
-        return f"{CacheConfig.REVIEW_PREFIX}{product_id}"
-    
-    def related_key(self, product_id: int) -> str:
-        """Build exact related products cache key"""
-        return f"{self.prefix}related:{product_id}"
-    
-    def variant_key(self, product_id: int, variant_id: int) -> str:
-        """Build exact variant cache key"""
-        return f"{self.prefix}variant:{product_id}:{variant_id}"
-    
     def _build_key(self, product_id: int, key_type: str = "detail", 
                    variant_id: Optional[int] = None, extra: Optional[str] = None) -> str:
         """Build consistent cache key"""
@@ -167,84 +143,26 @@ class RedisProductCache:
         
         return result
     
-    def invalidate_product(self, product_id: int, slug: Optional[str] = None) -> int:
-        """
-        Invalidate all caches for a product using exact keys
-        
-        Args:
-            product_id: Product ID
-            slug: Optional product slug
-        
-        Returns:
-            Number of cache keys deleted
-        """
-        keys_to_delete = [
-            self.detail_key(product_id),
-            self.inventory_key(product_id),
-            self.review_key(product_id),
-            self.related_key(product_id),
-        ]
-        
-        if slug:
-            keys_to_delete.append(self.slug_key(slug))
-        
-        try:
-            # Delete all keys at once
-            deleted_count = 0
-            for key in keys_to_delete:
-                try:
-                    if self.redis.exists(key):
-                        self.redis.delete(key)
-                        deleted_count += 1
-                except:
-                    pass
-            
-            logger.info(f"Invalidated {deleted_count} cache keys for product {product_id}")
-            return deleted_count
-        except Exception as e:
-            logger.error(f"Cache invalidate_product error: {e}")
-            return 0
-    
-    def invalidate_variant(self, product_id: int, variant_id: int) -> int:
-        """Invalidate cache for specific variant"""
-        key = self.variant_key(product_id, variant_id)
-        try:
-            if self.redis.exists(key):
-                self.redis.delete(key)
-                return 1
-            return 0
-        except Exception as e:
-            logger.error(f"Cache invalidate_variant error: {e}")
-            return 0
-    
     def invalidate(self, product_id: int, pattern: str = "detail:*") -> int:
         """
-        DEPRECATED: Use invalidate_product() instead
+        Invalidate cache for a product
         
-        Kept for backward compatibility but uses safer scan approach
+        Args:
+            product_id: Product ID to invalidate
+            pattern: Pattern of keys to invalidate
+        
+        Returns:
+            Number of keys deleted
         """
         try:
-            # Use SCAN instead of KEYS for safety
-            cursor = 0
-            deleted_count = 0
-            
-            while True:
-                cursor, keys = self.redis.scan(
-                    cursor,
-                    match=f"{self.prefix}{pattern}:{product_id}*",
-                    count=100
-                )
-                
-                if keys:
-                    deleted_count += self.redis.delete(*keys)
-                
-                if cursor == 0:
-                    break
-            
-            logger.info(f"Invalidated {deleted_count} cache keys for product {product_id}")
-            return deleted_count
+            keys = self.redis.keys(f"{self.prefix}{pattern}:{product_id}*")
+            if keys:
+                count = self.redis.delete(*keys)
+                logger.info(f"Invalidated {count} cache keys for product {product_id}")
+                return count
+            return 0
         except Exception as e:
-            logger.error(f"Cache invalidate error: {e}")
+            logger.error(f"Cache INVALIDATE error: {e}")
             return 0
     
     def invalidate_related(self, category_id: int) -> int:
@@ -304,61 +222,47 @@ class CacheInvalidationManager:
         self.cache = cache
         self.logger = logger or logging.getLogger(__name__)
     
-    def on_product_update(self, product_id: int, slug: Optional[str] = None):
+    def on_product_update(self, product_id: int):
         """Called when product is updated"""
-        self.cache.invalidate_product(product_id, slug)
+        self.cache.invalidate(product_id)
         self.logger.info(f"Cache invalidated for product {product_id}")
     
-    def on_product_delete(self, product_id: int, slug: Optional[str] = None):
+    def on_product_delete(self, product_id: int):
         """Called when product is deleted"""
-        self.cache.invalidate_product(product_id, slug)
+        self.cache.invalidate(product_id, pattern="*")
         self.logger.info(f"Cache cleared for deleted product {product_id}")
     
     def on_inventory_change(self, product_id: int):
         """Called when inventory changes - invalidate inventory cache only"""
-        key = self.cache.inventory_key(product_id)
-        try:
-            self.cache.redis.delete(key)
-            self.logger.info(f"Inventory cache invalidated for product {product_id}")
-        except Exception as e:
-            self.logger.error(f"Inventory invalidation error: {e}")
+        key = f"{CacheConfig.INVENTORY_PREFIX}{product_id}"
+        self.cache.redis.delete(key)
+        self.logger.info(f"Inventory cache invalidated for product {product_id}")
     
-    def on_price_change(self, product_id: int, slug: Optional[str] = None):
+    def on_price_change(self, product_id: int):
         """Called when price changes - invalidate product detail cache"""
-        # Invalidate detail and related caches when price changes
-        self.cache.invalidate_product(product_id, slug)
+        self.cache.invalidate(product_id, pattern="detail")
         self.logger.info(f"Detail cache invalidated for product {product_id} (price change)")
     
     def on_review_added(self, product_id: int):
         """Called when new review is added"""
-        keys_to_delete = [
-            self.cache.review_key(product_id),
-            self.cache.detail_key(product_id),  # Detail includes average rating
-        ]
-        try:
-            for key in keys_to_delete:
-                if self.cache.redis.exists(key):
-                    self.cache.redis.delete(key)
-            self.logger.info(f"Review cache invalidated for product {product_id}")
-        except Exception as e:
-            self.logger.error(f"Review invalidation error: {e}")
+        self.cache.redis.delete(f"{CacheConfig.REVIEW_PREFIX}{product_id}")
+        self.cache.invalidate(product_id, pattern="detail")
+        self.logger.info(f"Review cache invalidated for product {product_id}")
     
     def on_variant_change(self, product_id: int, variant_id: int):
         """Called when product variant changes"""
-        self.cache.invalidate_variant(product_id, variant_id)
-        self.cache.invalidate_product(product_id)
+        self.cache.invalidate(product_id, pattern="detail")
         self.logger.info(f"Variant cache invalidated for product {product_id}")
     
     def on_category_update(self, category_id: int):
         """Called when category is updated"""
-        # Category changes should invalidate related products caches
-        # This is a simplified version - in production, use a set of related products
-        self.logger.info(f"Category {category_id} updated - manual invalidation may be needed")
+        self.cache.invalidate_related(category_id)
+        self.logger.info(f"Related products cache invalidated for category {category_id}")
     
     def schedule_bulk_invalidation(self, product_ids: List[int]):
         """Schedule invalidation for multiple products"""
         for product_id in product_ids:
-            self.cache.invalidate_product(product_id)
+            self.cache.invalidate(product_id)
         self.logger.info(f"Bulk invalidated {len(product_ids)} product caches")
 
 

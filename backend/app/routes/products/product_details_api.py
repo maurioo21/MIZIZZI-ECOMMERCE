@@ -5,7 +5,6 @@ High-performance REST API with Redis caching and real-time updates
 
 import time
 import json
-import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -16,24 +15,6 @@ from sqlalchemy import and_
 from app.configuration.extensions import db
 from app.models.models import Product
 from app.cache.product_cache_manager import CacheConfig
-
-
-def _safe_parse_json(data):
-    """Safely parse JSON data with fallback"""
-    if not data:
-        return None
-    
-    try:
-        if isinstance(data, str):
-            return json.loads(data)
-        elif isinstance(data, dict):
-            return data
-        else:
-            return None
-    except (json.JSONDecodeError, ValueError) as e:
-        logger = logging.getLogger(__name__)
-        logger.warning(f"Failed to parse JSON: {e}")
-        return None
 
 
 product_details_bp = Blueprint(
@@ -54,12 +35,10 @@ def get_request_context():
 
 def build_product_query(product_id: int, include_inactive: bool = False):
     """Build optimized query with eager loading to prevent N+1 queries"""
-    from sqlalchemy.orm import contains_eager
-    
     query = db.session.query(Product).options(
         selectinload(Product.images),
         selectinload(Product.variants),
-        selectinload(Product.reviews).selectinload(Product.reviews.property.mapper.class_.user),  # Eager load review authors
+        selectinload(Product.reviews),
         selectinload(Product.category),
         selectinload(Product.brand),
     ).filter(Product.id == product_id)
@@ -182,11 +161,15 @@ def serialize_product_complete(product) -> Dict:
         'is_top_pick': getattr(product, 'is_top_pick', False),
         
         # Technical details
-        'specifications': _safe_parse_json(product.specifications),
+        'specifications': (
+            json.loads(product.specifications) 
+            if isinstance(product.specifications, str) 
+            else product.specifications
+        ) if hasattr(product, 'specifications') else None,
         'warranty_info': getattr(product, 'warranty_info', None),
         'shipping_info': getattr(product, 'shipping_info', None),
         'weight': getattr(product, 'weight', None),
-        'dimensions': _safe_parse_json(getattr(product, 'dimensions', None)),
+        'dimensions': getattr(product, 'dimensions', None),
         'material': getattr(product, 'material', None),
         'color': getattr(product, 'color', None),
         
@@ -218,6 +201,7 @@ def get_product_details(product_id: int):
     Query Parameters:
     - cache: true/false (default: true) - Enable/disable caching
     - force: true/false (default: false) - Bypass cache
+    - admin: true/false (default: false) - Include inactive products
     
     Performance:
     - Fresh: 150-250ms
@@ -229,6 +213,7 @@ def get_product_details(product_id: int):
         # Parse query parameters
         use_cache = request.args.get('cache', 'true').lower() == 'true'
         force_refresh = request.args.get('force', 'false').lower() == 'true'
+        admin_mode = request.args.get('admin', 'false').lower() == 'true'
         
         cache_client = getattr(current_app, 'cache_manager', None)
         
@@ -240,10 +225,19 @@ def get_product_details(product_id: int):
                 cached['response_time_ms'] = int((time.time() - start_time) * 1000)
                 return jsonify(cached), 200
         
-        # Build optimized query - only active/visible products
-        product = build_product_query(product_id, include_inactive=False)
+        # Build optimized query
+        product = build_product_query(product_id, include_inactive=admin_mode)
         
         if not product:
+            # Check if product exists but is hidden
+            hidden_product = db.session.query(Product).filter(Product.id == product_id).first()
+            if hidden_product and not admin_mode:
+                return jsonify({
+                    'error': 'Product not found',
+                    'reason': 'Product is inactive or hidden',
+                    'hint': 'Use ?admin=true to view inactive products'
+                }), 404
+            
             return jsonify({'error': 'Product not found'}), 404
         
         # Serialize data
@@ -352,78 +346,6 @@ def invalidate_cache(product_id: int):
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-
-@product_details_bp.route('/<int:product_id>/inventory', methods=['GET'])
-def get_inventory_status(product_id: int):
-    """
-    GET /api/product-details/<id>/inventory
-    
-    Get fresh inventory status with short cache TTL
-    Used separately from detail cache to keep stock data fresh
-    
-    Returns current stock without relying on detail cache expiry
-    """
-    try:
-        start_time = time.time()
-        
-        cache_client = getattr(current_app, 'cache_manager', None)
-        
-        # Try inventory cache (30 second TTL)
-        if cache_client:
-            cached = cache_client.get(product_id, key_type='inventory')
-            if cached:
-                cached['cache_hit'] = True
-                cached['response_time_ms'] = int((time.time() - start_time) * 1000)
-                return jsonify(cached), 200
-        
-        # Query fresh inventory
-        product = db.session.query(Product).filter(
-            and_(
-                Product.id == product_id,
-                Product.is_active == True,
-                Product.is_visible == True
-            )
-        ).first()
-        
-        if not product:
-            return jsonify({'error': 'Product not found'}), 404
-        
-        inventory_data = {
-            'product_id': product_id,
-            'stock': product.stock,
-            'in_stock': product.stock > 0,
-            'stock_status': 'in_stock' if product.stock > 0 else 'out_of_stock',
-            'variants_stock': [
-                {
-                    'variant_id': v.id,
-                    'stock': v.stock,
-                    'in_stock': v.stock > 0
-                } for v in (product.variants or [])
-            ]
-        }
-        
-        response = {
-            'success': True,
-            'cache_hit': False,
-            'data': inventory_data,
-            'response_time_ms': int((time.time() - start_time) * 1000)
-        }
-        
-        # Cache with short TTL (30 seconds)
-        if cache_client:
-            cache_client.set(
-                product_id, 
-                response, 
-                CacheConfig.INVENTORY_STATUS,
-                key_type='inventory'
-            )
-        
-        return jsonify(response), 200
-    
-    except Exception as e:
-        current_app.logger.error(f"Inventory lookup error: {e}", exc_info=True)
-        return jsonify({'error': 'Internal server error'}), 500
 
 
 @product_details_bp.route('/cache/stats', methods=['GET'])
