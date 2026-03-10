@@ -1,292 +1,304 @@
 """
-Redis Cache Management Module - Production-Ready v2
-Fixes: exact key invalidation, safe patterns, security, N+1 queries, safe parsing
+Redis Cache Management Module - Production-Ready
+Handles all caching operations for product data with TTL management
 """
 
 import json
 import time
-import logging
-from typing import Optional, Dict, Any, List, Callable
+from typing import Optional, Dict, Any, List
 from functools import wraps
+import logging
 
 logger = logging.getLogger(__name__)
 
 
-class CacheKeyBuilder:
-    """Centralized cache key management - single source of truth for all keys"""
-    
-    # All cache key formats defined explicitly here
-    PREFIX = "mizizzi:product:"
-    
-    @staticmethod
-    def detail_id(product_id: int) -> str:
-        """Exact key for product detail by ID"""
-        return f"{CacheKeyBuilder.PREFIX}detail:id:{product_id}"
-    
-    @staticmethod
-    def detail_slug(slug: str) -> str:
-        """Exact key for product detail by slug"""
-        return f"{CacheKeyBuilder.PREFIX}detail:slug:{slug}"
-    
-    @staticmethod
-    def slug_to_id(slug: str) -> str:
-        """Map slug to product ID for faster lookups"""
-        return f"{CacheKeyBuilder.PREFIX}slug_map:{slug}"
-    
-    @staticmethod
-    def inventory(product_id: int) -> str:
-        """Exact key for inventory/stock data"""
-        return f"{CacheKeyBuilder.PREFIX}inventory:{product_id}"
-    
-    @staticmethod
-    def reviews_summary(product_id: int) -> str:
-        """Exact key for reviews summary"""
-        return f"{CacheKeyBuilder.PREFIX}reviews:{product_id}"
-    
-    @staticmethod
-    def related_products(product_id: int, category_id: int) -> str:
-        """Exact key for related products"""
-        return f"{CacheKeyBuilder.PREFIX}related:{product_id}:cat:{category_id}"
-    
-    @staticmethod
-    def variants(product_id: int) -> str:
-        """Exact key for product variants"""
-        return f"{CacheKeyBuilder.PREFIX}variants:{product_id}"
-
-
 class CacheConfig:
-    """Cache TTL configuration - dynamic based on product type"""
+    """Cache configuration with dynamic TTL based on product type"""
     
-    # Different products need different cache lifetimes
-    PRODUCT_DETAIL_FLASH = 60           # 1 minute - flash sales change fast
-    PRODUCT_DETAIL_SALE = 120           # 2 minutes - sales can expire
-    PRODUCT_DETAIL_REGULAR = 600        # 10 minutes - normal products
-    PRODUCT_DETAIL_FEATURED = 1800      # 30 minutes - featured are stable
+    # Cache TTL constants (in seconds)
+    PRODUCT_DETAIL_FRESH = 600          # 10 minutes
+    PRODUCT_DETAIL_SALE = 120           # 2 minutes
+    PRODUCT_DETAIL_FLASH = 60           # 1 minute
+    PRODUCT_DETAIL_FEATURED = 1800      # 30 minutes
+    RELATED_PRODUCTS = 3600             # 1 hour
+    INVENTORY_STATUS = 30               # 30 seconds
+    REVIEW_SUMMARY = 300                # 5 minutes
+    CATEGORY_DATA = 3600                # 1 hour
+    BRAND_DATA = 3600                   # 1 hour
     
-    # Inventory must be fresh - shorter TTL to catch stock changes
-    INVENTORY_FRESH = 30                # 30 seconds - stock changes frequently
-    INVENTORY_LOW_STOCK = 15            # 15 seconds - low stock needs more frequent updates
-    
-    REVIEWS_SUMMARY = 300               # 5 minutes - reviews add slowly
-    RELATED_PRODUCTS = 3600             # 1 hour - related products are stable
-    SLUG_MAPPING = 7200                 # 2 hours - slugs rarely change
-    VARIANTS = 1800                     # 30 minutes - variants stable
+    # Cache key prefixes
+    PRODUCT_DETAIL_PREFIX = "pd:"
+    INVENTORY_PREFIX = "inv:"
+    RELATED_PREFIX = "rel:"
+    REVIEW_PREFIX = "rev:"
+    CATEGORY_PREFIX = "cat:"
     
     @staticmethod
-    def get_detail_ttl(product: Any) -> int:
-        """Smart TTL based on product type"""
-        if hasattr(product, 'is_flash_sale') and product.is_flash_sale:
+    def get_product_ttl(product_data: Dict) -> int:
+        """Determine TTL based on product characteristics"""
+        if product_data.get('is_flash_sale'):
             return CacheConfig.PRODUCT_DETAIL_FLASH
-        if hasattr(product, 'is_sale') and product.is_sale:
+        elif product_data.get('is_sale'):
             return CacheConfig.PRODUCT_DETAIL_SALE
-        if hasattr(product, 'is_featured') and product.is_featured:
+        elif product_data.get('is_featured'):
             return CacheConfig.PRODUCT_DETAIL_FEATURED
-        return CacheConfig.PRODUCT_DETAIL_REGULAR
-    
-    @staticmethod
-    def get_inventory_ttl(stock_level: int) -> int:
-        """Very fresh inventory - lower for low-stock items"""
-        if stock_level <= 5:
-            return CacheConfig.INVENTORY_LOW_STOCK
-        return CacheConfig.INVENTORY_FRESH
+        return CacheConfig.PRODUCT_DETAIL_FRESH
 
 
 class RedisProductCache:
-    """Production-ready Redis cache with exact key management"""
+    """Redis cache manager for product operations"""
     
     def __init__(self, redis_client):
+        """
+        Initialize cache manager
+        
+        Args:
+            redis_client: Redis client instance from Upstash or local Redis
+        """
         self.redis = redis_client
-        self.logger = logger
-        # Per-process stats (for monitoring, not distributed stats)
+        self.prefix = CacheConfig.PRODUCT_DETAIL_PREFIX
         self.hits = 0
         self.misses = 0
     
-    def get(self, key: str) -> Optional[Dict]:
+    def _build_key(self, product_id: int, key_type: str = "detail", 
+                   variant_id: Optional[int] = None, extra: Optional[str] = None) -> str:
+        """Build consistent cache key"""
+        if variant_id and extra:
+            return f"{self.prefix}{key_type}:{product_id}:{variant_id}:{extra}"
+        elif variant_id:
+            return f"{self.prefix}{key_type}:{product_id}:{variant_id}"
+        elif extra:
+            return f"{self.prefix}{key_type}:{product_id}:{extra}"
+        return f"{self.prefix}{key_type}:{product_id}"
+    
+    def get(self, product_id: int, key_type: str = "detail", 
+            variant_id: Optional[int] = None) -> Optional[Dict]:
         """
-        Get cached value by exact key.
-        Returns None if not found or expired.
-        """
-        if not self.redis or not key:
-            self.misses += 1
-            return None
+        Get cached product data
         
+        Returns:
+            Cached data dict or None if not found/expired
+        """
+        key = self._build_key(product_id, key_type, variant_id)
         try:
             data = self.redis.get(key)
             if data:
                 self.hits += 1
-                # Handle both string and bytes
-                if isinstance(data, bytes):
-                    data = data.decode('utf-8')
-                return json.loads(data)
-            self.misses += 1
-            return None
-        except json.JSONDecodeError as e:
-            self.logger.error(f"JSON decode error for key {key}: {e}")
+                return json.loads(data) if isinstance(data, str) else json.loads(data.decode())
             self.misses += 1
             return None
         except Exception as e:
-            self.logger.error(f"Cache GET error for {key}: {e}")
+            logger.warning(f"Cache GET error for {key}: {e}")
             self.misses += 1
             return None
     
-    def set(self, key: str, value: Dict, ttl: int) -> bool:
+    def set(self, product_id: int, data: Dict, ttl: int, 
+            key_type: str = "detail", variant_id: Optional[int] = None) -> bool:
         """
-        Set cached value with exact key and TTL.
-        Returns True if successful.
-        """
-        if not self.redis or not key:
-            return False
+        Cache product data with TTL
         
-        try:
-            json_data = json.dumps(value)
-            self.redis.setex(key, ttl, json_data)
-            return True
-        except (TypeError, json.JSONEncodeError) as e:
-            self.logger.error(f"JSON encode error for key {key}: {e}")
-            return False
-        except Exception as e:
-            self.logger.error(f"Cache SET error for {key}: {e}")
-            return False
-    
-    def get_or_fetch(self, key: str, fetch_fn: Callable, ttl: int) -> tuple[Optional[Dict], bool]:
-        """
-        Get from cache or fetch fresh if miss.
+        Args:
+            product_id: Product ID
+            data: Data to cache
+            ttl: Time to live in seconds
+            key_type: Type of cache key (detail, inventory, etc.)
+            variant_id: Optional variant ID for variant-specific caching
         
         Returns:
-            (data, was_cached) - tuple of data and cache hit boolean
+            True if successful
         """
-        # Try cache first
-        cached = self.get(key)
-        if cached is not None:
-            return cached, True
-        
-        # Cache miss - fetch fresh
-        data = fetch_fn()
-        if data is not None:
-            self.set(key, data, ttl)
-        
-        return data, False
-    
-    def delete(self, *keys: str) -> int:
-        """Delete one or more exact keys. Returns count deleted."""
-        if not self.redis or not keys:
-            return 0
-        
+        key = self._build_key(product_id, key_type, variant_id)
         try:
-            # Filter empty strings
-            keys_to_delete = [k for k in keys if k]
-            if not keys_to_delete:
-                return 0
-            return self.redis.delete(*keys_to_delete)
+            self.redis.setex(key, ttl, json.dumps(data))
+            return True
         except Exception as e:
-            self.logger.error(f"Cache DELETE error for {keys}: {e}")
-            return 0
-    
-    def exists(self, key: str) -> bool:
-        """Check if key exists"""
-        if not self.redis or not key:
-            return False
-        try:
-            return self.redis.exists(key) > 0
-        except Exception as e:
-            self.logger.error(f"Cache EXISTS error: {e}")
+            logger.error(f"Cache SET error for {key}: {e}")
             return False
     
-    def ttl(self, key: str) -> int:
-        """Get remaining TTL for key. -1 = no expiry, -2 = doesn't exist"""
-        if not self.redis or not key:
-            return -2
+    def get_with_fallback(self, product_id: int, fetch_fn, ttl: int,
+                         key_type: str = "detail") -> Optional[Dict]:
+        """
+        Get from cache or fetch from function if not cached
+        
+        Args:
+            product_id: Product ID
+            fetch_fn: Function to call if cache miss
+            ttl: TTL for caching result
+            key_type: Cache key type
+        
+        Returns:
+            Cached or freshly fetched data
+        """
+        # Try cache
+        cached = self.get(product_id, key_type)
+        if cached:
+            cached['_cache_hit'] = True
+            return cached
+        
+        # Cache miss - fetch fresh data
+        result = fetch_fn(product_id)
+        if result:
+            self.set(product_id, result, ttl, key_type)
+            result['_cache_hit'] = False
+        
+        return result
+    
+    def invalidate(self, product_id: int, pattern: str = "detail:*") -> int:
+        """
+        Invalidate cache for a product
+        
+        Args:
+            product_id: Product ID to invalidate
+            pattern: Pattern of keys to invalidate
+        
+        Returns:
+            Number of keys deleted
+        """
+        try:
+            keys = self.redis.keys(f"{self.prefix}{pattern}:{product_id}*")
+            if keys:
+                count = self.redis.delete(*keys)
+                logger.info(f"Invalidated {count} cache keys for product {product_id}")
+                return count
+            return 0
+        except Exception as e:
+            logger.error(f"Cache INVALIDATE error: {e}")
+            return 0
+    
+    def invalidate_related(self, category_id: int) -> int:
+        """Invalidate all related products for a category"""
+        try:
+            keys = self.redis.keys(f"{self.prefix}related:*:{category_id}")
+            if keys:
+                return self.redis.delete(*keys)
+            return 0
+        except Exception as e:
+            logger.error(f"Cache INVALIDATE_RELATED error: {e}")
+            return 0
+    
+    def get_ttl_remaining(self, product_id: int, key_type: str = "detail") -> int:
+        """
+        Get remaining TTL for a cache entry
+        
+        Returns:
+            TTL in seconds, -1 if no expiry, -2 if doesn't exist
+        """
+        key = self._build_key(product_id, key_type)
         try:
             return self.redis.ttl(key)
         except Exception as e:
-            self.logger.error(f"Cache TTL error: {e}")
+            logger.warning(f"Cache TTL check error: {e}")
             return -2
     
+    def clear_all(self) -> int:
+        """Clear all product cache (dangerous - use cautiously)"""
+        try:
+            keys = self.redis.keys(f"{self.prefix}*")
+            if keys:
+                return self.redis.delete(*keys)
+            return 0
+        except Exception as e:
+            logger.error(f"Cache CLEAR_ALL error: {e}")
+            return 0
+    
     def get_stats(self) -> Dict:
-        """Get cache statistics (per-process, not distributed)"""
+        """Get cache statistics"""
         total = self.hits + self.misses
         hit_rate = (self.hits / total * 100) if total > 0 else 0
+        
         return {
             'hits': self.hits,
             'misses': self.misses,
             'total_requests': total,
-            'hit_rate': f"{hit_rate:.1f}%",
-            'note': 'Per-process stats only, resets on restart'
+            'hit_rate': hit_rate,
+            'efficiency': f"{hit_rate:.1f}%"
         }
 
 
-class ProductCacheInvalidator:
-    """Exact cache invalidation - deletes only known keys"""
+class CacheInvalidationManager:
+    """Manage cache invalidation for all product operations"""
     
-    def __init__(self, cache: RedisProductCache):
+    def __init__(self, cache: RedisProductCache, logger=None):
         self.cache = cache
-        self.logger = logger
+        self.logger = logger or logging.getLogger(__name__)
     
-    def invalidate_product_detail(self, product_id: int, slug: Optional[str] = None):
-        """Invalidate all detail caches for a product"""
-        keys_to_delete = [CacheKeyBuilder.detail_id(product_id)]
-        
-        if slug:
-            keys_to_delete.append(CacheKeyBuilder.detail_slug(slug))
-            keys_to_delete.append(CacheKeyBuilder.slug_to_id(slug))
-        
-        deleted = self.cache.delete(*keys_to_delete)
-        self.logger.info(f"Invalidated {deleted} detail cache keys for product {product_id}")
-        return deleted
+    def on_product_update(self, product_id: int):
+        """Called when product is updated"""
+        self.cache.invalidate(product_id)
+        self.logger.info(f"Cache invalidated for product {product_id}")
     
-    def invalidate_inventory(self, product_id: int):
-        """Invalidate inventory cache (stock changes frequently)"""
-        deleted = self.cache.delete(CacheKeyBuilder.inventory(product_id))
-        self.logger.info(f"Invalidated inventory cache for product {product_id}")
-        return deleted
-    
-    def invalidate_reviews(self, product_id: int):
-        """Invalidate reviews summary"""
-        deleted = self.cache.delete(CacheKeyBuilder.reviews_summary(product_id))
-        self.logger.info(f"Invalidated review cache for product {product_id}")
-        return deleted
-    
-    def invalidate_variants(self, product_id: int):
-        """Invalidate variants cache"""
-        deleted = self.cache.delete(CacheKeyBuilder.variants(product_id))
-        self.logger.info(f"Invalidated variants cache for product {product_id}")
-        return deleted
-    
-    def on_price_change(self, product_id: int, slug: Optional[str] = None):
-        """Price changed - invalidate detail (inventory stays fresh with short TTL)"""
-        self.invalidate_product_detail(product_id, slug)
-        self.logger.info(f"Price change: invalidated detail cache for {product_id}")
+    def on_product_delete(self, product_id: int):
+        """Called when product is deleted"""
+        self.cache.invalidate(product_id, pattern="*")
+        self.logger.info(f"Cache cleared for deleted product {product_id}")
     
     def on_inventory_change(self, product_id: int):
-        """Stock changed - invalidate inventory cache (very short TTL anyway)"""
-        self.invalidate_inventory(product_id)
-        self.logger.info(f"Inventory change: invalidated for {product_id}")
+        """Called when inventory changes - invalidate inventory cache only"""
+        key = f"{CacheConfig.INVENTORY_PREFIX}{product_id}"
+        self.cache.redis.delete(key)
+        self.logger.info(f"Inventory cache invalidated for product {product_id}")
+    
+    def on_price_change(self, product_id: int):
+        """Called when price changes - invalidate product detail cache"""
+        self.cache.invalidate(product_id, pattern="detail")
+        self.logger.info(f"Detail cache invalidated for product {product_id} (price change)")
     
     def on_review_added(self, product_id: int):
-        """New review - invalidate reviews and detail"""
-        self.invalidate_reviews(product_id)
-        self.invalidate_product_detail(product_id)
-        self.logger.info(f"New review: invalidated caches for {product_id}")
+        """Called when new review is added"""
+        self.cache.redis.delete(f"{CacheConfig.REVIEW_PREFIX}{product_id}")
+        self.cache.invalidate(product_id, pattern="detail")
+        self.logger.info(f"Review cache invalidated for product {product_id}")
     
-    def on_product_deleted(self, product_id: int, slug: Optional[str] = None):
-        """Product deleted - invalidate all related caches"""
-        keys = [
-            CacheKeyBuilder.detail_id(product_id),
-            CacheKeyBuilder.inventory(product_id),
-            CacheKeyBuilder.reviews_summary(product_id),
-            CacheKeyBuilder.variants(product_id),
-        ]
-        if slug:
-            keys.extend([
-                CacheKeyBuilder.detail_slug(slug),
-                CacheKeyBuilder.slug_to_id(slug),
-            ])
-        deleted = self.cache.delete(*keys)
-        self.logger.info(f"Product deleted: invalidated {deleted} cache keys for {product_id}")
-        return deleted
+    def on_variant_change(self, product_id: int, variant_id: int):
+        """Called when product variant changes"""
+        self.cache.invalidate(product_id, pattern="detail")
+        self.logger.info(f"Variant cache invalidated for product {product_id}")
     
-    def on_category_change(self, category_id: int):
-        """Category changed - invalidate all related products (use SCAN if many)"""
-        # Note: This would need SCAN for large catalogs, not KEYS
-        # For now, just log that related products may be stale
-        self.logger.info(f"Category {category_id} changed - related products may be stale")
+    def on_category_update(self, category_id: int):
+        """Called when category is updated"""
+        self.cache.invalidate_related(category_id)
+        self.logger.info(f"Related products cache invalidated for category {category_id}")
+    
+    def schedule_bulk_invalidation(self, product_ids: List[int]):
+        """Schedule invalidation for multiple products"""
+        for product_id in product_ids:
+            self.cache.invalidate(product_id)
+        self.logger.info(f"Bulk invalidated {len(product_ids)} product caches")
+
+
+def cache_product_data(ttl_func=None):
+    """
+    Decorator for automatic cache management on functions
+    
+    Usage:
+        @cache_product_data(ttl_func=lambda p: CacheConfig.get_product_ttl(p))
+        def get_product_details(product_id):
+            return fetch_from_db(product_id)
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(product_id, *args, **kwargs):
+            cache_client = kwargs.get('cache_client')
+            
+            if not cache_client:
+                return func(product_id, *args, **kwargs)
+            
+            # Try cache first
+            cached = cache_client.get(product_id)
+            if cached:
+                cached['_cache_hit'] = True
+                return cached
+            
+            # Execute function
+            result = func(product_id, *args, **kwargs)
+            
+            # Cache result
+            if result and result.get('success'):
+                ttl = ttl_func(result['data']) if ttl_func else CacheConfig.PRODUCT_DETAIL_FRESH
+                cache_client.set(product_id, result, ttl)
+                result['_cache_hit'] = False
+            
+            return result
+        
+        return wrapper
+    return decorator
