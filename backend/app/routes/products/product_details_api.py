@@ -5,6 +5,7 @@ High-performance REST API with Redis caching and real-time updates
 
 import time
 import json
+import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
 
@@ -14,7 +15,7 @@ from sqlalchemy import and_
 
 from app.configuration.extensions import db
 from app.models.models import Product
-from app.cache.product_cache_manager import CacheConfig
+from app.cache.cache import cache_manager
 
 
 product_details_bp = Blueprint(
@@ -201,7 +202,6 @@ def get_product_details(product_id: int):
     Query Parameters:
     - cache: true/false (default: true) - Enable/disable caching
     - force: true/false (default: false) - Bypass cache
-    - admin: true/false (default: false) - Include inactive products
     
     Performance:
     - Fresh: 150-250ms
@@ -213,31 +213,22 @@ def get_product_details(product_id: int):
         # Parse query parameters
         use_cache = request.args.get('cache', 'true').lower() == 'true'
         force_refresh = request.args.get('force', 'false').lower() == 'true'
-        admin_mode = request.args.get('admin', 'false').lower() == 'true'
         
-        cache_client = getattr(current_app, 'cache_manager', None)
+        # Build cache key
+        cache_key = f"product:detail:{product_id}"
         
         # Try cache first
-        if use_cache and not force_refresh and cache_client:
-            cached = cache_client.get(product_id)
+        if use_cache and not force_refresh:
+            cached = cache_manager.get(cache_key)
             if cached:
                 cached['cache_hit'] = True
                 cached['response_time_ms'] = int((time.time() - start_time) * 1000)
                 return jsonify(cached), 200
         
-        # Build optimized query
-        product = build_product_query(product_id, include_inactive=admin_mode)
+        # Build optimized query - only active/visible products
+        product = build_product_query(product_id, include_inactive=False)
         
         if not product:
-            # Check if product exists but is hidden
-            hidden_product = db.session.query(Product).filter(Product.id == product_id).first()
-            if hidden_product and not admin_mode:
-                return jsonify({
-                    'error': 'Product not found',
-                    'reason': 'Product is inactive or hidden',
-                    'hint': 'Use ?admin=true to view inactive products'
-                }), 404
-            
             return jsonify({'error': 'Product not found'}), 404
         
         # Serialize data
@@ -252,18 +243,15 @@ def get_product_details(product_id: int):
             'timestamp': int(time.time())
         }
         
-        # Cache the response
-        if use_cache and cache_client:
-            ttl = CacheConfig.get_product_ttl(product_data)
-            cache_client.set(product_id, response, ttl)
-        
-        # Log performance
-        if hasattr(current_app, 'performance_monitor'):
-            current_app.performance_monitor.log_request(
-                product_id,
-                response['response_time_ms'],
-                cache_hit=False
-            )
+        # Cache the response (600s for regular, 120s for sale, 60s for flash sale)
+        if use_cache:
+            ttl = 600  # Default TTL for regular products
+            if hasattr(product, 'is_flash_sale') and product.is_flash_sale:
+                ttl = 60  # 1 minute for flash sales
+            elif hasattr(product, 'is_sale') and product.is_sale:
+                ttl = 120  # 2 minutes for sales
+            
+            cache_manager.set(cache_key, response, ttl=ttl)
         
         return jsonify(response), 200
     
