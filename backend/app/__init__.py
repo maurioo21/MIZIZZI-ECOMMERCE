@@ -1070,6 +1070,8 @@ def create_app(config_name=None, enable_socketio=True):
         app.register_blueprint(final_blueprints['admin_wishlist_routes'], url_prefix='/api/admin/wishlist')
         
         app.register_blueprint(final_blueprints['products_routes'], url_prefix='/api/products')
+        app.register_blueprint(final_blueprints['product_details_routes'])  # Already has /api/product-details prefix
+        app.logger.info("✅ Product details routes registered at /api/product-details")
         app.register_blueprint(final_blueprints['categories_routes'], url_prefix='/api/categories')
         
         app.register_blueprint(final_blueprints['user_address_routes'], url_prefix='/api/addresses/user')
