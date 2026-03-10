@@ -136,27 +136,10 @@ export default memo(function ProductDetailsEnhanced({
 
   // Explore products hook - replaces explore products state
   const {
-    products: exploreProductsFromHook,
-    hasMore: exploreHasMoreFromHook,
-    isLoading: exploreLoadingFromHook,
+    products: exploreProducts,
+    hasMore: exploreHasMore,
+    isLoading: exploreLoading,
   } = useExploreProducts(product, similarProducts)
-
-  // Local state mirrors hook values and provides setters used in this component
-  const [exploreProducts, setExploreProducts] = useState<any[]>(exploreProductsFromHook ?? [])
-  const [exploreHasMore, setExploreHasMore] = useState<boolean>(Boolean(exploreHasMoreFromHook))
-  const [exploreLoading, setExploreLoading] = useState<boolean>(Boolean(exploreLoadingFromHook))
-
-  useEffect(() => {
-    setExploreProducts(exploreProductsFromHook ?? [])
-  }, [exploreProductsFromHook])
-
-  useEffect(() => {
-    setExploreHasMore(Boolean(exploreHasMoreFromHook))
-  }, [exploreHasMoreFromHook])
-
-  useEffect(() => {
-    setExploreLoading(Boolean(exploreLoadingFromHook))
-  }, [exploreLoadingFromHook])
 
   // Refs
   const addToCartInProgress = useRef(false)

@@ -503,7 +503,6 @@ def create_app(config_name=None, enable_socketio=True):
         'user_wishlist_routes': Blueprint('user_wishlist_routes', __name__),
         'admin_wishlist_routes': Blueprint('admin_wishlist_routes', __name__),
         'products_routes': Blueprint('products_routes', __name__),
-        'product_details_routes': Blueprint('product_details', __name__),
         'categories_routes': Blueprint('categories_routes', __name__),
         'user_address_routes': Blueprint('user_address_routes', __name__),
         'admin_address_routes': Blueprint('admin_address_routes', __name__),
@@ -775,12 +774,6 @@ def create_app(config_name=None, enable_socketio=True):
         'products_routes': [
             ('app.routes.products.products_routes', 'products_routes'),
             ('routes.products.products_routes', 'products_routes')
-        ],
-        'product_details_routes': [
-            ('app.routes.products.product_details_optimized', 'product_details_bp'),
-            ('routes.products.product_details_optimized', 'product_details_bp'),
-            ('backend.app.routes.products.product_details_optimized', 'product_details_bp'),
-            ('backend.routes.products.product_details_optimized', 'product_details_bp'),
         ],
         'categories_routes': [
             ('app.routes.categories.categories_routes', 'categories_routes'),
@@ -1070,8 +1063,6 @@ def create_app(config_name=None, enable_socketio=True):
         app.register_blueprint(final_blueprints['admin_wishlist_routes'], url_prefix='/api/admin/wishlist')
         
         app.register_blueprint(final_blueprints['products_routes'], url_prefix='/api/products')
-        app.register_blueprint(final_blueprints['product_details_routes'])  # Already has /api/product-details prefix
-        app.logger.info("✅ Product details routes registered at /api/product-details")
         app.register_blueprint(final_blueprints['categories_routes'], url_prefix='/api/categories')
         
         app.register_blueprint(final_blueprints['user_address_routes'], url_prefix='/api/addresses/user')
@@ -1146,7 +1137,6 @@ def create_app(config_name=None, enable_socketio=True):
                 'admin_order_routes': '/api/admin',
                 'admin_cart_routes': '/api/admin/cart',
                 'admin_cloudinary_routes': '/api/admin/cloudinary',
-                'admin_upload_routes': '/',
                 'admin_category_routes': '/api/admin/categories',
                 'admin_shop_categories_routes': '/api/admin/shop-categories',
                 'product_images_batch_bp': '/',
@@ -1157,7 +1147,6 @@ def create_app(config_name=None, enable_socketio=True):
                 'user_wishlist_routes': '/api/wishlist/user',
                 'admin_wishlist_routes': '/api/admin/wishlist',
                 'products_routes': '/api/products',
-                'product_details_routes': '/api/product-details',
                 'categories_routes': '/api/categories',
                 'user_address_routes': '/api/addresses/user',
                 'admin_address_routes': '/api/admin/addresses',
