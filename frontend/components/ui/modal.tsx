@@ -46,7 +46,20 @@ export function Modal({
 
     if (open) {
       document.addEventListener("keydown", handleEscape)
-      document.body.style.overflow = "hidden"
+      // Only prevent scroll on non-touch devices to preserve native mobile pull-to-refresh
+      const isTouchDevice = () => {
+        return (
+          typeof window !== "undefined" &&
+          (navigator.maxTouchPoints > 0 ||
+            (navigator as any).msMaxTouchPoints > 0 ||
+            (matchMedia && matchMedia("(pointer:coarse)").matches))
+        )
+      }
+      
+      if (!isTouchDevice()) {
+        document.body.style.overflow = "hidden"
+      }
+      
       return () => {
         document.removeEventListener("keydown", handleEscape)
         document.body.style.overflow = "unset"

@@ -45,7 +45,7 @@ export default async function RootLayout({
   })
 
   return (
-    <html lang="en" suppressHydrationWarning className="fixed inset-0 overflow-hidden" data-scroll-behavior="smooth">
+    <html lang="en" suppressHydrationWarning className="scroll-smooth" data-scroll-behavior="smooth">
       <head>
         {/* Suppress React DevTools warning in development */}
         {process.env.NODE_ENV === "development" && (
@@ -69,7 +69,7 @@ export default async function RootLayout({
           />
         )}
       </head>
-      <body className={`${inter.className} ${inter.variable} fixed inset-0 overflow-hidden`} suppressHydrationWarning>
+      <body className={`${inter.className} ${inter.variable}`} suppressHydrationWarning>
         {/* Defer Google Sign-In until page is interactive */}
         <Script src="https://accounts.google.com/gsi/client" strategy="lazyOnload" async defer />
 
@@ -77,7 +77,7 @@ export default async function RootLayout({
           <StateProviders>
             <AppProviders>
               <PageTransitionWrapper />
-              <div className="h-full w-full overflow-y-auto overflow-x-hidden overscroll-none">
+              <div className="w-full min-h-screen overflow-x-hidden">
                 <RootLayoutContent>{layoutRenderer}</RootLayoutContent>
               </div>
             </AppProviders>
