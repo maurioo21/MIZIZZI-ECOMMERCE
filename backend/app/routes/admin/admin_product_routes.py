@@ -14,8 +14,18 @@ from flask import current_app
 from flask_cors import cross_origin
 import cloudinary
 import cloudinary.uploader
+from app.services.cloudinary_service import CloudinaryService
 
 admin_product_routes = Blueprint('admin_products', __name__)
+
+# Initialize Cloudinary service
+cloudinary_service = CloudinaryService()
+
+# Allowed file extensions
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def admin_required():
     """Decorator to check if user has admin role"""
@@ -648,10 +658,11 @@ def upload_product_images(product_id):
                 secure_url = result.get('secure_url') or result.get('url')
                 public_id = result.get('public_id')
 
-                # Persist to ProductImage
+                # Persist to ProductImage with Cloudinary public_id for future deletion
                 pi = ProductImage(
                     product_id=product_id,
                     url=secure_url,
+                    public_id=public_id,  # Store Cloudinary public_id for efficient deletion
                     filename=result.get('original_filename') or getattr(f, 'filename', None),
                     is_primary=False,
                     sort_order=0,
@@ -689,3 +700,43 @@ def upload_product_images(product_id):
         db.session.rollback()
         current_app.logger.error(f"Unexpected error uploading images: {str(e)}")
         return jsonify({'success': False, 'errors': [{'file': None, 'error': str(e)}], 'uploaded_images': [], 'message': 'Upload failed'}), 500
+
+
+@admin_product_routes.route('/api/admin/products/images/<int:image_id>', methods=['DELETE', 'OPTIONS'])
+@cross_origin()
+@jwt_required()
+def delete_product_image(image_id):
+    """Delete a product image from ProductImage and Cloudinary"""
+    if request.method == 'OPTIONS':
+        return handle_options('DELETE, OPTIONS')
+    
+    # Check admin permissions
+    auth_check = admin_required()
+    if auth_check:
+        return auth_check
+    
+    try:
+        product_image = ProductImage.query.get_or_404(image_id)
+        
+        # Delete from Cloudinary if public_id is stored
+        if product_image.public_id:
+            try:
+                cloudinary_service.delete_image(product_image.public_id)
+                current_app.logger.info(f"Product image deleted from Cloudinary: {product_image.public_id}")
+            except Exception as e:
+                current_app.logger.warning(f"Failed to delete product image from Cloudinary: {str(e)}")
+        
+        # Delete from database
+        product_id = product_image.product_id
+        db.session.delete(product_image)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Product image deleted successfully'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting product image: {str(e)}")
+        return jsonify({'error': 'Failed to delete product image', 'details': str(e)}), 500

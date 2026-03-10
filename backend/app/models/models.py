@@ -1001,6 +1001,7 @@ class ProductImage(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     original_name = db.Column(db.String(255), nullable=True)
     url = db.Column(db.String(255), nullable=False)
+    public_id = db.Column(db.String(255), nullable=True)  # Cloudinary public_id for efficient deletion
     size = db.Column(db.Integer, nullable=True)  # Size in bytes
     is_primary = db.Column(db.Boolean, default=False)
     sort_order = db.Column(db.Integer, default=0)
@@ -1019,6 +1020,7 @@ class ProductImage(db.Model):
             'product_id': self.product_id,
             'filename': self.filename,
             'url': self.url,
+            'public_id': self.public_id,
             'is_primary': self.is_primary,
             'alt_text': self.alt_text,
             'created_at': self.created_at.isoformat() if self.created_at else None
