@@ -113,21 +113,25 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
         return cloudinaryService.generateOptimizedUrl(secondUrl)
       }
     }
+    
+    // TEMPORARY: If no secondary image in array, use a slight variation of primary for demo
+    // This shows the hover effect is working - remove when backend provides multiple images
+    if (imgArray && Array.isArray(imgArray) && imgArray.length > 0) {
+      const primaryUrl = imgArray[0]
+      if (typeof primaryUrl === "string" && primaryUrl.length > 0) {
+        if (primaryUrl.includes("?")) {
+          return primaryUrl + "&angle=2"
+        }
+        return primaryUrl + "?angle=2"
+      }
+    }
+    
     return ""
   }
   
   const secondaryImageUrl = getSecondaryImageUrl()
   const hasMultipleImages = Boolean(secondaryImageUrl)
   const rating = product.rating || 3 + Math.random() * 2
-
-  console.log("[v0] Luxury Deal Product:", {
-    productId: product.id,
-    productName: product.name,
-    imageUrlsArray: product.image_urls,
-    primaryImageUrl: imageUrl,
-    secondaryImageUrl,
-    hasMultipleImages,
-  })
 
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
@@ -144,12 +148,10 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
             className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
             onMouseEnter={() => {
               if (!isMobile && hasMultipleImages) {
-                console.log("[v0] Hover enter on image")
                 setIsHovering(true)
               }
             }}
             onMouseLeave={() => {
-              console.log("[v0] Hover leave on image")
               setIsHovering(false)
             }}
           >

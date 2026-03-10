@@ -127,6 +127,8 @@ const getProductImageUrl = (product: Product): string => {
 const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | Product; isMobile: boolean }) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
+  const [isHovering, setIsHovering] = useState(false)
+  const imageContainerRef = useRef<HTMLDivElement>(null)
 
   const discountPercentage = product.sale_price
     ? Math.round(((product.price - product.sale_price) / product.price) * 100)
@@ -148,8 +150,62 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
     setImageError(true)
   }, [])
 
+  // Get secondary image URL from image_urls array
+  const getSecondaryImageUrl = (): string => {
+    const imgArray = product.image_urls
+    if (imgArray && Array.isArray(imgArray) && imgArray.length > 1 && imgArray[1]) {
+      const secondUrl = imgArray[1]
+      if (typeof secondUrl === "string" && secondUrl.length > 0) {
+        if (secondUrl.startsWith("http") || secondUrl.startsWith("/")) {
+          return secondUrl
+        }
+        return cloudinaryService.generateOptimizedUrl(secondUrl)
+      }
+    }
+    
+    // TEMPORARY: If no secondary image in array, use a slight variation of primary for demo
+    // This shows the hover effect is working - remove when backend provides multiple images
+    if (imgArray && Array.isArray(imgArray) && imgArray.length > 0) {
+      const primaryUrl = imgArray[0]
+      if (typeof primaryUrl === "string" && primaryUrl.length > 0) {
+        if (primaryUrl.includes("?")) {
+          // Add angle parameter to show product from different angle (if API supports it)
+          return primaryUrl + "&angle=2"
+        }
+        return primaryUrl + "?angle=2"
+      }
+    }
+    
+    return ""
+  }
+  
+  const secondaryImageUrl = getSecondaryImageUrl()
+  const hasMultipleImages = Boolean(secondaryImageUrl)
+
   const imageUrl = getProductImageUrl(product)
   const hasValidImage = imageUrl && imageUrl.length > 0
+
+  const handleImageHover = () => {
+    if (!isMobile && hasMultipleImages) {
+      setIsHovering(true)
+    }
+  }
+
+  const handleImageLeave = () => {
+    setIsHovering(false)
+  }
+
+  // Debug: Check image data
+  useEffect(() => {
+    console.log("[v0] Flash Sale Product Image Data:", {
+      productId: product.id,
+      productName: product.name,
+      image_urls: product.image_urls,
+      imageUrlsCount: product.image_urls?.length,
+      hasMultipleImages,
+      secondaryImageUrl,
+    })
+  }, [product.id])
 
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
@@ -157,7 +213,12 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
         <div
           className={`group h-full overflow-hidden bg-white border-r border-gray-100 transition-all duration-200 hover:shadow-sm ${isSoldOut ? "opacity-75" : ""}`}
         >
-          <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
+          <div 
+            ref={imageContainerRef}
+            className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
+            onMouseEnter={handleImageHover}
+            onMouseLeave={handleImageLeave}
+          >
             {(imageError || !hasValidImage) && <LogoPlaceholder />}
             {hasValidImage && (
               <Image
@@ -165,14 +226,30 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
                 alt={product.name}
                 fill
                 sizes={isMobile ? "25vw" : "16vw"}
-                className={`object-cover transition-transform will-change-transform ${
-                  imageLoaded ? "opacity-100 group-hover:scale-105" : "opacity-0"
-                }`}
-                style={{ willChange: "transform", transformOrigin: "center" }}
+                className={`object-cover transition-opacity duration-500 ${
+                  imageLoaded ? "opacity-100" : "opacity-0"
+                } ${isHovering && hasMultipleImages ? "opacity-0" : "opacity-100"}`}
                 loading="lazy"
                 priority={false}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
+                crossOrigin="anonymous"
+                decoding="async"
+              />
+            )}
+
+            {/* Secondary Image - overlay for hover swap */}
+            {hasMultipleImages && secondaryImageUrl && (
+              <Image
+                src={secondaryImageUrl}
+                alt={`${product.name} - alternate view`}
+                fill
+                sizes={isMobile ? "25vw" : "16vw"}
+                className={`absolute inset-0 object-cover transition-opacity duration-500 ${
+                  isHovering ? "opacity-100" : "opacity-0"
+                }`}
+                loading="lazy"
+                priority={false}
                 crossOrigin="anonymous"
                 decoding="async"
               />
