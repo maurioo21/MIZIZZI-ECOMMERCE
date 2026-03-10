@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ShoppingCart, Loader2 } from "lucide-react"
@@ -16,6 +16,7 @@ import { WishlistButton } from "./wishlist-button"
 import { useToast } from "@/components/ui/use-toast"
 import { EnhancedImage } from "@/components/shared/enhanced-image"
 import { cn } from "@/lib/utils"
+import { useMediaQuery } from "@/hooks/use-media-query"
 
 interface ProductCardProps {
   product: {
@@ -85,11 +86,30 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
   const { addToCart } = useCart()
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [isHovering, setIsHovering] = useState(false)
+  const [preloadedImages, setPreloadedImages] = useState<Set<string>>(new Set())
+  const imageContainerRef = useRef<HTMLDivElement>(null)
   const { items: cartItems } = useCart()
   const { toast } = useToast()
+  const isMobile = useMediaQuery("(max-width: 768px)")
 
   const validImages = getValidImageUrls(product.image_urls)
   const primaryImage = getFirstValidImage(product)
+  const hasMultipleImages = validImages.length > 1
+  
+  // Determine which image to display
+  const displayImage = isHovering && hasMultipleImages && validImages[1] ? validImages[1] : primaryImage
+  
+  // Preload secondary image on mount for desktop
+  useEffect(() => {
+    if (!isMobile && hasMultipleImages && validImages[1]) {
+      const img = new window.Image()
+      img.src = validImages[1]
+      img.onload = () => {
+        setPreloadedImages((prev) => new Set([...prev, validImages[1]]))
+      }
+    }
+  }, [validImages, hasMultipleImages, isMobile])
 
   // Calculate discount percentage
   const discountPercentage =
@@ -147,7 +167,6 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
         const result = await addToCart(product.id, 1)
         if (result?.success) {
           // Toast is now handled by the CartIndicator component
-          // The cart-updated event will trigger the notification
         }
       }
     } catch (error) {
@@ -163,13 +182,13 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
   }
 
   const handleImageHover = () => {
-    if (validImages.length > 1) {
-      setCurrentImageIndex(1)
+    if (!isMobile && hasMultipleImages) {
+      setIsHovering(true)
     }
   }
 
   const handleImageLeave = () => {
-    setCurrentImageIndex(0)
+    setIsHovering(false)
   }
 
   // Star rating component
@@ -225,16 +244,27 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
     return (
       <motion.div initial="hidden" animate="visible" variants={variants} className={`group ${className}`}>
         <Card className="overflow-hidden border-cherry-100 hover:shadow-lg transition-all duration-300 h-full">
-          <div className="relative aspect-[4/5] bg-white">
+          <div className="relative aspect-[4/5] bg-white overflow-hidden">
             <Image
-              src={validImages[currentImageIndex] || primaryImage}
+              src={displayImage}
               alt={product.name}
               fill
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              className="object-cover transition-all duration-500"
+              className="object-cover transition-all duration-500 ease-in-out"
+              quality={90}
+              priority={false}
               onMouseEnter={handleImageHover}
               onMouseLeave={handleImageLeave}
             />
+
+            {/* Image Count Indicator */}
+            {hasMultipleImages && !isMobile && (
+              <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-sm">
+                {isHovering ? "2" : "1"}/{validImages.length}
+              </div>
+            )}
+
+            {/* Badges */}
             <div className="absolute left-3 top-3 flex flex-col gap-1 z-10">
               {discountPercentage > 0 && (
                 <Badge className="bg-cherry-600 text-white border-0 px-2 py-1 rounded-md">-{discountPercentage}%</Badge>
@@ -244,6 +274,8 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
                 <Badge className="bg-purple-600 text-white border-0 px-2 py-1 rounded-md">FEATURED</Badge>
               )}
             </div>
+
+            {/* Gradient Overlay on Hover */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
               <div className="w-full">
                 <h3 className="text-white font-semibold line-clamp-1 text-lg mb-1">{product.name}</h3>
@@ -295,17 +327,35 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
       <Card className="overflow-hidden border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 h-full bg-white rounded-lg">
         <div className="relative">
           <Link href={`/product/${product.slug || product.id}`} className="block">
-            <div className="relative aspect-square overflow-hidden">
-              <EnhancedImage
-                src={primaryImage}
+            <div
+              ref={imageContainerRef}
+              className="relative aspect-square overflow-hidden bg-gray-50"
+              onMouseEnter={handleImageHover}
+              onMouseLeave={handleImageLeave}
+            >
+              {/* Primary Image with smooth fade transition */}
+              <Image
+                src={displayImage}
                 alt={product.name}
-                width={300}
-                height={300}
-                className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
-                objectFit="cover"
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className={cn(
+                  "w-full h-full object-cover transition-all duration-500 ease-in-out",
+                  isHovering && hasMultipleImages ? "opacity-100" : "opacity-100",
+                  "group-hover:scale-105",
+                )}
                 quality={90}
+                priority={false}
               />
 
+              {/* Image Count Indicator - only show if multiple images and clean */}
+              {hasMultipleImages && !isMobile && (
+                <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 backdrop-blur-sm">
+                  {isHovering ? "2" : "1"}/{validImages.length}
+                </div>
+              )}
+
+              {/* Badges */}
               <div className="absolute top-2 left-2 flex flex-col gap-1">
                 {product.is_new && (
                   <span className="inline-block bg-green-500 px-2 py-1 text-xs font-bold text-white rounded">New</span>
@@ -320,6 +370,16 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
                     Featured
                   </span>
                 )}
+                {product.is_luxury_deal && (
+                  <span className="inline-block bg-amber-600 px-2 py-1 text-xs font-bold text-white rounded">
+                    Luxury
+                  </span>
+                )}
+                {product.is_flash_sale && (
+                  <span className="inline-block bg-red-600 px-2 py-1 text-xs font-bold text-white rounded">
+                    Flash Sale
+                  </span>
+                )}
                 {product.badge_text && (
                   <span
                     className={cn(
@@ -332,6 +392,7 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
                 )}
               </div>
 
+              {/* Wishlist Button */}
               <WishlistButton
                 productId={product.id}
                 className="absolute top-2 right-2 bg-white/90 hover:bg-white rounded-full p-1.5 shadow-sm"
@@ -339,6 +400,7 @@ export function ProductCard({ product, variant = "default", className = "" }: Pr
             </div>
           </Link>
 
+          {/* Product Info */}
           <div className="p-3">
             {(product.category?.name || product.category_id) && (
               <div className="mb-2">
