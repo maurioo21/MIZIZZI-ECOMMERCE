@@ -59,25 +59,24 @@ const CountdownTimer = memo(({ initialTimeLeft }: { initialTimeLeft: { hours: nu
 
 CountdownTimer.displayName = "CountdownTimer"
 
-  return (
-    <div className="flex items-center">
-      <div className="flex">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${
-              star <= Math.floor(rating)
-                ? "fill-yellow-400 text-yellow-400"
-                : star - 0.5 <= rating
-                  ? "fill-yellow-400/50 text-yellow-400"
-                  : "fill-gray-200 text-gray-200"
-            }`}
-          />
-        ))}
-      </div>
+const StarRating = ({ rating = 4 }: { rating?: number }) => (
+  <div className="flex items-center">
+    <div className="flex">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Star
+          key={star}
+          className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${
+            star <= Math.floor(rating)
+              ? "fill-yellow-400 text-yellow-400"
+              : star - 0.5 <= rating
+                ? "fill-yellow-400/50 text-yellow-400"
+                : "fill-gray-200 text-gray-200"
+          }`}
+        />
+      ))}
     </div>
-  )
-}
+  </div>
+)
 
 const StockIndicator = ({
   itemsLeft,
