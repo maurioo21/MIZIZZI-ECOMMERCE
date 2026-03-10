@@ -33,7 +33,6 @@ function getLocalCache(key: string): CarouselBanner[] | null {
 
     // Return cache if still valid
     if (now - entry.timestamp < CACHE_DURATION) {
-      console.log(`[v0] Using valid cached carousel data for ${key}`)
       return entry.data
     }
 
@@ -54,7 +53,6 @@ function saveLocalCache(key: string, data: CarouselBanner[]): void {
       timestamp: Date.now(),
     }
     localStorage.setItem(CACHE_KEY_PREFIX + key, JSON.stringify(entry))
-    console.log(`[v0] Saved carousel cache for ${key}`)
   } catch (error) {
     console.error("[v0] Error saving carousel cache:", error)
   }
@@ -67,7 +65,6 @@ function getMemoryCache(key: string): CarouselBanner[] | null {
 
   const now = Date.now()
   if (now - cached.timestamp < CACHE_DURATION) {
-    console.log(`[v0] Using memory cached carousel data for ${key}`)
     return cached.data
   }
 
@@ -81,7 +78,6 @@ function saveMemoryCache(key: string, data: CarouselBanner[]): void {
     data,
     timestamp: Date.now(),
   })
-  console.log(`[v0] Saved carousel memory cache for ${key}`)
 }
 
 // Optimize Cloudinary URLs for CDN delivery
@@ -122,8 +118,6 @@ export async function getCarouselBanners(
 
   // 3. Fetch fresh data from server
   try {
-    console.log(`[v0] Fetching carousel banners for position: ${position}`)
-    
     const response = await fetch(`${API_BASE_URL}/api/carousel/banners?position=${position}`, {
       method: "GET",
       headers: {
@@ -137,7 +131,6 @@ export async function getCarouselBanners(
       // If fetch fails, try to use any available cache
       const fallback = localCached || getMemoryCache(cacheKey)
       if (fallback) {
-        console.warn(`[v0] Fetch failed, using cached carousel data`)
         return fallback
       }
       throw new Error(`Failed to fetch carousel: ${response.status}`)
@@ -156,7 +149,6 @@ export async function getCarouselBanners(
     saveMemoryCache(cacheKey, optimizedBanners)
     saveLocalCache(cacheKey, optimizedBanners)
 
-    console.log(`[v0] Loaded ${optimizedBanners.length} carousel banners`)
     return optimizedBanners
   } catch (error) {
     console.error("[v0] Error fetching carousel banners:", error)
@@ -164,7 +156,6 @@ export async function getCarouselBanners(
     // Return cached data if fetch fails
     const fallback = localCached || getMemoryCache(cacheKey) || []
     if (fallback.length > 0) {
-      console.log("[v0] Returning cached carousel data as fallback")
       return fallback
     }
     
@@ -231,7 +222,6 @@ export function clearCarouselCache(position?: string): void {
     const cacheKey = `banners_${position}`
     memoryCache.delete(cacheKey)
     localStorage.removeItem(CACHE_KEY_PREFIX + cacheKey)
-    console.log(`[v0] Cleared carousel cache for ${position}`)
   } else {
     // Clear all carousel caches
     memoryCache.clear()
@@ -241,6 +231,5 @@ export function clearCarouselCache(position?: string): void {
         localStorage.removeItem(key)
       }
     })
-    console.log("[v0] Cleared all carousel caches")
   }
 }

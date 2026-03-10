@@ -47,13 +47,11 @@ export const Carousel = memo(function Carousel({
   const displayItems = useMemo(() => {
     // Priority 1: Use carousel items if available
     if (serverCarouselItems && serverCarouselItems.length > 0) {
-      console.log("[v0] Using carousel items:", serverCarouselItems.length);
       return serverCarouselItems;
     }
     
     // Priority 2: Use contact CTA slides as carousel backup (they're designed for big display)
     if (contactCTASlides && contactCTASlides.length > 0) {
-      console.log("[v0] Using contact CTA slides as carousel:", contactCTASlides.length);
       return contactCTASlides.map(slide => ({
         image: slide.image || "/placeholder.svg",
         title: slide.subtitle || "Mizizzi",
@@ -65,7 +63,6 @@ export const Carousel = memo(function Carousel({
     
     // Priority 3: Feature cards as minimal fallback (less ideal for carousel but shows something)
     if (featureCards && featureCards.length > 0) {
-      console.log("[v0] Using feature cards as carousel fallback:", featureCards.length);
       return featureCards.slice(0, 3).map(card => ({
         image: "/placeholder.svg",
         title: card.title,
@@ -76,7 +73,6 @@ export const Carousel = memo(function Carousel({
     }
     
     // Return empty - carousel will not render
-    console.warn("[v0] No carousel items, contact CTA slides, or feature cards available");
     return [];
   }, [serverCarouselItems, contactCTASlides, featureCards]);
 
