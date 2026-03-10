@@ -55,7 +55,7 @@ export const Carousel = memo(function Carousel({
       return contactCTASlides.map(slide => ({
         image: slide.image || "/placeholder.svg",
         title: slide.subtitle || "Mizizzi",
-        description: slide.description || "",
+        description: "",  // ContactCTASlide doesn't have description property
         buttonText: "Discover Now",
         href: "/products",
       }));
