@@ -76,6 +76,8 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [showPlaceholder, setShowPlaceholder] = useState(true)
+  const [isHovering, setIsHovering] = useState(false)
+  const imageContainerRef = useRef<HTMLDivElement>(null)
 
   const discountPercentage = product.sale_price
     ? Math.round(((product.price - product.sale_price) / product.price) * 100)
@@ -98,7 +100,34 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
   }, [product.id])
 
   const imageUrl = getProductImageUrl(product)
+  
+  // Get secondary image URL from image_urls array
+  const getSecondaryImageUrl = (): string => {
+    const imgArray = product.image_urls
+    if (imgArray && Array.isArray(imgArray) && imgArray.length > 1 && imgArray[1]) {
+      const secondUrl = imgArray[1]
+      if (typeof secondUrl === "string" && secondUrl.length > 0) {
+        if (secondUrl.startsWith("http") || secondUrl.startsWith("/")) {
+          return secondUrl
+        }
+        return cloudinaryService.generateOptimizedUrl(secondUrl)
+      }
+    }
+    return ""
+  }
+  
+  const secondaryImageUrl = getSecondaryImageUrl()
+  const hasMultipleImages = Boolean(secondaryImageUrl)
   const rating = product.rating || 3 + Math.random() * 2
+
+  console.log("[v0] Luxury Deal Product:", {
+    productId: product.id,
+    productName: product.name,
+    imageUrlsArray: product.image_urls,
+    primaryImageUrl: imageUrl,
+    secondaryImageUrl,
+    hasMultipleImages,
+  })
 
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
@@ -110,7 +139,20 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
         className="h-full"
       >
         <div className="group h-full overflow-hidden bg-white border-r border-gray-100 transition-all duration-200 hover:shadow-sm">
-          <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
+          <div 
+            ref={imageContainerRef}
+            className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
+            onMouseEnter={() => {
+              if (!isMobile && hasMultipleImages) {
+                console.log("[v0] Hover enter on image")
+                setIsHovering(true)
+              }
+            }}
+            onMouseLeave={() => {
+              console.log("[v0] Hover leave on image")
+              setIsHovering(false)
+            }}
+          >
             <AnimatePresence>
               {(showPlaceholder || imageError) && (
                 <motion.div
@@ -122,11 +164,13 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                 </motion.div>
               )}
             </AnimatePresence>
+            
+            {/* Primary Image */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: imageLoaded ? 1 : 0 }}
               transition={{ duration: 0.3 }}
-              className="absolute inset-0"
+              className={`absolute inset-0 transition-opacity duration-500 ${isHovering && hasMultipleImages ? "opacity-0" : "opacity-100"}`}
             >
               {imageUrl && (
                 <Image
@@ -142,6 +186,26 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                 />
               )}
             </motion.div>
+
+            {/* Secondary Image - overlay for hover swap */}
+            {hasMultipleImages && secondaryImageUrl && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: imageLoaded ? 1 : 0 }}
+                transition={{ duration: 0.3 }}
+                className={`absolute inset-0 transition-opacity duration-500 ${isHovering ? "opacity-100" : "opacity-0"}`}
+              >
+                <Image
+                  src={secondaryImageUrl}
+                  alt={`${product.name} - alternate view`}
+                  fill
+                  sizes={isMobile ? "25vw" : "16vw"}
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
+                  crossOrigin="anonymous"
+                />
+              </motion.div>
+            )}
             {product.sale_price && discountPercentage > 0 && (
               <div className="absolute top-1 left-1 bg-[#8B1538] text-white text-[10px] sm:text-xs font-medium px-1.5 py-0.5 rounded-sm z-20">
                 -{discountPercentage}%
