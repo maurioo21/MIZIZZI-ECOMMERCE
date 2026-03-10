@@ -331,8 +331,23 @@ def get_product_by_id(product_id):
         return jsonify(product_data), 200
     
     except Exception as e:
-        current_app.logger.error(f"Error fetching product {product_id}: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        error_msg = str(e)
+        current_app.logger.error(f"Error fetching product {product_id}: {error_msg}")
+        current_app.logger.error(f"Full error details: {repr(e)}")
+        
+        # Check for database-specific errors
+        if 'database' in error_msg.lower() or 'connection' in error_msg.lower():
+            return jsonify({
+                'error': 'database_unavailable',
+                'message': 'Database is currently unavailable. Please try again later.',
+                'retry_after_seconds': 5.0,
+                'details': error_msg if current_app.debug else None
+            }), 503
+        
+        return jsonify({
+            'error': 'Internal server error',
+            'details': error_msg if current_app.debug else None
+        }), 500
 
 
 @product_details_bp.route('/slug/<slug>', methods=['GET'])
@@ -355,8 +370,23 @@ def get_product_by_slug(slug):
         return jsonify(product_data), 200
     
     except Exception as e:
-        current_app.logger.error(f"Error fetching product {slug}: {e}")
-        return jsonify({'error': 'Internal server error'}), 500
+        error_msg = str(e)
+        current_app.logger.error(f"Error fetching product {slug}: {error_msg}")
+        current_app.logger.error(f"Full error details: {repr(e)}")
+        
+        # Check for database-specific errors
+        if 'database' in error_msg.lower() or 'connection' in error_msg.lower():
+            return jsonify({
+                'error': 'database_unavailable',
+                'message': 'Database is currently unavailable. Please try again later.',
+                'retry_after_seconds': 5.0,
+                'details': error_msg if current_app.debug else None
+            }), 503
+        
+        return jsonify({
+            'error': 'Internal server error',
+            'details': error_msg if current_app.debug else None
+        }), 500
 
 
 @product_details_bp.route('/<int:product_id>/cache-status', methods=['GET'])
