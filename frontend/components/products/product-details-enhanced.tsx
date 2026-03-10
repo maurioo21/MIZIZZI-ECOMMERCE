@@ -1489,7 +1489,6 @@ export default function ProductDetailsEnhanced({
                     {isProductInWishlist ? "Saved to Wishlist" : "Add to Wishlist"}
                   </motion.button>
                 </div>
-                </div>
 
                 {/* Payment Methods */}
                 <div className="pt-4 border-t border-gray-100">
