@@ -1127,7 +1127,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
       </div>
 
       {/* Stats Grid - Fully Responsive */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5 md:gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 gap-2 xs:gap-2.5 sm:gap-3 md:gap-4">
         <StatsCard
           title="Total Products"
           value={productStats?.totalProducts || 0}
@@ -1158,7 +1158,7 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
         />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-2.5 md:gap-3 lg:gap-4">
+      <div className="grid grid-cols-2 gap-2 xs:gap-2.5 sm:gap-3 md:gap-4">
         <StatsCard
           title="New Products"
           value={productStats?.newProducts || 0}
@@ -1191,17 +1191,17 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
 
       <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {/* Search & Filters Section */}
-        <div className="p-3 sm:p-4 md:p-5 lg:p-6 border-b border-gray-100">
-          <div className="flex flex-col gap-3 sm:gap-4">
+        <div className="p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6 border-b border-gray-100">
+          <div className="flex flex-col gap-2 xs:gap-3 sm:gap-4">
             {/* Search Bar - Full width on mobile */}
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-3 items-stretch sm:items-center">
+            <div className="flex flex-col xs:flex-row gap-2 xs:gap-3 items-stretch xs:items-center">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none flex-shrink-0" />
+                <Search className="absolute left-2.5 xs:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 xs:h-4 w-3.5 xs:w-4 pointer-events-none flex-shrink-0" />
                 <Input
-                  placeholder="Search products by name, SKU..."
+                  placeholder="Search products..."
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="pl-10 w-full rounded-lg sm:rounded-full border-gray-200 focus:border-gray-400 text-xs sm:text-sm h-9 sm:h-10"
+                  className="pl-8 xs:pl-10 w-full rounded-lg sm:rounded-full border-gray-200 focus:border-gray-400 text-xs xs:text-sm h-8 xs:h-9 sm:h-10"
                 />
               </div>
               <Sheet open={uiState.isFilterSheetOpen} onOpenChange={(open) => setUiState((prev) => ({ ...prev, isFilterSheetOpen: open }))}>
@@ -1210,12 +1210,12 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                     variant="outline"
                     size="sm"
                     className={cn(
-                      "rounded-lg sm:rounded-full border-gray-200 hover:bg-gray-50 transition-all duration-200 h-9 sm:h-10 whitespace-nowrap",
+                      "rounded-lg sm:rounded-full border-gray-200 hover:bg-gray-50 transition-all duration-200 h-8 xs:h-9 sm:h-10 whitespace-nowrap text-xs xs:text-sm",
                       uiState.isFilterActive && "bg-blue-50 border-blue-200 text-blue-700",
                     )}
                   >
-                    <Filter className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                    <span className="text-xs sm:text-sm">Filters</span>
+                    <Filter className="h-3.5 xs:h-4 w-3.5 xs:w-4 mr-1 flex-shrink-0" />
+                    <span className="hidden xs:inline">Filters</span>
                     {uiState.isFilterActive && (
                       <span className="ml-1 text-xs font-semibold">
                         ({Object.values({
@@ -1537,8 +1537,8 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
 
         <Tabs defaultValue="all" value={uiState.activeTab} onValueChange={(value) => setUiState((prev) => ({ ...prev, activeTab: value }))}>
           {/* Responsive Tabs - Scrollable on mobile */}
-          <div className="px-3 sm:px-4 md:px-5 lg:px-6 py-2 sm:py-3 border-b border-gray-100 overflow-x-auto">
-            <TabsList className="inline-flex grid-cols-4 md:grid-cols-8 gap-1 sm:gap-1.5 bg-gray-50 p-1 rounded-lg sm:rounded-2xl w-max md:w-full md:inline-grid">
+          <div className="px-2 xs:px-3 sm:px-4 md:px-5 lg:px-6 py-1.5 xs:py-2 sm:py-3 border-b border-gray-100 overflow-x-auto scrollbar-hide">
+            <TabsList className="inline-flex md:grid md:grid-cols-8 gap-0.5 xs:gap-1 bg-gray-50 p-0.5 xs:p-1 rounded-lg sm:rounded-2xl w-max md:w-full">
               {[
                 { value: "all", label: "All", count: allProducts.length, icon: Package },
                 { value: "in_stock", label: "In Stock", count: productStats?.inStock || 0, icon: CheckCircle2 },
@@ -1552,12 +1552,12 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                 <TabsTrigger
                   key={tab.value}
                   value={tab.value}
-                  className="text-xs md:text-sm rounded-lg md:rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-1 md:gap-2 px-1.5 sm:px-2 md:px-3 py-1.5 md:py-2 whitespace-nowrap flex-shrink-0 md:flex-shrink"
+                  className="text-xs sm:text-sm rounded-md md:rounded-xl data-[state=active]:bg-white data-[state=active]:shadow-sm flex items-center gap-0.5 xs:gap-1 md:gap-2 px-1 xs:px-1.5 sm:px-2 md:px-3 py-1 xs:py-1.5 md:py-2 whitespace-nowrap flex-shrink-0 md:flex-shrink"
                 >
-                  <tab.icon className="h-3 w-3 md:h-4 md:w-4 flex-shrink-0" />
-                  <span className="hidden sm:inline text-xs md:text-sm">{tab.label}</span>
+                  <tab.icon className="h-3 xs:h-3.5 w-3 xs:w-3.5 md:h-4 md:w-4 flex-shrink-0" />
+                  <span className="hidden sm:inline text-xs md:text-sm font-medium">{tab.label}</span>
                   <span className="sm:hidden text-xs font-semibold">{tab.label.slice(0, 1)}</span>
-                  <Badge variant="secondary" className="ml-0 sm:ml-1 text-xs px-1.5 py-0 h-5 hidden sm:inline-flex">
+                  <Badge variant="secondary" className="ml-0 xs:ml-0.5 text-xs px-1 py-0 h-5 hidden sm:inline-flex">
                     {tab.count}
                   </Badge>
                 </TabsTrigger>

@@ -55,15 +55,16 @@ const ProductList = memo(function ProductList({
   // Responsive list view - transforms to card layout on mobile
   if (isMobile) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-2.5 xs:space-y-3">
         {products.map((product) => (
           <div
             key={product.id}
-            className="bg-white border border-gray-200 rounded-lg p-3 hover:border-gray-300 hover:shadow-sm transition-all duration-200"
+            className="bg-white border border-gray-200 rounded-lg p-2.5 xs:p-3 hover:border-gray-300 hover:shadow-sm transition-all duration-200 w-full overflow-hidden"
           >
-            <div className="flex gap-3">
-              {/* Product Image */}
-              <div className="flex-shrink-0 w-16 h-16">
+            {/* Product Header - Image and Main Info */}
+            <div className="flex gap-2.5 xs:gap-3 mb-2.5 xs:mb-3">
+              {/* Product Image - Responsive sizing */}
+              <div className="flex-shrink-0 w-14 xs:w-16 h-14 xs:h-16">
                 <img
                   src={productImages[product.id] || getProductImage(product) || "/placeholder-product.png"}
                   alt={product.name}
@@ -71,25 +72,27 @@ const ProductList = memo(function ProductList({
                 />
               </div>
 
-              {/* Product Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-semibold text-gray-900 line-clamp-2">{product.name}</h3>
+              {/* Product Info - Flex column with controlled overflow */}
+              <div className="flex-1 min-w-0 flex flex-col justify-between">
+                {/* Name and checkbox row */}
+                <div className="flex items-start justify-between gap-1.5 xs:gap-2 mb-1.5 xs:mb-2">
+                  <h3 className="text-xs xs:text-sm font-semibold text-gray-900 line-clamp-2 flex-1 break-words">{product.name}</h3>
                   <input
                     type="checkbox"
                     checked={selectedProducts.includes(product.id.toString())}
                     onChange={() => onSelectProduct(product.id.toString())}
                     className="w-4 h-4 rounded cursor-pointer flex-shrink-0 mt-0.5"
+                    aria-label={`Select ${product.name}`}
                   />
                 </div>
 
-                {/* Price and Stock in mobile layout */}
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <div className="text-xs text-gray-600">
+                {/* Price and Stock Row - Stack on very small screens */}
+                <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-1 xs:gap-2 mb-2">
+                  <div className="text-xs xs:text-sm">
                     <span className="font-semibold text-gray-900">KSh {(product.price || 0).toLocaleString()}</span>
                   </div>
                   <div
-                    className={`text-xs font-medium px-2 py-1 rounded-full ${
+                    className={`text-xs font-medium px-2 py-1 rounded-full whitespace-nowrap w-fit ${
                       (product.stock || 0) > 0
                         ? "bg-emerald-50 text-emerald-700"
                         : "bg-red-50 text-red-700"
@@ -99,32 +102,32 @@ const ProductList = memo(function ProductList({
                   </div>
                 </div>
 
-                {/* Status Badge */}
+                {/* Status Badges - Wrapping and responsive */}
                 <div className="flex items-center gap-1 flex-wrap">
                   {product.is_featured && (
-                    <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">Featured</span>
+                    <span className="text-xs bg-purple-50 text-purple-700 px-1.5 xs:px-2 py-0.5 rounded-full truncate">Featured</span>
                   )}
                   {product.is_sale && (
-                    <span className="text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">On Sale</span>
+                    <span className="text-xs bg-orange-50 text-orange-700 px-1.5 xs:px-2 py-0.5 rounded-full truncate">On Sale</span>
                   )}
                   {product.is_new && (
-                    <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">New</span>
+                    <span className="text-xs bg-blue-50 text-blue-700 px-1.5 xs:px-2 py-0.5 rounded-full truncate">New</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Mobile Actions */}
-            <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
+            {/* Mobile Actions - Improved button styling */}
+            <div className="flex gap-2 pt-2.5 xs:pt-3 border-t border-gray-100">
               <button
                 onClick={() => onEditProduct(product.id.toString())}
-                className="flex-1 text-xs font-medium text-gray-700 hover:text-gray-900 py-1.5 rounded transition-colors"
+                className="flex-1 text-xs xs:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 py-1.5 xs:py-2 px-2 rounded-md transition-colors duration-150"
               >
                 Edit
               </button>
               <button
                 onClick={() => onDeleteProduct(product.id.toString())}
-                className="flex-1 text-xs font-medium text-red-700 hover:text-red-900 py-1.5 rounded transition-colors"
+                className="flex-1 text-xs xs:text-sm font-medium text-white bg-red-600 hover:bg-red-700 active:bg-red-800 disabled:bg-gray-300 py-1.5 xs:py-2 px-2 rounded-md transition-colors duration-150"
               >
                 Delete
               </button>
