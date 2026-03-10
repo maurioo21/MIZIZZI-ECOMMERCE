@@ -196,17 +196,17 @@ def create_category():
             updated_at=datetime.utcnow()
         )
         
-        # Handle category image - now expects Cloudinary URL
+        # Handle category image - now expects Cloudinary URL and public_id
         if data.get('image_url'):
-            # Store Cloudinary URL directly
             category.image_url = data['image_url']
-            current_app.logger.info(f"Category image URL set: {data['image_url']}")
+            category.image_public_id = data.get('image_public_id')
+            current_app.logger.info(f"Category image set: {data['image_url']} (public_id: {data.get('image_public_id')})")
         
-        # Handle banner image - now expects Cloudinary URL
+        # Handle banner image - now expects Cloudinary URL and public_id
         if data.get('banner_url'):
-            # Store Cloudinary URL directly
             category.banner_url = data['banner_url']
-            current_app.logger.info(f"Category banner URL set: {data['banner_url']}")
+            category.banner_public_id = data.get('banner_public_id')
+            current_app.logger.info(f"Category banner set: {data['banner_url']} (public_id: {data.get('banner_public_id')})")
         
         db.session.add(category)
         db.session.commit()
@@ -262,15 +262,33 @@ def update_category(category_id):
         if 'description' in data:
             category.description = data['description']
         
-        # Handle image updates - now expects Cloudinary URL
+        # Handle image updates - now expects Cloudinary URL and public_id
         if 'image_url' in data and data['image_url']:
+            # Delete old image from Cloudinary if replace with delete flag
+            if data.get('delete_old_image') and category.image_public_id:
+                try:
+                    cloudinary_service.delete_image(category.image_public_id)
+                    current_app.logger.info(f"Old category image deleted from Cloudinary: {category.image_public_id}")
+                except Exception as e:
+                    current_app.logger.warning(f"Failed to delete old image: {str(e)}")
+            
             category.image_url = data['image_url']
-            current_app.logger.info(f"Category image updated: {data['image_url']}")
+            category.image_public_id = data.get('image_public_id')
+            current_app.logger.info(f"Category image updated: {data['image_url']} (public_id: {data.get('image_public_id')})")
         
-        # Handle banner updates - now expects Cloudinary URL
+        # Handle banner updates - now expects Cloudinary URL and public_id
         if 'banner_url' in data and data['banner_url']:
+            # Delete old banner from Cloudinary if replace with delete flag
+            if data.get('delete_old_banner') and category.banner_public_id:
+                try:
+                    cloudinary_service.delete_image(category.banner_public_id)
+                    current_app.logger.info(f"Old category banner deleted from Cloudinary: {category.banner_public_id}")
+                except Exception as e:
+                    current_app.logger.warning(f"Failed to delete old banner: {str(e)}")
+            
             category.banner_url = data['banner_url']
-            current_app.logger.info(f"Category banner updated: {data['banner_url']}")
+            category.banner_public_id = data.get('banner_public_id')
+            current_app.logger.info(f"Category banner updated: {data['banner_url']} (public_id: {data.get('banner_public_id')})")
         
         if 'is_featured' in data:
             category.is_featured = data['is_featured']
@@ -312,7 +330,7 @@ def update_category(category_id):
 @admin_categories_bp.route('/categories/<int:category_id>', methods=['DELETE'])
 @admin_required
 def delete_category(category_id):
-    """Delete category (soft delete or hard delete)"""
+    """Delete category and remove associated images from Cloudinary"""
     try:
         category = Category.query.get_or_404(category_id)
         
@@ -321,6 +339,21 @@ def delete_category(category_id):
         subcategories = CategoryModel.query.filter_by(parent_id=category_id).count()
         if subcategories > 0:
             return jsonify({'error': 'Cannot delete category with subcategories'}), 400
+        
+        # Delete images from Cloudinary
+        if category.image_public_id:
+            try:
+                cloudinary_service.delete_image(category.image_public_id)
+                current_app.logger.info(f"Category image deleted from Cloudinary: {category.image_public_id}")
+            except Exception as e:
+                current_app.logger.warning(f"Failed to delete category image from Cloudinary: {str(e)}")
+        
+        if category.banner_public_id:
+            try:
+                cloudinary_service.delete_image(category.banner_public_id)
+                current_app.logger.info(f"Category banner deleted from Cloudinary: {category.banner_public_id}")
+            except Exception as e:
+                current_app.logger.warning(f"Failed to delete category banner from Cloudinary: {str(e)}")
         
         db.session.delete(category)
         db.session.commit()
@@ -474,3 +507,57 @@ def reorder_categories():
         db.session.rollback()
         current_app.logger.error(f"Error reordering categories: {str(e)}")
         return jsonify({'error': 'Failed to reorder categories'}), 500
+
+@admin_categories_bp.route('/categories/<int:category_id>/delete-image', methods=['POST'])
+@admin_required
+def delete_category_image(category_id):
+    """Delete a specific image from Cloudinary for a category"""
+    try:
+        category = Category.query.get_or_404(category_id)
+        data = request.get_json() or {}
+        
+        image_type = data.get('image_type', 'category')  # 'category' or 'banner'
+        
+        if image_type == 'category':
+            if not category.image_public_id:
+                return jsonify({'error': 'No category image to delete'}), 400
+            
+            # Delete from Cloudinary
+            success = cloudinary_service.delete_image(category.image_public_id)
+            if not success:
+                return jsonify({'error': 'Failed to delete image from Cloudinary'}), 500
+            
+            # Clear from database
+            category.image_url = None
+            category.image_public_id = None
+            current_app.logger.info(f"Category image deleted: {category_id}")
+            
+        elif image_type == 'banner':
+            if not category.banner_public_id:
+                return jsonify({'error': 'No banner image to delete'}), 400
+            
+            # Delete from Cloudinary
+            success = cloudinary_service.delete_image(category.banner_public_id)
+            if not success:
+                return jsonify({'error': 'Failed to delete banner from Cloudinary'}), 500
+            
+            # Clear from database
+            category.banner_url = None
+            category.banner_public_id = None
+            current_app.logger.info(f"Category banner deleted: {category_id}")
+        
+        else:
+            return jsonify({'error': 'Invalid image type. Use "category" or "banner"'}), 400
+        
+        category.updated_at = datetime.utcnow()
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'{image_type.capitalize()} image deleted successfully',
+            'category': category.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting image for category {category_id}: {str(e)}")
+        return jsonify({'error': 'Failed to delete image'}), 500

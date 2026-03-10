@@ -7,7 +7,7 @@ import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
 import { CategoryFormDialog } from "@/components/admin/categories/category-form-dialog"
 import { CategoryDeleteDialog } from "@/components/admin/categories/category-delete-dialog"
-import { buildCloudinaryUrlFromFullUrl, isCloudinaryUrl } from "@/lib/cloudinary-url-builder"
+import { getCategoryListImageUrl } from "@/lib/cloudinary-image-handler"
 
 const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = false): string => {
   if (!url) {
@@ -28,20 +28,15 @@ const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = f
     return "/placeholder.svg"
   }
 
-  // Optimize Cloudinary URLs for fast loading
-  if (isCloudinaryUrl(finalUrl)) {
-    const transformed = buildCloudinaryUrlFromFullUrl(finalUrl, {
-      width: 200,
-      height: 150,
-      crop: "fill",
-      quality: "auto",
-      format: "auto",
-      dpr: "auto",
-    })
-    finalUrl = transformed || finalUrl // Fall back to original if transform fails
+  // Use Cloudinary handler for optimized URLs
+  try {
+    finalUrl = getCategoryListImageUrl(finalUrl)
+  } catch (error) {
+    // Fall back to original URL if optimization fails
+    console.warn("Failed to optimize image URL:", error)
   }
 
-  // Add cache-busting parameter for Cloudinary URLs to force fresh images
+  // Add cache-busting parameter for force refresh
   if (bustCache && finalUrl.includes("cloudinary.com")) {
     const separator = finalUrl.includes("?") ? "&" : "?"
     finalUrl = `${finalUrl}${separator}t=${Date.now()}`
@@ -56,7 +51,9 @@ interface Category {
   slug: string
   description?: string
   image_url?: string
+  image_public_id?: string
   banner_url?: string
+  banner_public_id?: string
   is_featured: boolean
   sort_order: number
   is_active?: boolean

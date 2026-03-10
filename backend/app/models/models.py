@@ -596,8 +596,10 @@ class Category(db.Model):
     name = db.Column(db.String(100), nullable=False)
     slug = db.Column(db.String(100), unique=True, nullable=False, index=True)
     description = db.Column(db.Text)
-    image_url = db.Column(db.String(255))  # Keep for backward compatibility
-    banner_url = db.Column(db.String(255))  # Keep for backward compatibility
+    image_url = db.Column(db.String(255))  # Cloudinary secure_url for category image
+    image_public_id = db.Column(db.String(255), nullable=True)  # Cloudinary public_id for image deletion/management
+    banner_url = db.Column(db.String(255))  # Cloudinary secure_url for banner image
+    banner_public_id = db.Column(db.String(255), nullable=True)  # Cloudinary public_id for banner deletion/management
     image_data = db.Column(db.LargeBinary, nullable=True)  # Store image as binary
     image_filename = db.Column(db.String(255), nullable=True)  # Original filename
     image_mimetype = db.Column(db.String(50), nullable=True)  # MIME type (image/jpeg, etc.)
@@ -633,7 +635,9 @@ class Category(db.Model):
             'slug': self.slug,
             'description': self.description,
             'image_url': f'/api/admin/shop-categories/categories/{self.id}/image' if self.image_data else self.image_url,
+            'image_public_id': self.image_public_id,
             'banner_url': f'/api/admin/shop-categories/categories/{self.id}/banner' if self.banner_data else self.banner_url,
+            'banner_public_id': self.banner_public_id,
             'parent_id': self.parent_id,
             'is_featured': self.is_featured,
             'sort_order': self.sort_order,

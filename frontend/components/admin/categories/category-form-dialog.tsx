@@ -9,22 +9,17 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Modal, ModalHeader, ModalTitle, ModalDescription, ModalBody, ModalFooter } from "@/components/ui/modal"
 import { useToast } from "@/hooks/use-toast"
-import { Loader, ImageIcon, Upload, Save, X } from "lucide-react"
+import { Loader, ImageIcon, Upload, Save, X, Trash2, RefreshCw, Check } from "lucide-react"
 import Image from "next/image"
 import { websocketService } from "@/services/websocket"
 import { useSWRConfig } from "swr"
 import { categoryService } from "@/services/category"
-
-const getValidImageUrl = (url: string | null | undefined): string => {
-  if (!url) return "/placeholder.svg"
-  if (url.startsWith("data:")) return url
-  if (url.startsWith("http://") || url.startsWith("https://")) return url
-  if (url.startsWith("/")) {
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-    return `${baseUrl}${url}`
-  }
-  return "/placeholder.svg"
-}
+import { 
+  validateImageFile, 
+  createImagePreview, 
+  getCategoryDisplayImageUrl,
+  getBannerImageUrl 
+} from "@/lib/cloudinary-image-handler"
 
 interface Category {
   id: number
@@ -32,7 +27,9 @@ interface Category {
   slug: string
   description?: string
   image_url?: string
+  image_public_id?: string
   banner_url?: string
+  banner_public_id?: string
   is_featured: boolean
   sort_order: number
   is_active?: boolean
@@ -45,6 +42,13 @@ interface CategoryFormDialogProps {
   onSaveSuccess: (bypassCache?: boolean) => void
 }
 
+interface ImageUploadState {
+  preview: string | null
+  file: File | null
+  progress: number
+  isUploading: boolean
+}
+
 export function CategoryFormDialog({
   open,
   onOpenChange,
@@ -54,7 +58,6 @@ export function CategoryFormDialog({
   const { toast } = useToast()
   const { mutate } = useSWRConfig()
   const [saving, setSaving] = useState(false)
-  const [uploadingImage, setUploadingImage] = useState<"category" | "banner" | null>(null)
   const categoryImageRef = useRef<HTMLInputElement>(null)
   const bannerImageRef = useRef<HTMLInputElement>(null)
 
@@ -63,11 +66,33 @@ export function CategoryFormDialog({
     slug: "",
     description: "",
     image_url: "",
+    image_public_id: "",
     banner_url: "",
+    banner_public_id: "",
     is_featured: false,
     sort_order: 0,
   })
 
+  const [categoryImage, setCategoryImage] = useState<ImageUploadState>({
+    preview: null,
+    file: null,
+    progress: 0,
+    isUploading: false,
+  })
+
+  const [bannerImage, setBannerImage] = useState<ImageUploadState>({
+    preview: null,
+    file: null,
+    progress: 0,
+    isUploading: false,
+  })
+
+  const [deleteOldImage, setDeleteOldImage] = useState(false)
+  const [deleteOldBanner, setDeleteOldBanner] = useState(false)
+  const [slugValidating, setSlugValidating] = useState(false)
+  const [slugError, setSlugError] = useState("")
+
+  // Initialize form with existing data
   useEffect(() => {
     if (editingCategory) {
       setFormData({
@@ -75,44 +100,180 @@ export function CategoryFormDialog({
         slug: editingCategory.slug,
         description: editingCategory.description || "",
         image_url: editingCategory.image_url || "",
+        image_public_id: editingCategory.image_public_id || "",
         banner_url: editingCategory.banner_url || "",
+        banner_public_id: editingCategory.banner_public_id || "",
         is_featured: editingCategory.is_featured,
         sort_order: editingCategory.sort_order,
       })
+      
+      // Set previews from existing URLs
+      if (editingCategory.image_url) {
+        setCategoryImage(prev => ({
+          ...prev,
+          preview: getCategoryDisplayImageUrl(editingCategory.image_url || ""),
+        }))
+      }
+      
+      if (editingCategory.banner_url) {
+        setBannerImage(prev => ({
+          ...prev,
+          preview: getBannerImageUrl(editingCategory.banner_url || ""),
+        }))
+      }
     } else {
       setFormData({
         name: "",
         slug: "",
         description: "",
         image_url: "",
+        image_public_id: "",
         banner_url: "",
+        banner_public_id: "",
         is_featured: false,
         sort_order: 0,
       })
+      setCategoryImage({ preview: null, file: null, progress: 0, isUploading: false })
+      setBannerImage({ preview: null, file: null, progress: 0, isUploading: false })
     }
+    
+    setDeleteOldImage(false)
+    setDeleteOldBanner(false)
+    setSlugError("")
   }, [editingCategory, open])
 
+  // Auto-generate slug from name
   const handleNameChange = (name: string) => {
     setFormData((prev) => ({
       ...prev,
       name,
       slug: name.toLowerCase().replace(/\s+/g, "-").replace(/[^\w-]/g, ""),
     }))
+    setSlugError("")
   }
 
-  const handleImageUpload = async (file: File, type: "category" | "banner") => {
+  // Validate slug uniqueness
+  const validateSlug = async (slug: string) => {
+    if (!slug) {
+      setSlugError("")
+      return true
+    }
+
+    setSlugValidating(true)
+    try {
+      // Check if slug already exists (excluding current category)
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/admin/shop-categories/categories?slug=${slug}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")}`,
+          },
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        const existingCategory = data.categories?.find((cat: Category) => 
+          cat.slug === slug && cat.id !== editingCategory?.id
+        )
+        
+        if (existingCategory) {
+          setSlugError("This slug already exists")
+          return false
+        }
+      }
+      
+      setSlugError("")
+      return true
+    } catch (error) {
+      console.error("Slug validation error:", error)
+      return true
+    } finally {
+      setSlugValidating(false)
+    }
+  }
+
+  // Handle category image selection
+  const handleCategoryImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
     if (!file) return
 
+    // Validate file
+    const validation = validateImageFile(file)
+    if (!validation.valid) {
+      toast({
+        title: "Invalid Image",
+        description: validation.error,
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
-      setUploadingImage(type)
+      const preview = await createImagePreview(file)
+      setCategoryImage({
+        preview,
+        file,
+        progress: 0,
+        isUploading: false,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to preview image",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Handle banner image selection
+  const handleBannerImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const validation = validateImageFile(file)
+    if (!validation.valid) {
+      toast({
+        title: "Invalid Image",
+        description: validation.error,
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const preview = await createImagePreview(file)
+      setBannerImage({
+        preview,
+        file,
+        progress: 0,
+        isUploading: false,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to preview image",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Upload image to Cloudinary via backend
+  const uploadImageToCloudinary = async (file: File, type: "category" | "banner") => {
+    const imageState = type === "category" ? categoryImage : bannerImage
+    const setImageState = type === "category" ? setCategoryImage : setBannerImage
+
+    try {
+      setImageState(prev => ({ ...prev, isUploading: true, progress: 20 }))
+
       const formDataObj = new FormData()
       formDataObj.append("file", file)
 
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-
       const endpoint = `${baseUrl}/api/admin/shop-categories/categories/upload-image`
-      console.log(`[v0] Uploading ${type} image to: ${endpoint}`)
+
+      setImageState(prev => ({ ...prev, progress: 40 }))
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -122,55 +283,64 @@ export function CategoryFormDialog({
         body: formDataObj,
       })
 
-      console.log(`[v0] Response status: ${response.status}`)
+      setImageState(prev => ({ ...prev, progress: 80 }))
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error(`[v0] Upload error response:`, errorData)
         throw new Error(errorData.error || "Upload failed")
       }
 
       const data = await response.json()
-      console.log(`[v0] Full response data:`, data)
+      const imageUrl = data.secure_url || data.url
+      const publicId = data.public_id
 
-      const fieldName = type === "category" ? "image_url" : "banner_url"
-      const imageUrl = data.url || data.secure_url || data.data
-
-      console.log(`[v0] Extracted image URL: ${imageUrl}`)
-      console.log(`[v0] Field name to update: ${fieldName}`)
-
-      if (!imageUrl) {
-        console.error(`[v0] No image URL found in response`, data)
-        throw new Error("No image URL returned from server")
+      if (!imageUrl || !publicId) {
+        throw new Error("Invalid response from server")
       }
 
-      console.log(`[v0] Setting ${fieldName} to: ${imageUrl}`)
-      setFormData((prev) => {
-        const updated = {
-          ...prev,
-          [fieldName]: imageUrl,
-        }
-        console.log(`[v0] Updated formData:`, updated)
-        return updated
-      })
+      // Update form data with URL and public_id
+      const fieldUrl = type === "category" ? "image_url" : "banner_url"
+      const fieldPublicId = type === "category" ? "image_public_id" : "banner_public_id"
+
+      setFormData(prev => ({
+        ...prev,
+        [fieldUrl]: imageUrl,
+        [fieldPublicId]: publicId,
+      }))
+
+      setImageState(prev => ({ ...prev, progress: 100, isUploading: false }))
 
       toast({
         title: "Success",
-        description: `${type === "category" ? "Category" : "Banner"} image uploaded`,
+        description: `${type === "category" ? "Category" : "Banner"} image uploaded successfully`,
       })
     } catch (error) {
-      console.error("Error uploading image:", error)
+      console.error("Upload error:", error)
+      setImageState(prev => ({ ...prev, isUploading: false, progress: 0 }))
       toast({
-        title: "Error",
+        title: "Upload Failed",
         description: error instanceof Error ? error.message : "Failed to upload image",
         variant: "destructive",
       })
-    } finally {
-      setUploadingImage(null)
     }
   }
 
+  // Clear image
+  const clearImage = (type: "category" | "banner") => {
+    if (type === "category") {
+      setCategoryImage({ preview: null, file: null, progress: 0, isUploading: false })
+      setFormData(prev => ({ ...prev, image_url: "", image_public_id: "" }))
+      if (categoryImageRef.current) categoryImageRef.current.value = ""
+    } else {
+      setBannerImage({ preview: null, file: null, progress: 0, isUploading: false })
+      setFormData(prev => ({ ...prev, banner_url: "", banner_public_id: "" }))
+      if (bannerImageRef.current) bannerImageRef.current.value = ""
+    }
+  }
+
+  // Handle form save
   const handleSave = async () => {
+    // Validation
     if (!formData.name.trim()) {
       toast({
         title: "Validation Error",
@@ -189,124 +359,70 @@ export function CategoryFormDialog({
       return
     }
 
+    // Validate slug
+    const isSlugValid = await validateSlug(formData.slug)
+    if (!isSlugValid) {
+      toast({
+        title: "Validation Error",
+        description: "Category slug already exists",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setSaving(true)
       const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 
-      // Extract base64 data from data URLs if they exist
-      let imageData = formData.image_url
-      let imageMimetype = "image/jpeg"
-      if (formData.image_url?.startsWith("data:")) {
-        const matches = formData.image_url.match(/^data:([^;]+);base64,(.+)$/)
-        if (matches) {
-          imageMimetype = matches[1]
-          imageData = matches[2]
-        }
-      }
-
-      let bannerData = formData.banner_url
-      let bannerMimetype = "image/jpeg"
-      if (formData.banner_url?.startsWith("data:")) {
-        const matches = formData.banner_url.match(/^data:([^;]+);base64,(.+)$/)
-        if (matches) {
-          bannerMimetype = matches[1]
-          bannerData = matches[2]
-        }
-      }
-
       const payload: Record<string, any> = {
         name: formData.name.trim(),
         slug: formData.slug || formData.name.toLowerCase().replace(/\s+/g, "-"),
         description: formData.description.trim(),
+        image_url: formData.image_url,
+        image_public_id: formData.image_public_id,
+        banner_url: formData.banner_url || undefined,
+        banner_public_id: formData.banner_public_id || undefined,
         is_featured: formData.is_featured,
         sort_order: formData.sort_order,
+        delete_old_image: deleteOldImage && editingCategory?.image_public_id ? true : false,
+        delete_old_banner: deleteOldBanner && editingCategory?.banner_public_id ? true : false,
       }
 
-      // Helper to normalize URLs for comparison (remove cache-busting params)
-      const normalizeUrl = (url: string | undefined) => {
-        if (!url) return ""
-        // Remove query parameters and cache-busting timestamps
-        return url.split("?")[0].split("#")[0].trim()
-      }
-
-      const normalizedImageUrl = normalizeUrl(editingCategory?.image_url)
-      const normalizedBannerUrl = normalizeUrl(editingCategory?.banner_url)
-      const normalizedImageData = normalizeUrl(imageData)
-      const normalizedBannerData = normalizeUrl(bannerData)
-
-      // Add image data - Always include if it's a Cloudinary URL or if it changed from original
-      if (imageData) {
-        if (imageData.includes("base64") || (!imageData.startsWith("http") && !imageData.startsWith("https"))) {
-          // Base64 encoded data - send as base64
-          payload.image_data = imageData
-          payload.image_mimetype = imageMimetype
-          payload.image_filename = "category_image.jpg"
-        } else {
-          // URL-based image (e.g., from Cloudinary or external) - send as URL
-          // Always send it regardless of whether it changed, to ensure persistence
-          payload.image_url = imageData
-        }
-      }
-
-      // Add banner data - Always include if it exists
-      if (bannerData) {
-        if (bannerData.includes("base64") || (!bannerData.startsWith("http") && !bannerData.startsWith("https"))) {
-          // Base64 encoded data - send as base64
-          payload.banner_data = bannerData
-          payload.banner_mimetype = bannerMimetype
-          payload.banner_filename = "category_banner.jpg"
-        } else {
-          // URL-based image - send as URL
-          payload.banner_url = bannerData
-        }
-      }
-
-      const url = editingCategory
+      const method = editingCategory ? "PUT" : "POST"
+      const endpoint = editingCategory 
         ? `${baseUrl}/api/admin/shop-categories/categories/${editingCategory.id}`
         : `${baseUrl}/api/admin/shop-categories/categories`
 
-      console.log(`[v0] Sending payload to ${editingCategory ? "UPDATE" : "CREATE"} endpoint:`, payload)
-      console.log(`[v0] Endpoint URL: ${url}`)
-      console.log(`[v0] Request method: ${editingCategory ? "PUT" : "POST"}`)
-
-      const response = await fetch(url, {
-        method: editingCategory ? "PUT" : "POST",
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error(`[v0] API Error: ${response.status}`, errorData)
-        throw new Error(errorData.error || "Failed to save category")
+        throw new Error(errorData.error || `Failed to ${editingCategory ? "update" : "create"} category`)
       }
 
-      const responseData = await response.json()
-      console.log(`[v0] Save successful, response:`, responseData)
+      const result = await response.json()
 
       toast({
         title: "Success",
-        description: editingCategory ? "Category updated successfully" : "Category created successfully",
+        description: `Category ${editingCategory ? "updated" : "created"} successfully`,
       })
 
-      await websocketService.emit("category_updated", {
-        type: editingCategory ? "updated" : "created",
-        category: payload,
-      })
+      // Refresh SWR cache
+      mutate("/api/admin/shop-categories/categories")
 
-      // Clear caches and force a full refresh of categories
-      categoryService.clearCache()
-      mutate((key: any) => typeof key === "string" && key.includes("categories"), undefined, { revalidate: true })
-
-      // Close dialog and refetch immediately with cache busting to get updated image URLs
+      // Close dialog
       onOpenChange(false)
       onSaveSuccess(true)
     } catch (error) {
-      console.error("Error saving category:", error)
+      console.error("Save error:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to save category",
@@ -317,268 +433,352 @@ export function CategoryFormDialog({
     }
   }
 
-  return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title={editingCategory ? "Edit Category" : "Create Category"}
-      description={
-        editingCategory
-          ? "Update your category details and visibility settings"
-          : "Set up a new category for your store"
-      }
-      size="lg"
-      footer={
-        <ModalFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={saving}
-            className="flex-1 sm:flex-none h-10 rounded-lg font-medium"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={saving || !formData.name.trim() || !formData.image_url}
-            className="flex-1 sm:flex-none h-10 rounded-lg font-medium gap-2"
-          >
-            {saving ? (
-              <>
-                <Loader className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                {editingCategory ? "Update" : "Create"} Category
-              </>
-            )}
-          </Button>
-        </ModalFooter>
-      }
-    >
-      <ModalBody className="space-y-6">
-        {/* Images Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-blue-600" />
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Images</h3>
-          </div>
+  const isFormValid = formData.name.trim() && formData.image_url && !slugError && !slugValidating
+  const isLoading = categoryImage.isUploading || bannerImage.isUploading || saving || slugValidating
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Category Image */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-gray-900">
+  return (
+    <Modal open={open} onOpenChange={onOpenChange}>
+      <ModalHeader>
+        <ModalTitle>{editingCategory ? "Edit Category" : "Add Category"}</ModalTitle>
+        <ModalDescription>
+          {editingCategory ? "Update your category details and visibility settings" : "Create a new product category"}
+        </ModalDescription>
+      </ModalHeader>
+
+      <ModalBody className="space-y-6 max-h-[70vh] overflow-y-auto">
+        {/* Images Section */}
+        <div className="space-y-6 border-b pb-6">
+          <h3 className="text-sm font-semibold text-gray-900">Images</h3>
+
+          {/* Category Image */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium text-gray-700">
                 Category Image <span className="text-red-500">*</span>
               </Label>
-              <div
-                className="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors duration-200 h-32 group cursor-pointer"
-                onClick={() => categoryImageRef.current?.click()}
-              >
+              {formData.image_url && (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Uploaded
+                </span>
+              )}
+            </div>
+
+            {categoryImage.preview || formData.image_url ? (
+              <div className="relative w-full h-48 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                 <Image
-                  src={getValidImageUrl(formData.image_url)}
+                  src={categoryImage.preview || getCategoryDisplayImageUrl(formData.image_url)}
                   alt="Category preview"
                   fill
-                  className="object-cover group-hover:opacity-90 transition-opacity"
+                  className="object-cover"
                 />
-                {!formData.image_url && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <div className="text-center">
-                      <ImageIcon className="h-8 w-8 text-white mx-auto mb-2" />
-                      <p className="text-xs text-white font-medium">Click to upload</p>
+                
+                {categoryImage.isUploading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
+                      <div className="text-sm">{categoryImage.progress}%</div>
                     </div>
                   </div>
                 )}
               </div>
-              <input
-                ref={categoryImageRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) handleImageUpload(file, "category")
-                }}
-                disabled={uploadingImage === "category"}
-              />
+            ) : (
+              <div
+                onClick={() => categoryImageRef.current?.click()}
+                className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-gray-400 transition-colors"
+              >
+                <div className="text-center">
+                  <ImageIcon className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600">Click to upload category image</p>
+                  <p className="text-xs text-gray-500 mt-1">Max 10MB (JPEG, PNG, WebP, GIF)</p>
+                </div>
+              </div>
+            )}
+
+            <input
+              ref={categoryImageRef}
+              type="file"
+              accept="image/*"
+              onChange={handleCategoryImageChange}
+              className="hidden"
+              disabled={categoryImage.isUploading}
+            />
+
+            <div className="flex gap-2">
               <Button
                 type="button"
-                variant="outline"
                 onClick={() => categoryImageRef.current?.click()}
-                disabled={uploadingImage === "category"}
-                className="w-full h-9 rounded-lg font-medium text-sm"
+                disabled={categoryImage.isUploading || saving}
+                className="flex-1"
+                variant="outline"
               >
-                {uploadingImage === "category" ? (
-                  <>
-                    <Loader className="h-4 w-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    {formData.image_url ? "Change" : "Upload"} Image
-                  </>
-                )}
+                <Upload className="w-4 h-4 mr-2" />
+                {categoryImage.file ? "Change Image" : "Upload Image"}
               </Button>
+
+              {categoryImage.file && !categoryImage.isUploading && (
+                <Button
+                  type="button"
+                  onClick={() => uploadImageToCloudinary(categoryImage.file!, "category")}
+                  disabled={saving}
+                  className="flex-1"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload to Cloud
+                </Button>
+              )}
+
+              {formData.image_url && (
+                <Button
+                  type="button"
+                  onClick={() => clearImage("category")}
+                  disabled={categoryImage.isUploading || saving}
+                  variant="outline"
+                  size="icon"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
             </div>
 
-            {/* Banner Image */}
-            <div className="space-y-3">
-              <Label className="text-sm font-semibold text-gray-900">
+            {categoryImage.file && !categoryImage.isUploading && !formData.image_url && (
+              <p className="text-xs text-amber-600">
+                ⚠️ Image selected but not uploaded yet. Click "Upload to Cloud" to save it.
+              </p>
+            )}
+
+            {editingCategory?.image_public_id && formData.image_url && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteOldImage}
+                  onChange={(e) => setDeleteOldImage(e.target.checked)}
+                  disabled={saving}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <span className="text-xs text-gray-600">
+                  Delete old image from CDN when updating (optional)
+                </span>
+              </label>
+            )}
+          </div>
+
+          {/* Banner Image (Optional) */}
+          <div className="space-y-3 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium text-gray-700">
                 Banner Image <span className="text-gray-400">(Optional)</span>
               </Label>
-              <div
-                className="relative rounded-xl overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-dashed border-gray-300 hover:border-blue-400 transition-colors duration-200 h-32 group cursor-pointer"
-                onClick={() => bannerImageRef.current?.click()}
-              >
+              {formData.banner_url && (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Uploaded
+                </span>
+              )}
+            </div>
+
+            {bannerImage.preview || formData.banner_url ? (
+              <div className="relative w-full h-24 bg-gray-100 rounded-lg overflow-hidden border border-gray-200">
                 <Image
-                  src={getValidImageUrl(formData.banner_url)}
+                  src={bannerImage.preview || getBannerImageUrl(formData.banner_url)}
                   alt="Banner preview"
                   fill
-                  className="object-cover group-hover:opacity-90 transition-opacity"
+                  className="object-cover"
                 />
-                {!formData.banner_url && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <div className="text-center">
-                      <ImageIcon className="h-8 w-8 text-white mx-auto mb-2" />
-                      <p className="text-xs text-white font-medium">Click to upload</p>
+                
+                {bannerImage.isUploading && (
+                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                    <div className="text-center text-white">
+                      <Loader className="w-6 h-6 animate-spin mx-auto mb-2" />
+                      <div className="text-sm">{bannerImage.progress}%</div>
                     </div>
                   </div>
                 )}
               </div>
-              <input
-                ref={bannerImageRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) handleImageUpload(file, "banner")
-                }}
-                disabled={uploadingImage === "banner"}
-              />
+            ) : (
+              <div
+                onClick={() => bannerImageRef.current?.click()}
+                className="w-full h-20 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center cursor-pointer hover:border-gray-400 transition-colors"
+              >
+                <p className="text-xs text-gray-500">Click to upload banner image (optional)</p>
+              </div>
+            )}
+
+            <input
+              ref={bannerImageRef}
+              type="file"
+              accept="image/*"
+              onChange={handleBannerImageChange}
+              className="hidden"
+              disabled={bannerImage.isUploading}
+            />
+
+            <div className="flex gap-2">
               <Button
                 type="button"
-                variant="outline"
                 onClick={() => bannerImageRef.current?.click()}
-                disabled={uploadingImage === "banner"}
-                className="w-full h-9 rounded-lg font-medium text-sm"
+                disabled={bannerImage.isUploading || saving}
+                className="flex-1"
+                variant="outline"
               >
-                {uploadingImage === "banner" ? (
-                  <>
-                    <Loader className="h-4 w-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    {formData.banner_url ? "Change" : "Upload"} Banner
-                  </>
-                )}
+                <Upload className="w-4 h-4 mr-2" />
+                {bannerImage.file ? "Change Banner" : "Upload Banner"}
               </Button>
+
+              {bannerImage.file && !bannerImage.isUploading && (
+                <Button
+                  type="button"
+                  onClick={() => uploadImageToCloudinary(bannerImage.file!, "banner")}
+                  disabled={saving}
+                  className="flex-1"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload
+                </Button>
+              )}
+
+              {formData.banner_url && (
+                <Button
+                  type="button"
+                  onClick={() => clearImage("banner")}
+                  disabled={bannerImage.isUploading || saving}
+                  variant="outline"
+                  size="icon"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
             </div>
+
+            {editingCategory?.banner_public_id && formData.banner_url && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteOldBanner}
+                  onChange={(e) => setDeleteOldBanner(e.target.checked)}
+                  disabled={saving}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <span className="text-xs text-gray-600">
+                  Delete old banner from CDN when updating (optional)
+                </span>
+              </label>
+            )}
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="h-px bg-gray-200" />
-
-        {/* Category Details Section */}
+        {/* Details Section */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-blue-600" />
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Details</h3>
-          </div>
+          <h3 className="text-sm font-semibold text-gray-900">Details</h3>
 
           <div className="space-y-3">
-            <div>
-              <Label htmlFor="name" className="text-sm font-semibold text-gray-900">
-                Category Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Enter category name"
-                className="mt-2 h-10 rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="slug" className="text-sm font-semibold text-gray-900">
-                URL Slug
-              </Label>
-              <Input
-                id="slug"
-                value={formData.slug}
-                onChange={(e) => setFormData((prev) => ({ ...prev, slug: e.target.value }))}
-                placeholder="category-slug"
-                className="mt-2 h-10 rounded-lg font-mono text-xs border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="description" className="text-sm font-semibold text-gray-900">
-                Description
-              </Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Add a description for this category"
-                rows={3}
-                className="mt-2 rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500 resize-none"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="h-px bg-gray-200" />
-
-        {/* Settings Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-blue-600" />
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Settings</h3>
-          </div>
-
-          {/* Featured Toggle */}
-          <div className="flex items-center justify-between p-4 rounded-xl bg-blue-50/50 border border-blue-100 hover:bg-blue-50 transition-colors">
-            <div className="space-y-0.5">
-              <p className="text-sm font-semibold text-gray-900">Featured Category</p>
-              <p className="text-xs text-gray-600">Display on homepage</p>
-            </div>
-            <Switch
-              checked={formData.is_featured}
-              onCheckedChange={(checked) =>
-                setFormData((prev) => ({ ...prev, is_featured: checked }))
-              }
+            <Label htmlFor="category-name" className="text-sm font-medium text-gray-700">
+              Category Name <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="category-name"
+              value={formData.name}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="e.g., Electronics"
+              disabled={isLoading}
+              className="text-sm"
             />
           </div>
 
-          {/* Sort Order */}
-          <div>
-            <Label htmlFor="sort_order" className="text-sm font-semibold text-gray-900">
-              Display Order
+          <div className="space-y-3">
+            <Label htmlFor="category-slug" className="text-sm font-medium text-gray-700">
+              URL Slug <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <Input
+                id="category-slug"
+                value={formData.slug}
+                onChange={(e) => {
+                  setFormData(prev => ({ ...prev, slug: e.target.value }))
+                  setSlugError("")
+                }}
+                placeholder="e.g., electronics"
+                disabled={isLoading}
+                className={`text-sm ${slugError ? "border-red-500" : ""}`}
+              />
+              {slugValidating && (
+                <Loader className="absolute right-3 top-3 w-4 h-4 animate-spin text-gray-400" />
+              )}
+            </div>
+            {slugError && (
+              <p className="text-xs text-red-600">{slugError}</p>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            <Label htmlFor="category-description" className="text-sm font-medium text-gray-700">
+              Description
+            </Label>
+            <Textarea
+              id="category-description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Describe this category..."
+              disabled={isLoading}
+              rows={3}
+              className="text-sm resize-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <Switch
+              id="is-featured"
+              checked={formData.is_featured}
+              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_featured: checked }))}
+              disabled={isLoading}
+            />
+            <Label htmlFor="is-featured" className="text-sm font-medium text-gray-700 cursor-pointer">
+              Featured Category
+            </Label>
+          </div>
+
+          <div className="space-y-3">
+            <Label htmlFor="sort-order" className="text-sm font-medium text-gray-700">
+              Sort Order
             </Label>
             <Input
-              id="sort_order"
+              id="sort-order"
               type="number"
               value={formData.sort_order}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  sort_order: Number.parseInt(e.target.value) || 0,
-                }))
-              }
-              min={0}
-              className="mt-2 h-10 rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+              onChange={(e) => setFormData(prev => ({ ...prev, sort_order: parseInt(e.target.value) || 0 }))}
+              disabled={isLoading}
+              className="text-sm"
             />
           </div>
         </div>
       </ModalBody>
+
+      <ModalFooter className="gap-2 pt-4 border-t">
+        <Button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          disabled={isLoading}
+          variant="outline"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          onClick={handleSave}
+          disabled={!isFormValid || isLoading}
+          className="min-w-[120px]"
+        >
+          {saving ? (
+            <>
+              <Loader className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              {editingCategory ? "Update" : "Create"}
+            </>
+          )}
+        </Button>
+      </ModalFooter>
     </Modal>
   )
 }
