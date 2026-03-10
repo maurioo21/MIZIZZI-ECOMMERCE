@@ -355,4 +355,76 @@ export const categoryService = {
       sessionStorage.removeItem("categories")
     }
   },
+
+  async createCategory(data: any): Promise<Category> {
+    try {
+      const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
+      if (!token) {
+        throw new Error("No authentication token available")
+      }
+
+      const baseUrl = getBaseUrl()
+      const response = await fetch(`${baseUrl}/api/admin/shop-categories/categories`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to create category")
+      }
+
+      const result = await response.json()
+      const category = result.category || result
+
+      // Clear cache after creating
+      this.clearCache()
+
+      return normalizeCategoryImages(category)
+    } catch (error) {
+      console.error("Error creating category:", error)
+      throw error
+    }
+  },
+
+  async updateCategory(id: number | string, data: any): Promise<Category> {
+    try {
+      const token = localStorage.getItem("admin_token") || localStorage.getItem("mizizzi_token")
+      if (!token) {
+        throw new Error("No authentication token available")
+      }
+
+      const baseUrl = getBaseUrl()
+      const response = await fetch(`${baseUrl}/api/admin/shop-categories/categories/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || errorData.message || "Failed to update category")
+      }
+
+      const result = await response.json()
+      const category = result.category || result
+
+      // Clear cache after updating
+      this.clearCache()
+
+      return normalizeCategoryImages(category)
+    } catch (error) {
+      console.error("Error updating category:", error)
+      throw error
+    }
+  },
 }

@@ -95,9 +95,11 @@ export function CategoryFormDialog({
   const handleImageSelect = async (file: File | null, isCategory: boolean) => {
     if (!file) return
 
-    const error = validateImageFile(file)
-    if (error) {
-      toast({ title: "Invalid image", description: error, variant: "destructive" })
+    const validation = validateImageFile(file)
+    if (!validation.valid) {
+      toast({ title: "Invalid image", description: validation.error || "Image validation failed", variant: "destructive" })
+      return
+    }
       return
     }
 
