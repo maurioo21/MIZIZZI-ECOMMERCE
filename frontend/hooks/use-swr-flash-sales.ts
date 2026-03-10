@@ -4,11 +4,6 @@ import { productService } from "@/services/product"
 import { cloudinaryService } from "@/services/cloudinary-service"
 import { quickFetchProducts, eagerPrefetchProducts } from "@/lib/cache/products-quick-fetch"
 
-// In-memory cache for instant display
-let flashSalesCache: Product[] | null = null
-let lastFetchTime = 0
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
-
 // Process product images
 const processProducts = (products: Product[]): Product[] => {
   return products.map((product) => ({
@@ -41,15 +36,9 @@ const flashSalesFetcher = async (): Promise<Product[]> => {
     }
 
     const processed = processProducts(products || []).slice(0, 12)
-    flashSalesCache = processed
-    lastFetchTime = Date.now()
     return processed
   } catch (error) {
     console.error("Error fetching flash sales:", error)
-    // Return cached data on error if available
-    if (flashSalesCache) {
-      return flashSalesCache
-    }
     throw error
   }
 }
@@ -68,29 +57,23 @@ const defaultConfig: SWRConfiguration = {
 }
 
 export function useFlashSales(config?: SWRConfiguration) {
-  const isCacheFresh = flashSalesCache && Date.now() - lastFetchTime < CACHE_DURATION
-
+  // Fetch fresh data from backend/Redis without frontend caching
   const { data, error, isLoading, isValidating, mutate } = useSWR<Product[]>("flash-sales", flashSalesFetcher, {
     ...defaultConfig,
-    fallbackData: isCacheFresh ? flashSalesCache : undefined,
     ...config,
   })
 
   return {
-    flashSales: data || flashSalesCache || [],
-    isLoading: isLoading && !flashSalesCache,
+    flashSales: data || [],
+    isLoading,
     isValidating,
     isError: error,
     mutate,
-    hasCachedData: !!flashSalesCache || !!data,
+    hasCachedData: !!data,
   }
 }
 
 export async function prefetchFlashSales(): Promise<void> {
-  if (flashSalesCache && Date.now() - lastFetchTime < CACHE_DURATION) {
-    return
-  }
-
   try {
     await eagerPrefetchProducts({
       limit: 12,
@@ -106,12 +89,10 @@ export async function prefetchFlashSales(): Promise<void> {
 
 // Invalidate cache - useful when admin updates flash sales
 export async function invalidateFlashSales(): Promise<void> {
-  flashSalesCache = null
-  lastFetchTime = 0
   await globalMutate("flash-sales")
 }
 
-// Get cached flash sales without triggering fetch
+// Get cached flash sales without triggering fetch (returns null - no frontend cache)
 export function getCachedFlashSales(): Product[] | null {
-  return flashSalesCache
+  return null
 }
