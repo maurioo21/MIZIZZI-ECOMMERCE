@@ -3,6 +3,7 @@ export interface CarouselBanner {
   name: string
   position: string
   image_url: string
+  image_public_id?: string  // Cloudinary public_id for efficient image management
   title: string
   description?: string
   badge_text?: string
