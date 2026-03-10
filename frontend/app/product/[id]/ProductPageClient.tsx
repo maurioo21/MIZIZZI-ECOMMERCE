@@ -2,6 +2,7 @@
 import { use } from "react"
 import { notFound } from "next/navigation"
 import ProductDetailsEnhanced from "@/components/products/product-details-enhanced"
+import ProductDetailsMobile from "@/components/products/product-details-mobile"
 import { productService } from "@/services/product"
 
 // Helper function to determine product type
@@ -135,9 +136,17 @@ export default function ProductPageClient({ params }: { params: { id: Promise<st
 
     console.log(`[DEBUG] Rendering product page`)
     return (
-      <div className="container px-4 py-8 sm:px-6 lg:px-8">
-        <ProductDetailsEnhanced product={product} />
-      </div>
+      <>
+        {/* Mobile View - Hidden on Desktop */}
+        <div className="block lg:hidden">
+          <ProductDetailsMobile product={product} initialReviews={product.reviews} />
+        </div>
+
+        {/* Desktop View - Hidden on Mobile */}
+        <div className="hidden lg:block container px-4 py-8 sm:px-6 lg:px-8">
+          <ProductDetailsEnhanced product={product} />
+        </div>
+      </>
     )
   } catch (error) {
     console.error(
