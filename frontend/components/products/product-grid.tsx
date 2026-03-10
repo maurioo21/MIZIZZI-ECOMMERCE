@@ -1,128 +1,170 @@
 "use client"
-import { useState, useEffect, useCallback, memo, useRef } from "react"
+import { useState, useEffect, useCallback, memo, useRef, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
 import { productService } from "@/services/product"
 import { ShoppingBag, Star, Package } from "lucide-react"
 import type { Product } from "@/types"
+import { cloudinaryService } from "@/services/cloudinary-service"
 
-const LogoPlaceholder = () => (
+type ProductImageLike = {
+  url?: string
+  is_primary?: boolean
+}
+
+const LogoPlaceholder = memo(() => (
   <div className="absolute inset-0 flex items-center justify-center bg-white">
-    <motion.div
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="relative h-6 w-6 sm:h-8 sm:w-8"
-    >
-      <Image
-        src="/images/screenshot-20from-202025-02-18-2013-30-22.png"
-        alt="Loading"
-        fill
-        sizes="32px"
-        className="object-contain"
-      />
-    </motion.div>
+    <div className="relative h-6 w-6 sm:h-8 sm:w-8">
+      <Image src="/logo.png" alt="Loading" fill sizes="32px" className="object-contain" />
+    </div>
   </div>
-)
+))
 
-const getProductImageUrl = (product: Product): string => {
-  // Priority 0: Check direct image field (from homepage API)
-  if ((product as any).image && typeof (product as any).image === "string" && (product as any).image.length > 0) {
-    const imageUrl = (product as any).image
-    if (imageUrl.startsWith("http") || imageUrl.startsWith("/")) {
-      return imageUrl
+LogoPlaceholder.displayName = "LogoPlaceholder"
+
+function optimizeImageUrl(rawUrl?: string): string {
+  if (!rawUrl || typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
+    return ""
+  }
+
+  if (rawUrl.startsWith("http") || rawUrl.startsWith("/")) {
+    return rawUrl
+  }
+
+  const optimized = cloudinaryService.generateOptimizedUrl(rawUrl)
+  return optimized && optimized !== "/placeholder.svg" ? optimized : ""
+}
+
+function resolvePrimaryImage(product: Product): string {
+  const directImage = optimizeImageUrl((product as any).image)
+  if (directImage) return directImage
+
+  const thumbnail = optimizeImageUrl(product.thumbnail_url)
+  if (thumbnail) return thumbnail
+
+  if (Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+    for (const url of product.image_urls) {
+      const resolved = optimizeImageUrl(url)
+      if (resolved) return resolved
     }
   }
 
-  // Priority 1: Check thumbnail_url
-  if (product.thumbnail_url && typeof product.thumbnail_url === "string" && product.thumbnail_url.length > 0) {
-    if (product.thumbnail_url.startsWith("http") || product.thumbnail_url.startsWith("/")) {
-      return product.thumbnail_url
-    }
-  }
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    const primary = product.images.find((img: any) => img?.is_primary && img?.url)
+    const firstValid = primary || product.images.find((img: any) => img?.url)
 
-  // Priority 2: Check image_urls array
-  if (product.image_urls && Array.isArray(product.image_urls) && product.image_urls.length > 0) {
-    const firstUrl = product.image_urls[0]
-    if (typeof firstUrl === "string" && firstUrl.length > 0) {
-      if (firstUrl.startsWith("http") || firstUrl.startsWith("/")) {
-        return firstUrl
-      }
-    }
-  }
-
-  // Priority 3: Check images array
-  if (product.images && Array.isArray(product.images) && product.images.length > 0) {
-    const primaryImage = product.images.find((img: any) => img.is_primary)
-    const imageToUse = primaryImage || product.images[0]
-    if (imageToUse && imageToUse.url) {
-      if (typeof imageToUse.url === "string" && imageToUse.url.length > 0) {
-        if (imageToUse.url.startsWith("http") || imageToUse.url.startsWith("/")) {
-          return imageToUse.url
-        }
-      }
+    if (firstValid?.url) {
+      const resolved = optimizeImageUrl(firstValid.url)
+      if (resolved) return resolved
     }
   }
 
   return ""
 }
 
-const StarRating = ({ rating = 4, reviewCount = 0 }: { rating?: number; reviewCount?: number }) => {
+function resolveSecondaryImage(product: Product, primaryImageUrl: string): string {
+  const seen = new Set<string>()
+  if (primaryImageUrl) {
+    seen.add(primaryImageUrl)
+  }
+
+  if (Array.isArray(product.image_urls) && product.image_urls.length > 1) {
+    for (const rawUrl of product.image_urls) {
+      const resolved = optimizeImageUrl(rawUrl)
+      if (resolved && !seen.has(resolved)) {
+        return resolved
+      }
+    }
+  }
+
+  if (Array.isArray(product.images) && product.images.length > 1) {
+    const normalizedImages = product.images
+      .map((img: ProductImageLike) => ({
+        resolved: optimizeImageUrl(img?.url),
+        isPrimary: Boolean(img?.is_primary),
+      }))
+      .filter((img) => Boolean(img.resolved))
+
+    const nonPrimaryDifferent = normalizedImages.find((img) => !img.isPrimary && img.resolved && !seen.has(img.resolved))
+    if (nonPrimaryDifferent?.resolved) {
+      return nonPrimaryDifferent.resolved
+    }
+
+    const anyDifferent = normalizedImages.find((img) => img.resolved && !seen.has(img.resolved))
+    if (anyDifferent?.resolved) {
+      return anyDifferent.resolved
+    }
+  }
+
+  return ""
+}
+
+const StarRating = memo(function StarRating({ rating = 4 }: { rating?: number }) {
+  const safeRating = Math.min(5, Math.max(1, rating))
+
   return (
-    <div className="flex items-center gap-0.5 sm:gap-1">
+    <div className="flex items-center">
       <div className="flex">
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-3.5 md:w-3.5 ${
-              star <= Math.floor(rating)
+            className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${star <= Math.floor(safeRating)
                 ? "fill-yellow-400 text-yellow-400"
-                : star - 0.5 <= rating
+                : star - 0.5 <= safeRating
                   ? "fill-yellow-400/50 text-yellow-400"
                   : "fill-gray-200 text-gray-200"
-            }`}
+              }`}
           />
         ))}
       </div>
-      {reviewCount > 0 && (
-        <span className="text-[8px] sm:text-[10px] md:text-xs text-gray-400">({reviewCount.toLocaleString()})</span>
-      )}
     </div>
   )
-}
+})
 
 const ProductCard = memo(
   ({ product, index, isNewlyLoaded = false }: { product: Product; index: number; isNewlyLoaded?: boolean }) => {
     const [imageLoaded, setImageLoaded] = useState(false)
     const [imageError, setImageError] = useState(false)
     const [showPlaceholder, setShowPlaceholder] = useState(true)
+    const [isHovering, setIsHovering] = useState(false)
+    const [primaryImageLoaded, setPrimaryImageLoaded] = useState(false)
+    const [secondaryImageLoaded, setSecondaryImageLoaded] = useState(false)
 
     const discountPercentage = product.sale_price
       ? Math.round(((product.price - product.sale_price) / product.price) * 100)
       : 0
 
-    const handleImageLoad = useCallback(() => {
+    const primaryImage = useMemo(() => resolvePrimaryImage(product), [product])
+    const secondaryImage = useMemo(() => resolveSecondaryImage(product, primaryImage), [product, primaryImage])
+    const hasHoverImage = Boolean(secondaryImage)
+
+    const handlePrimaryImageLoad = useCallback(() => {
+      setPrimaryImageLoaded(true)
       setImageLoaded(true)
       setTimeout(() => setShowPlaceholder(false), 300)
     }, [])
 
-    const handleImageError = useCallback(() => {
+    const handlePrimaryImageError = useCallback(() => {
       setImageError(true)
-      setImageLoaded(false)
+      setPrimaryImageLoaded(false)
+    }, [])
+
+    const handleSecondaryImageLoad = useCallback(() => {
+      setSecondaryImageLoaded(true)
     }, [])
 
     const productId = product.id
     useEffect(() => {
+      setPrimaryImageLoaded(false)
+      setSecondaryImageLoaded(false)
       setImageLoaded(false)
       setImageError(false)
       setShowPlaceholder(true)
+      setIsHovering(false)
     }, [productId])
 
-    const imageUrl = getProductImageUrl(product) || "/diverse-fashion-display.png"
-
-    const rating = product.rating || 3 + Math.random() * 2
-    const reviewCount = product.review_count || Math.floor(Math.random() * 5000) + 100
+    const rating = product.rating || 3.5 + Math.random() * 1.5
 
     const cardVariants = {
       hidden: {
@@ -153,7 +195,11 @@ const ProductCard = memo(
           className="h-full"
         >
           <div className="group h-full overflow-hidden bg-white border-b border-r border-gray-100 transition-all duration-200 hover:shadow-sm">
-            <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
+            <div
+              className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
+              onMouseEnter={() => hasHoverImage && setIsHovering(true)}
+              onMouseLeave={() => setIsHovering(false)}
+            >
               <AnimatePresence>
                 {(showPlaceholder || imageError) && (
                   <motion.div
@@ -166,23 +212,47 @@ const ProductCard = memo(
                 )}
               </AnimatePresence>
 
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: imageLoaded ? 1 : 0 }}
-                transition={{ duration: 0.3 }}
-                className="absolute inset-0"
-              >
-                <Image
-                  src={imageUrl || "/placeholder.svg"}
-                  alt={product.name}
-                  fill
-                  sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
-                  onLoad={handleImageLoad}
-                  onError={handleImageError}
-                />
-              </motion.div>
+              {/* Primary Image */}
+              {primaryImage && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: primaryImageLoaded && !isHovering ? 1 : 0 }}
+                  transition={{ duration: 0.4, ease: "easeInOut" }}
+                  className="absolute inset-0"
+                >
+                  <Image
+                    src={primaryImage}
+                    alt={product.name}
+                    fill
+                    sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                    onLoad={handlePrimaryImageLoad}
+                    onError={handlePrimaryImageError}
+                  />
+                </motion.div>
+              )}
+
+              {/* Secondary Image - shows on hover */}
+              {secondaryImage && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: isHovering && secondaryImageLoaded ? 1 : 0 }}
+                  transition={{ duration: 0.4, ease: "easeInOut" }}
+                  className="absolute inset-0"
+                >
+                  <Image
+                    src={secondaryImage}
+                    alt={`${product.name} - alternate view`}
+                    fill
+                    sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                    quality={75}
+                    onLoad={handleSecondaryImageLoad}
+                  />
+                </motion.div>
+              )}
 
               {product.sale_price && discountPercentage > 0 && (
                 <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 bg-[#8B1538] text-white text-[8px] sm:text-[10px] md:text-xs font-medium px-1 sm:px-1.5 py-0.5 rounded-sm z-20">
@@ -207,7 +277,7 @@ const ProductCard = memo(
                 )}
               </div>
 
-              <StarRating rating={rating} reviewCount={reviewCount} />
+              <StarRating rating={rating} />
             </div>
           </div>
         </motion.div>
