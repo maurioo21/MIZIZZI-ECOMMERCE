@@ -20,7 +20,45 @@ const LogoPlaceholder = () => (
   </div>
 )
 
-const StarRating = ({ rating = 4 }: { rating?: number }) => {
+const CountdownTimer = memo(({ initialTimeLeft }: { initialTimeLeft: { hours: number; minutes: number; seconds: number } }) => {
+  const [timeLeft, setTimeLeft] = useState(initialTimeLeft)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        const total = prev.hours * 3600 + prev.minutes * 60 + prev.seconds - 1
+        if (total <= 0) {
+          return { hours: 23, minutes: 59, seconds: 59 }
+        }
+        return {
+          hours: Math.floor(total / 3600),
+          minutes: Math.floor((total % 3600) / 60),
+          seconds: total % 60,
+        }
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  return (
+    <div className="flex gap-1">
+      <div className="bg-white/20 rounded px-1.5 py-0.5 min-w-[24px] text-center">
+        <span className="text-xs font-mono">{String(timeLeft.hours).padStart(2, "0")}</span>
+      </div>
+      <span className="text-xs">:</span>
+      <div className="bg-white/20 rounded px-1.5 py-0.5 min-w-[24px] text-center">
+        <span className="text-xs font-mono">{String(timeLeft.minutes).padStart(2, "0")}</span>
+      </div>
+      <span className="text-xs">:</span>
+      <div className="bg-white/20 rounded px-1.5 py-0.5 min-w-[24px] text-center">
+        <span className="text-xs font-mono">{String(timeLeft.seconds).padStart(2, "0")}</span>
+      </div>
+    </div>
+  )
+})
+
+CountdownTimer.displayName = "CountdownTimer"
+
   return (
     <div className="flex items-center">
       <div className="flex">
@@ -121,10 +159,7 @@ const getProductImageUrl = (product: Product): string => {
 
 const ProductCard = memo(
   ({ product, isMobile, isAboveFold }: { product: FlashSaleProduct | Product; isMobile: boolean; isAboveFold?: boolean }) => {
-  const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
-  const [isHovering, setIsHovering] = useState(false)
-  const imageContainerRef = useRef<HTMLDivElement>(null)
 
   const discountPercentage = product.sale_price
     ? Math.round(((product.price - product.sale_price) / product.price) * 100)
@@ -140,19 +175,17 @@ const ProductCard = memo(
   const ratingFallback = product.rating ?? (product.id ? (parseInt(product.id.toString().slice(-1)) % 2 + 3.5) : 4)
   const rating = typeof ratingFallback === "number" ? Math.min(5, Math.max(1, ratingFallback)) : 4
 
-  const handleImageLoad = useCallback(() => {
-    setImageLoaded(true)
-  }, [])
-
   const handleImageError = useCallback(() => {
     setImageError(true)
   }, [])
 
-  // Get secondary image URL - only from real backend data, no fallback query params
+  // Get secondary image URL - robust resolution from multiple sources
   const getSecondaryImageUrl = (): string => {
-    const imgArray = product.image_urls
-    if (imgArray && Array.isArray(imgArray) && imgArray.length > 1 && imgArray[1]) {
-      const secondUrl = imgArray[1]
+    const product_any = product as any
+    
+    // Priority 1: Check secondary in image_urls array
+    if (product_any.image_urls && Array.isArray(product_any.image_urls) && product_any.image_urls.length > 1) {
+      const secondUrl = product_any.image_urls[1]
       if (typeof secondUrl === "string" && secondUrl.length > 0) {
         if (secondUrl.startsWith("http") || secondUrl.startsWith("/")) {
           return secondUrl
@@ -160,6 +193,32 @@ const ProductCard = memo(
         return cloudinaryService.generateOptimizedUrl(secondUrl)
       }
     }
+    
+    // Priority 2: Check secondary in images array (non-primary)
+    if (product_any.images && Array.isArray(product_any.images) && product_any.images.length > 1) {
+      const secondaryImage = product_any.images.find((img: any) => !img.is_primary)
+      if (!secondaryImage && product_any.images.length > 1) {
+        // Fallback to second image if no non-primary exists
+        const secondImg = product_any.images[1]
+        if (secondImg && secondImg.url) {
+          if (typeof secondImg.url === "string" && secondImg.url.length > 0) {
+            if (secondImg.url.startsWith("http") || secondImg.url.startsWith("/")) {
+              return secondImg.url
+            }
+            return cloudinaryService.generateOptimizedUrl(secondImg.url)
+          }
+        }
+      }
+      if (secondaryImage && secondaryImage.url) {
+        if (typeof secondaryImage.url === "string" && secondaryImage.url.length > 0) {
+          if (secondaryImage.url.startsWith("http") || secondaryImage.url.startsWith("/")) {
+            return secondaryImage.url
+          }
+          return cloudinaryService.generateOptimizedUrl(secondaryImage.url)
+        }
+      }
+    }
+    
     return ""
   }
   
@@ -169,67 +228,41 @@ const ProductCard = memo(
   const imageUrl = getProductImageUrl(product)
   const hasValidImage = imageUrl && imageUrl.length > 0
 
-  const handleImageHover = () => {
-    if (!isMobile && hasMultipleImages) {
-      setIsHovering(true)
-    }
-  }
-
-  const handleImageLeave = () => {
-    setIsHovering(false)
-  }
-
-  // Removed: Debug logging and universal image preloading
-  // Production optimization: Only preload on-hover if needed, not for every card
-
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
       <div className="h-full">
         <div
           className={`group h-full overflow-hidden bg-white border-r border-gray-100 transition-all duration-200 hover:shadow-sm ${isSoldOut ? "opacity-75" : ""}`}
         >
-          <div 
-            ref={imageContainerRef}
-            className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
-            onMouseEnter={handleImageHover}
-            onMouseLeave={handleImageLeave}
-          >
+          <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
             {(imageError || !hasValidImage) && <LogoPlaceholder />}
             {hasValidImage && (
-              <Image
-                src={imageUrl || "/placeholder.svg"}
-                alt={product.name}
-                fill
-                sizes={isMobile ? "25vw" : "16vw"}
-                className="object-cover transition-opacity duration-500"
-                style={{
-                  opacity: isHovering && hasMultipleImages ? 0 : 1,
-                }}
-                loading={isAboveFold ? "eager" : "lazy"}
-                priority={isAboveFold || false}
-                onLoad={handleImageLoad}
-                onError={handleImageError}
-                crossOrigin="anonymous"
-                decoding="async"
-              />
-            )}
+              <>
+                {/* Primary Image - CSS hover state for smooth performance */}
+                <Image
+                  src={imageUrl || "/placeholder.svg"}
+                  alt={product.name}
+                  fill
+                  sizes={isMobile ? "25vw" : "16vw"}
+                  className="object-cover transition-opacity duration-500 group-hover:opacity-0"
+                  loading={isAboveFold ? "eager" : "lazy"}
+                  priority={isAboveFold || false}
+                  onError={handleImageError}
+                />
 
-            {/* Secondary Image - overlay for hover swap */}
-            {hasMultipleImages && secondaryImageUrl && (
-              <Image
-                src={secondaryImageUrl}
-                alt={`${product.name} - alternate view`}
-                fill
-                sizes={isMobile ? "25vw" : "16vw"}
-                className="absolute inset-0 object-cover transition-opacity duration-500"
-                style={{
-                  opacity: isHovering ? 1 : 0,
-                }}
-                loading="lazy"
-                priority={false}
-                crossOrigin="anonymous"
-                decoding="async"
-              />
+                {/* Secondary Image - CSS group-hover for smooth performance */}
+                {hasMultipleImages && secondaryImageUrl && (
+                  <Image
+                    src={secondaryImageUrl}
+                    alt={`${product.name} - alternate view`}
+                    fill
+                    sizes={isMobile ? "25vw" : "16vw"}
+                    className="absolute inset-0 object-cover transition-opacity duration-500 opacity-0 group-hover:opacity-100"
+                    loading="lazy"
+                    priority={false}
+                  />
+                )}
+              </>
             )}
             {product.sale_price && discountPercentage > 0 && (
               <div className="absolute top-1 left-1 bg-[#8B1538] text-white text-[10px] sm:text-xs font-medium px-1.5 py-0.5 rounded-sm z-20 pointer-events-none">
@@ -311,15 +344,17 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
     }
   }
 
-  const [timeLeft, setTimeLeft] = useState(getInitialTimeLeft)
+  const initialTimeLeft = getInitialTimeLeft()
+
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isHovering, setIsHovering] = useState(false)
   const [hoverSide, setHoverSide] = useState<"left" | "right" | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const carouselRef = useRef<HTMLDivElement>(null)
-  const motionDivRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const dragVelocityRef = useRef(0)
+  const wheelListenerRef = useRef<((e: WheelEvent) => void) | null>(null)
+  const hoverSideRef = useRef<"left" | "right" | null>(null)
 
   const isMobile = useMediaQuery("(max-width: 640px)")
   const isSmallMobile = useMediaQuery("(max-width: 480px)")
@@ -344,7 +379,13 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
       const rect = carouselRef.current.getBoundingClientRect()
       const x = e.clientX - rect.left
       const width = rect.width
-      setHoverSide(x < width / 2 ? "left" : "right")
+      const newSide = x < width / 2 ? "left" : "right"
+      
+      // Only update state if hoverSide actually changed
+      if (hoverSideRef.current !== newSide) {
+        hoverSideRef.current = newSide
+        setHoverSide(newSide)
+      }
     },
     [isDragging, isMobile],
   )
@@ -389,41 +430,39 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
   useEffect(() => {
     const currentCarousel = carouselRef.current
     if (!currentCarousel || isMobile) return
+
+    // Create listener once and reuse
     const handleWheelEvent = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) {
         e.preventDefault()
         const threshold = 10
         const delta = e.deltaX || e.deltaY
         if (Math.abs(delta) > threshold) {
-          if (delta > 0 && currentIndex < maxIndex) {
-            goToNext()
-          } else if (delta < 0 && currentIndex > 0) {
-            goToPrevious()
-          }
+          setCurrentIndex((prevIndex) => {
+            const maxIdx = Math.max(0, products.length - itemsPerView)
+            if (delta > 0 && prevIndex < maxIdx) {
+              return prevIndex + 1
+            } else if (delta < 0 && prevIndex > 0) {
+              return prevIndex - 1
+            }
+            return prevIndex
+          })
         }
       }
     }
+    
+    wheelListenerRef.current = handleWheelEvent
     currentCarousel.addEventListener("wheel", handleWheelEvent, { passive: false })
-    return () => currentCarousel.removeEventListener("wheel", handleWheelEvent)
-  }, [currentIndex, maxIndex, goToPrevious, goToNext, isMobile])
+    
+    return () => {
+      if (wheelListenerRef.current) {
+        currentCarousel.removeEventListener("wheel", wheelListenerRef.current)
+      }
+    }
+  }, [isMobile, products.length, itemsPerView])
 
-  // Countdown timer - updates every second on client
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        const total = prev.hours * 3600 + prev.minutes * 60 + prev.seconds - 1
-        if (total <= 0) {
-          return { hours: 23, minutes: 59, seconds: 59 }
-        }
-        return {
-          hours: Math.floor(total / 3600),
-          minutes: Math.floor((total % 3600) / 60),
-          seconds: total % 60,
-        }
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
+  // Countdown timer - now isolated in separate memoized component
+  // Main component no longer rerenders every second
 
   const handleViewAll = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -446,19 +485,7 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
           </div>
           <div className="flex items-center gap-2">
             <span className={`font-medium ${isMobile ? "text-xs" : "text-sm"}`}>Time Left:</span>
-            <div className="flex gap-1">
-              <div className="bg-white/20 rounded px-1.5 py-0.5 min-w-[24px] text-center">
-                <span className="text-xs font-mono">{String(timeLeft.hours).padStart(2, "0")}</span>
-              </div>
-              <span className="text-xs">:</span>
-              <div className="bg-white/20 rounded px-1.5 py-0.5 min-w-[24px] text-center">
-                <span className="text-xs font-mono">{String(timeLeft.minutes).padStart(2, "0")}</span>
-              </div>
-              <span className="text-xs">:</span>
-              <div className="bg-white/20 rounded px-1.5 py-0.5 min-w-[24px] text-center">
-                <span className="text-xs font-mono">{String(timeLeft.seconds).padStart(2, "0")}</span>
-              </div>
-            </div>
+            <CountdownTimer initialTimeLeft={initialTimeLeft} />
             <button
               onClick={handleViewAll}
               className={`flex items-center gap-0.5 sm:gap-1 font-medium hover:underline whitespace-nowrap ${
@@ -509,7 +536,6 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
               </div>
             ) : (
               <motion.div
-                ref={motionDivRef}
                 className="flex gap-[1px]"
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
