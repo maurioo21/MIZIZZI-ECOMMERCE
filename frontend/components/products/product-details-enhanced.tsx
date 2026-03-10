@@ -101,10 +101,11 @@ export default function ProductDetailsEnhanced({
   const [quantity, setQuantity] = useState(1)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const [exploreProducts, setExploreProducts] = useState<any[]>(
-    similarProducts && similarProducts.length > 0 ? similarProducts : [],
+    similarProducts && similarProducts.length > 0 ? similarProducts.slice(0, 12) : [],
   )
-  const [explorePage, setExplorePage] = useState(1)
-  const [exploreHasMore, setExploreHasMore] = useState(true)
+  const [exploreHasMore, setExploreHasMore] = useState(
+    (similarProducts && similarProducts.length > 12) || false,
+  )
   const [exploreLoading, setExploreLoading] = useState(false)
   const [newlyLoadedStartIndex, setNewlyLoadedStartIndex] = useState<number | null>(null)
 
@@ -343,7 +344,16 @@ export default function ProductDetailsEnhanced({
 
   useEffect(() => {
     const fetchRelatedProducts = async () => {
-      // Only fetch if we don't have products already and some initial products are not enough
+      // If we already have similar products from props, use them
+      if (similarProducts && similarProducts.length > 0) {
+        const sliced = similarProducts.slice(0, 12)
+        setExploreProducts(sliced)
+        setExploreHasMore(similarProducts.length > 12)
+        setExploreLoading(false)
+        return
+      }
+
+      // Only fetch if we don't have products already
       if (exploreProducts.length >= 12) {
         setExploreLoading(false)
         return
@@ -372,20 +382,15 @@ export default function ProductDetailsEnhanced({
             // Safely extract products array from various response formats
             let productsArray: any[] = []
             if (Array.isArray(data)) {
-              // If response is directly an array
               productsArray = data
             } else if (Array.isArray(data?.products)) {
-              // If wrapped in products key
               productsArray = data.products
             } else if (Array.isArray(data?.items)) {
-              // If wrapped in items key
               productsArray = data.items
             } else if (Array.isArray(data?.data)) {
-              // If wrapped in data key
               productsArray = data.data
             }
             
-            // Only filter if we actually have an array
             if (Array.isArray(productsArray)) {
               const generalProducts = productsArray.filter(
                 (p: any) => p?.id && p.id !== product.id && !allProducts.some((ap: any) => ap.id === p.id),
@@ -400,24 +405,23 @@ export default function ProductDetailsEnhanced({
         // Smart sorting: prioritize by category match, then price similarity, then rating
         const productPrice = product?.sale_price || product?.price || 0
         const sortedProducts = allProducts.sort((a: any, b: any) => {
-          // Same category gets priority
           const aCategoryMatch = a.category_id === product?.category_id ? 1 : 0
           const bCategoryMatch = b.category_id === product?.category_id ? 1 : 0
           if (aCategoryMatch !== bCategoryMatch) return bCategoryMatch - aCategoryMatch
 
-          // Then sort by price similarity (closer price = higher priority)
           const aPriceDiff = Math.abs((a.sale_price || a.price || 0) - productPrice)
           const bPriceDiff = Math.abs((b.sale_price || b.price || 0) - productPrice)
           if (aPriceDiff !== bPriceDiff) return aPriceDiff - bPriceDiff
 
-          // Finally by rating
           return (b.rating || 0) - (a.rating || 0)
         })
 
+        // Set initial 12 items and flag if more exist
         setExploreProducts(sortedProducts.slice(0, 12))
         setExploreHasMore(sortedProducts.length > 12)
       } catch (error) {
-        console.error("[v0] Error in fetchRelatedProducts:", error)
+        console.error("[v0] Error loading explore products:", error)
+        setExploreHasMore(false)
       } finally {
         setExploreLoading(false)
       }
@@ -426,7 +430,6 @@ export default function ProductDetailsEnhanced({
     if (product?.id && exploreProducts.length < 12) {
       fetchRelatedProducts()
     } else if (!product?.id) {
-      // Handle case where product might be null initially
       setExploreLoading(false)
     }
   }, [product?.id, product?.category_id, product?.price, product?.sale_price])
@@ -1061,22 +1064,31 @@ export default function ProductDetailsEnhanced({
 
     setExploreLoading(true)
     try {
-      const nextPage = explorePage + 1
-      const response = await fetch(
-        `/api/products?limit=12&page=${nextPage}${product?.category?.slug ? `&category_slug=${product.category.slug}` : ""}`,
-      )
+      const response = await fetch(`/api/products?limit=30&page=1`)
       const data = await response.json()
 
-      const products = data?.products || data?.items || data || []
-      const filteredData = products.filter((p: any) => p.id !== product?.id)
+      // Safely extract products
+      let productsArray: any[] = []
+      if (Array.isArray(data)) {
+        productsArray = data
+      } else if (Array.isArray(data?.products)) {
+        productsArray = data.products
+      } else if (Array.isArray(data?.items)) {
+        productsArray = data.items
+      } else if (Array.isArray(data?.data)) {
+        productsArray = data.data
+      }
+
+      const filteredData = productsArray
+        .filter((p: any) => p?.id && p.id !== product?.id && !exploreProducts.some((ep: any) => ep.id === p.id))
+        .slice(0, 12 - exploreProducts.length)
 
       if (filteredData.length > 0) {
         setExploreProducts((prev) => {
           setNewlyLoadedStartIndex(prev.length)
           return [...prev, ...filteredData]
         })
-        setExplorePage(nextPage)
-        setExploreHasMore(filteredData.length >= 12)
+        setExploreHasMore(false)
       } else {
         setExploreHasMore(false)
       }
@@ -1086,7 +1098,7 @@ export default function ProductDetailsEnhanced({
     } finally {
       setExploreLoading(false)
     }
-  }, [exploreLoading, exploreHasMore, explorePage, product?.id, product?.category?.slug])
+  }, [exploreLoading, exploreHasMore, exploreProducts, product?.id])
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
