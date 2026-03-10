@@ -158,6 +158,7 @@ def get_product_by_id(product_id):
         use_cache = request.args.get('cache', 'true').lower() == 'true'
         force_refresh = request.args.get('force', 'false').lower() == 'true'
         include_reviews = request.args.get('reviews', 'true').lower() == 'true'
+        admin_mode = request.args.get('admin', 'false').lower() == 'true'  # Show inactive/hidden products
         
         cache_key = f"product:detail:{product_id}:full"
         start_time = time.time()
@@ -174,8 +175,8 @@ def get_product_by_id(product_id):
             except Exception as e:
                 current_app.logger.warning(f"Cache read error: {e}")
         
-        # Fetch product with all relationships
-        product = db.session.query(Product)\
+        # Build query
+        query = db.session.query(Product)\
             .options(
                 selectinload(Product.category),
                 selectinload(Product.brand),
@@ -183,11 +184,27 @@ def get_product_by_id(product_id):
                 selectinload(Product.reviews),
                 selectinload(Product.images)
             )\
-            .filter(Product.id == product_id, Product.is_active == True, Product.is_visible == True)\
-            .first()
+            .filter(Product.id == product_id)
+        
+        # Only apply is_active/is_visible filters if not in admin mode
+        if not admin_mode:
+            query = query.filter(Product.is_active == True, Product.is_visible == True)
+        
+        product = query.first()
         
         if not product:
-            return jsonify({'error': 'Product not found'}), 404
+            # Diagnostic: check if product exists at all
+            exists = db.session.query(Product).filter(Product.id == product_id).first()
+            if exists and not admin_mode:
+                return jsonify({
+                    'error': 'Product not found',
+                    'message': f'Product {product_id} exists but is not active or not visible',
+                    'product_exists': True,
+                    'is_active': exists.is_active,
+                    'is_visible': exists.is_visible,
+                    'hint': f'Try with ?admin=true to see inactive/hidden products'
+                }), 404
+            return jsonify({'error': 'Product not found', 'product_id': product_id}), 404
         
         # Serialize complete data
         product_data = serialize_full_product_details(product, include_reviews=include_reviews)
@@ -322,3 +339,37 @@ def invalidate_cache(product_id):
         return jsonify({'success': True, 'message': f'Cache invalidated for product {product_id}'}), 200
     except Exception as e:
         return jsonify({'error': str(e) if current_app.debug else 'Error invalidating cache'}), 500
+
+
+@product_details_bp.route('/debug/products-list', methods=['GET'])
+def debug_products_list():
+    """DEBUG ENDPOINT: List all products and their active/visible status (for testing only)."""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        
+        products = db.session.query(Product).limit(limit).all()
+        
+        product_list = []
+        for p in products:
+            product_list.append({
+                'id': p.id,
+                'name': p.name,
+                'slug': p.slug,
+                'is_active': p.is_active,
+                'is_visible': p.is_visible,
+                'price': float(p.price) if p.price else 0,
+                'stock': p.stock,
+                'can_fetch': p.is_active and p.is_visible,  # Can this product be fetched via normal API?
+            })
+        
+        total = db.session.query(Product).count()
+        
+        return jsonify({
+            'total_products': total,
+            'showing': len(product_list),
+            'products': product_list,
+            'note': 'Use ?admin=true parameter on product endpoint to fetch inactive/hidden products'
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
