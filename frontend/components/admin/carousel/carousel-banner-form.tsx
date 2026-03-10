@@ -64,35 +64,17 @@ export function CarouselBannerForm({ banner, onClose, onSubmit }: CarouselBanner
     }
     setFormData(updatedFormData)
     
-    // Auto-save image URL if banner already exists (editing mode)
+    // Just show success - don't auto-submit
+    // Let the user click the Update/Create button to properly route through the page logic
     if (banner?.id) {
-      setIsSubmitting(true)
-      try {
-        // For editing, pass only image fields - don't create a new banner
-        await onSubmit({ 
-          image_url: optimizedUrl,
-          image_public_id: cloudinaryPublicId,
-          delete_old_image: true,  // Flag to delete old Cloudinary image
-        })
-        toast({
-          title: "Image Saved",
-          description: "Banner image updated successfully",
-        })
-      } catch (error) {
-        console.error(`[v0] Auto-save failed:`, error)
-        toast({
-          title: "Auto-save Failed",
-          description: "Image uploaded but couldn't save to banner. Please click Update Banner.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else {
-      // For new banner, just show success and keep form open for other details
       toast({
         title: "Image Ready",
-        description: "Image uploaded. Fill in other details and click Create Banner to save.",
+        description: "Click 'Update Banner' to save changes",
+      })
+    } else {
+      toast({
+        title: "Image Ready",
+        description: "Fill in other details and click Create Banner to save.",
       })
     }
   }
