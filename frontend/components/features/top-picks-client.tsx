@@ -139,6 +139,17 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
   const hasMultipleImages = Boolean(secondaryImageUrl)
   const rating = product.rating || 3 + Math.random() * 2
 
+  // Preload secondary image when component mounts for smooth hover
+  useEffect(() => {
+    if (hasMultipleImages && secondaryImageUrl && !isMobile) {
+      const link = document.createElement("link")
+      link.rel = "preload"
+      link.as = "image"
+      link.href = secondaryImageUrl
+      document.head.appendChild(link)
+    }
+  }, [secondaryImageUrl, hasMultipleImages, isMobile])
+
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
       <motion.div
@@ -172,9 +183,12 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
               initial={{ opacity: 0 }}
               animate={{ opacity: imageLoaded ? 1 : 0 }}
               transition={{ duration: 0.3 }}
-              className="absolute inset-0 transition-opacity duration-500"
+              className="absolute inset-0 transition-opacity duration-500 will-change-opacity"
               style={{
                 opacity: imageLoaded && (isHovering && hasMultipleImages ? 0 : 1),
+                transitionProperty: "opacity",
+                transitionDuration: "500ms",
+                transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               {imageUrl ? (
@@ -184,7 +198,8 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
+                  loading="eager"
+                  priority={true}
                   onLoad={handleImageLoad}
                   onError={handleImageError}
                   crossOrigin="anonymous"
@@ -202,9 +217,12 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                 initial={{ opacity: 0 }}
                 animate={{ opacity: imageLoaded ? 1 : 0 }}
                 transition={{ duration: 0.3 }}
-                className="absolute inset-0 transition-opacity duration-500"
+                className="absolute inset-0 transition-opacity duration-500 will-change-opacity"
                 style={{
                   opacity: imageLoaded && isHovering ? 1 : 0,
+                  transitionProperty: "opacity",
+                  transitionDuration: "500ms",
+                  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               >
                 <Image
@@ -213,7 +231,8 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
+                  loading="eager"
+                  priority={false}
                   crossOrigin="anonymous"
                 />
               </motion.div>

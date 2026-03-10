@@ -207,6 +207,17 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
     })
   }, [product.id])
 
+  // Preload secondary image when component mounts for smooth hover
+  useEffect(() => {
+    if (hasMultipleImages && secondaryImageUrl && !isMobile) {
+      const link = document.createElement("link")
+      link.rel = "preload"
+      link.as = "image"
+      link.href = secondaryImageUrl
+      document.head.appendChild(link)
+    }
+  }, [secondaryImageUrl, hasMultipleImages, isMobile])
+
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
       <div className="h-full">
@@ -226,14 +237,15 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
                 alt={product.name}
                 fill
                 sizes={isMobile ? "25vw" : "16vw"}
-                className={`object-cover transition-opacity duration-500 ${
-                  imageLoaded ? "opacity-100" : "opacity-0"
-                }`}
+                className="object-cover transition-opacity duration-500 will-change-opacity"
                 style={{
                   opacity: isHovering && hasMultipleImages ? 0 : 1,
+                  transitionProperty: "opacity",
+                  transitionDuration: "500ms",
+                  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
-                loading="lazy"
-                priority={false}
+                loading="eager"
+                priority={true}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
                 crossOrigin="anonymous"
@@ -248,11 +260,14 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
                 alt={`${product.name} - alternate view`}
                 fill
                 sizes={isMobile ? "25vw" : "16vw"}
-                className="absolute inset-0 object-cover transition-opacity duration-500"
+                className="absolute inset-0 object-cover transition-opacity duration-500 will-change-opacity"
                 style={{
                   opacity: isHovering ? 1 : 0,
+                  transitionProperty: "opacity",
+                  transitionDuration: "500ms",
+                  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
-                loading="lazy"
+                loading="eager"
                 priority={false}
                 crossOrigin="anonymous"
                 decoding="async"
