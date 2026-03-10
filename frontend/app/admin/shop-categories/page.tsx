@@ -7,7 +7,6 @@ import Image from "next/image"
 import { useToast } from "@/hooks/use-toast"
 import { CategoryFormDialog } from "@/components/admin/categories/category-form-dialog"
 import { CategoryDeleteDialog } from "@/components/admin/categories/category-delete-dialog"
-import { getCategoryListImageUrl } from "@/lib/cloudinary-image-handler"
 
 const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = false): string => {
   if (!url) {
@@ -28,16 +27,8 @@ const getValidImageUrl = (url: string | null | undefined, bustCache: boolean = f
     return "/placeholder.svg"
   }
 
-  // Use Cloudinary handler for optimized URLs
-  try {
-    finalUrl = getCategoryListImageUrl(finalUrl)
-  } catch (error) {
-    // Fall back to original URL if optimization fails
-    console.warn("Failed to optimize image URL:", error)
-  }
-
   // Add cache-busting parameter for force refresh
-  if (bustCache && finalUrl.includes("cloudinary.com")) {
+  if (bustCache) {
     const separator = finalUrl.includes("?") ? "&" : "?"
     finalUrl = `${finalUrl}${separator}t=${Date.now()}`
   }
