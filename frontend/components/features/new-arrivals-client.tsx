@@ -16,6 +16,11 @@ type ProductImageLike = {
   is_primary?: boolean
 }
 
+const MAX_NEW_ARRIVALS_PRODUCTS = 10
+const WHEEL_STEP_COOLDOWN = 140
+const DRAG_THRESHOLD = 24
+const DRAG_VELOCITY_THRESHOLD = 180
+
 const LogoPlaceholder = memo(function LogoPlaceholder() {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-white">
@@ -35,12 +40,13 @@ const StarRating = memo(function StarRating({ rating = 4 }: { rating?: number })
         {[1, 2, 3, 4, 5].map((star) => (
           <Star
             key={star}
-            className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${star <= Math.floor(safeRating)
+            className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${
+              star <= Math.floor(safeRating)
                 ? "fill-yellow-400 text-yellow-400"
                 : star - 0.5 <= safeRating
                   ? "fill-yellow-400/50 text-yellow-400"
                   : "fill-gray-200 text-gray-200"
-              }`}
+            }`}
           />
         ))}
       </div>
@@ -48,12 +54,16 @@ const StarRating = memo(function StarRating({ rating = 4 }: { rating?: number })
   )
 })
 
-function optimizeImageUrl(rawUrl?: string): string {
-  if (!rawUrl || typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
+function optimizeImageUrl(rawUrl?: string | null): string {
+  if (rawUrl == null || typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
     return ""
   }
 
-  if (rawUrl.startsWith("http") || rawUrl.startsWith("/")) {
+  if (rawUrl.startsWith("/")) {
+    return rawUrl
+  }
+
+  if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
     return rawUrl
   }
 
@@ -111,7 +121,9 @@ function resolveSecondaryImage(product: Product, primaryImageUrl: string): strin
       }))
       .filter((img) => Boolean(img.resolved))
 
-    const nonPrimaryDifferent = normalizedImages.find((img) => !img.isPrimary && img.resolved && !seen.has(img.resolved))
+    const nonPrimaryDifferent = normalizedImages.find(
+      (img) => !img.isPrimary && img.resolved && !seen.has(img.resolved),
+    )
     if (nonPrimaryDifferent?.resolved) {
       return nonPrimaryDifferent.resolved
     }
@@ -134,13 +146,15 @@ const ProductCard = memo(function ProductCard({
   isMobile: boolean
   isAboveFold?: boolean
 }) {
-  const [imageError, setImageError] = useState(false)
+  const [primaryImageError, setPrimaryImageError] = useState(false)
+  const [secondaryImageError, setSecondaryImageError] = useState(false)
 
   const imageUrl = useMemo(() => resolvePrimaryImage(product), [product])
   const secondaryImageUrl = useMemo(() => resolveSecondaryImage(product, imageUrl), [product, imageUrl])
 
-  const hasValidImage = imageUrl.length > 0
-  const hasMultipleImages = !isMobile && secondaryImageUrl.length > 0
+  const hasValidPrimaryImage = imageUrl.length > 0 && !primaryImageError
+  const hasValidSecondaryImage = secondaryImageUrl.length > 0 && !secondaryImageError
+  const hasMultipleImages = !isMobile && hasValidSecondaryImage
 
   const discountPercentage =
     typeof product.sale_price === "number" && product.price > 0
@@ -149,8 +163,12 @@ const ProductCard = memo(function ProductCard({
 
   const rating = typeof product.rating === "number" ? product.rating : 4
 
-  const handleImageError = useCallback(() => {
-    setImageError(true)
+  const handlePrimaryImageError = useCallback(() => {
+    setPrimaryImageError(true)
+  }, [])
+
+  const handleSecondaryImageError = useCallback(() => {
+    setSecondaryImageError(true)
   }, [])
 
   return (
@@ -158,20 +176,21 @@ const ProductCard = memo(function ProductCard({
       <div className="h-full">
         <div className="group h-full overflow-hidden border-r border-gray-100 bg-white transition-shadow duration-200 hover:shadow-sm">
           <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
-            {(imageError || !hasValidImage) && <LogoPlaceholder />}
+            {!hasValidPrimaryImage && <LogoPlaceholder />}
 
-            {hasValidImage && (
+            {hasValidPrimaryImage && (
               <>
                 <Image
                   src={imageUrl}
                   alt={product.name}
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
-                  className={`object-cover transition-opacity duration-500 ${hasMultipleImages ? "group-hover:opacity-0" : ""
-                    }`}
+                  className={`object-cover transition-opacity duration-500 ${
+                    hasMultipleImages ? "group-hover:opacity-0" : ""
+                  }`}
                   loading={isAboveFold ? "eager" : "lazy"}
                   priority={isAboveFold}
-                  onError={handleImageError}
+                  onError={handlePrimaryImageError}
                 />
 
                 {hasMultipleImages && (
@@ -183,7 +202,7 @@ const ProductCard = memo(function ProductCard({
                     className="absolute inset-0 object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                     loading="lazy"
                     priority={false}
-                    onError={handleImageError}
+                    onError={handleSecondaryImageError}
                   />
                 )}
               </>
@@ -198,8 +217,9 @@ const ProductCard = memo(function ProductCard({
 
           <div className={isMobile ? "p-2" : "p-3"}>
             <h3
-              className={`mb-1.5 line-clamp-2 leading-tight text-gray-800 ${isMobile ? "min-h-[32px] text-xs" : "min-h-[40px] text-sm"
-                }`}
+              className={`mb-1.5 line-clamp-2 leading-tight text-gray-800 ${
+                isMobile ? "min-h-[32px] text-xs" : "min-h-[40px] text-sm"
+              }`}
             >
               {product.name}
             </h3>
@@ -228,7 +248,7 @@ interface NewArrivalsClientProps {
 }
 
 export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
-  const products = initialProducts ?? []
+  const products = useMemo(() => (initialProducts ?? []).slice(0, MAX_NEW_ARRIVALS_PRODUCTS), [initialProducts])
 
   const [currentIndex, setCurrentIndex] = useState(0)
   const [isHovering, setIsHovering] = useState(false)
@@ -237,7 +257,11 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
 
   const carouselRef = useRef<HTMLDivElement>(null)
   const hoverSideRef = useRef<"left" | "right" | null>(null)
+  const hoverRafRef = useRef<number | null>(null)
+  const pendingHoverSideRef = useRef<"left" | "right" | null>(null)
   const dragVelocityRef = useRef(0)
+  const wheelLockRef = useRef(false)
+  const wheelUnlockTimeoutRef = useRef<number | null>(null)
 
   const router = useRouter()
 
@@ -247,8 +271,12 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
 
   const itemsPerView = isSmallMobile ? 3 : isMobile ? 3 : isTablet ? 5 : 6
   const mobileItemWidth = "calc((100vw - 32px) / 3)"
-  const desktopItemWidth = isTablet ? 20 : 16.666
+  const desktopItemWidth = isTablet ? 20 : 16.6666667
   const maxIndex = Math.max(0, products.length - itemsPerView)
+
+  useEffect(() => {
+    setCurrentIndex((prev) => Math.min(prev, maxIndex))
+  }, [maxIndex])
 
   const goToPrevious = useCallback(() => {
     setCurrentIndex((prev) => Math.max(0, prev - 1))
@@ -258,6 +286,22 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
     setCurrentIndex((prev) => Math.min(maxIndex, prev + 1))
   }, [maxIndex])
 
+  const setHoverSideRaf = useCallback((nextSide: "left" | "right" | null) => {
+    pendingHoverSideRef.current = nextSide
+
+    if (hoverRafRef.current !== null) return
+
+    hoverRafRef.current = window.requestAnimationFrame(() => {
+      const side = pendingHoverSideRef.current
+      hoverRafRef.current = null
+
+      if (hoverSideRef.current !== side) {
+        hoverSideRef.current = side
+        setHoverSide(side)
+      }
+    })
+  }, [])
+
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!carouselRef.current || isDragging || isMobile) return
@@ -266,12 +310,9 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
       const x = e.clientX - rect.left
       const nextSide: "left" | "right" = x < rect.width / 2 ? "left" : "right"
 
-      if (hoverSideRef.current !== nextSide) {
-        hoverSideRef.current = nextSide
-        setHoverSide(nextSide)
-      }
+      setHoverSideRaf(nextSide)
     },
-    [isDragging, isMobile],
+    [isDragging, isMobile, setHoverSideRaf],
   )
 
   const handleMouseEnter = useCallback(() => {
@@ -280,16 +321,14 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
 
   const handleMouseLeave = useCallback(() => {
     setIsHovering(false)
-    setHoverSide(null)
-    hoverSideRef.current = null
-  }, [])
+    setHoverSideRaf(null)
+  }, [setHoverSideRaf])
 
   const handleDragStart = useCallback(() => {
     if (isMobile) return
     setIsDragging(true)
-    setHoverSide(null)
-    hoverSideRef.current = null
-  }, [isMobile])
+    setHoverSideRaf(null)
+  }, [isMobile, setHoverSideRaf])
 
   const handleDragEnd = useCallback(
     (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
@@ -301,12 +340,16 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
       const offset = info.offset.x
       dragVelocityRef.current = velocity
 
-      if (Math.abs(offset) > 20 || Math.abs(velocity) > 150) {
-        if (offset > 0 || velocity > 0) {
-          if (currentIndex > 0) goToPrevious()
-        } else {
-          if (currentIndex < maxIndex) goToNext()
-        }
+      const shouldMove =
+        Math.abs(offset) > DRAG_THRESHOLD ||
+        Math.abs(velocity) > DRAG_VELOCITY_THRESHOLD
+
+      if (!shouldMove) return
+
+      if (offset > 0 || velocity > 0) {
+        if (currentIndex > 0) goToPrevious()
+      } else {
+        if (currentIndex < maxIndex) goToNext()
       }
     },
     [currentIndex, goToNext, goToPrevious, isMobile, maxIndex],
@@ -316,26 +359,64 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
     const currentCarousel = carouselRef.current
     if (!currentCarousel || isMobile) return
 
-    const handleWheelEvent = (e: WheelEvent) => {
-      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey) {
-        e.preventDefault()
-
-        const delta = e.deltaX || e.deltaY
-        if (Math.abs(delta) <= 10) return
-
-        setCurrentIndex((prevIndex) => {
-          const nextMaxIndex = Math.max(0, products.length - itemsPerView)
-
-          if (delta > 0 && prevIndex < nextMaxIndex) return prevIndex + 1
-          if (delta < 0 && prevIndex > 0) return prevIndex - 1
-          return prevIndex
-        })
+    const unlockWheel = () => {
+      wheelLockRef.current = false
+      if (wheelUnlockTimeoutRef.current !== null) {
+        window.clearTimeout(wheelUnlockTimeoutRef.current)
+        wheelUnlockTimeoutRef.current = null
       }
     }
 
+    const lockWheelBriefly = () => {
+      wheelLockRef.current = true
+      if (wheelUnlockTimeoutRef.current !== null) {
+        window.clearTimeout(wheelUnlockTimeoutRef.current)
+      }
+      wheelUnlockTimeoutRef.current = window.setTimeout(() => {
+        wheelLockRef.current = false
+        wheelUnlockTimeoutRef.current = null
+      }, WHEEL_STEP_COOLDOWN)
+    }
+
+    const handleWheelEvent = (e: WheelEvent) => {
+      if (wheelLockRef.current || isDragging) return
+
+      const isHorizontalIntent = Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey
+      if (!isHorizontalIntent) return
+
+      const delta = e.deltaX || e.deltaY
+      if (Math.abs(delta) <= 10) return
+
+      e.preventDefault()
+      lockWheelBriefly()
+
+      setCurrentIndex((prevIndex) => {
+        const nextMaxIndex = Math.max(0, products.length - itemsPerView)
+
+        if (delta > 0 && prevIndex < nextMaxIndex) return prevIndex + 1
+        if (delta < 0 && prevIndex > 0) return prevIndex - 1
+        return prevIndex
+      })
+    }
+
     currentCarousel.addEventListener("wheel", handleWheelEvent, { passive: false })
-    return () => currentCarousel.removeEventListener("wheel", handleWheelEvent)
-  }, [isMobile, itemsPerView, products.length])
+
+    return () => {
+      currentCarousel.removeEventListener("wheel", handleWheelEvent)
+      unlockWheel()
+    }
+  }, [isDragging, isMobile, itemsPerView, products.length])
+
+  useEffect(() => {
+    return () => {
+      if (hoverRafRef.current !== null) {
+        window.cancelAnimationFrame(hoverRafRef.current)
+      }
+      if (wheelUnlockTimeoutRef.current !== null) {
+        window.clearTimeout(wheelUnlockTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const handleViewAll = useCallback(
     (e: React.MouseEvent) => {
@@ -354,7 +435,7 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
       <div className="w-full">
         <div className="flex items-center justify-between bg-[#8B1538] px-2 py-1.5 text-white sm:px-4 sm:py-2">
           <div className="flex items-center gap-1 sm:gap-2">
-            <Sparkles className={`h-4 w-4 text-yellow-300 sm:h-5 sm:w-5`} />
+            <Sparkles className="h-4 w-4 text-yellow-300 sm:h-5 sm:w-5" />
             <h2 className={`whitespace-nowrap font-bold ${isMobile ? "text-sm" : "text-base sm:text-lg"}`}>
               {isMobile ? "New Arrivals" : "New Arrivals | Fresh Collection!"}
             </h2>
@@ -362,8 +443,9 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
 
           <button
             onClick={handleViewAll}
-            className={`flex items-center gap-0.5 whitespace-nowrap font-medium hover:underline sm:gap-1 ${isMobile ? "text-xs" : "text-sm"
-              }`}
+            className={`flex items-center gap-0.5 whitespace-nowrap font-medium hover:underline sm:gap-1 ${
+              isMobile ? "text-xs" : "text-sm"
+            }`}
           >
             See All
             <ChevronRight className={isMobile ? "h-3.5 w-3.5" : "h-4 w-4"} />
@@ -407,26 +489,28 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
                 className="flex gap-[1px]"
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
-                dragElastic={0}
-                dragTransition={{ power: 0.1, timeConstant: 80 }}
+                dragElastic={0.035}
+                dragMomentum={false}
+                dragTransition={{ power: 0.08, timeConstant: 90 }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 animate={{ x: `-${currentIndex * desktopItemWidth}%` }}
                 transition={{
                   type: "spring",
-                  stiffness: 350,
-                  damping: 35,
-                  mass: 1,
+                  stiffness: 420,
+                  damping: 42,
+                  mass: 0.9,
                   velocity: dragVelocityRef.current,
                 }}
                 style={{
                   cursor: isDragging ? "grabbing" : "grab",
                   willChange: "transform",
-                  transform: "translateZ(0)",
+                  transform: "translate3d(0,0,0)",
                   backfaceVisibility: "hidden",
                   perspective: 1000,
                   WebkitFontSmoothing: "antialiased",
                   WebkitBackfaceVisibility: "hidden",
+                  contain: "layout paint style",
                 }}
               >
                 {products.map((product, index) => (
@@ -444,12 +528,13 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
             <AnimatePresence>
               {!isMobile && isHovering && !isDragging && hoverSide === "left" && currentIndex > 0 && (
                 <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.88 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.2 }}
+                  exit={{ opacity: 0, scale: 0.88 }}
+                  transition={{ duration: 0.12 }}
                   onClick={goToPrevious}
                   className="pointer-events-auto absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/95 p-2 shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-white"
+                  style={{ willChange: "opacity, transform" }}
                 >
                   <ChevronLeft className="h-5 w-5 text-gray-700" />
                 </motion.button>
@@ -459,12 +544,13 @@ export function NewArrivalsClient({ initialProducts }: NewArrivalsClientProps) {
             <AnimatePresence>
               {!isMobile && isHovering && !isDragging && hoverSide === "right" && currentIndex < maxIndex && (
                 <motion.button
-                  initial={{ opacity: 0, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.88 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.2 }}
+                  exit={{ opacity: 0, scale: 0.88 }}
+                  transition={{ duration: 0.12 }}
                   onClick={goToNext}
                   className="pointer-events-auto absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/95 p-2 shadow-lg backdrop-blur-sm transition-all hover:scale-110 hover:bg-white"
+                  style={{ willChange: "opacity, transform" }}
                 >
                   <ChevronRight className="h-5 w-5 text-gray-700" />
                 </motion.button>
