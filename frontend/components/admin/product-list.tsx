@@ -14,6 +14,8 @@ interface ProductListProps {
   productImages: Record<string, string>
   onSelectProduct: (id: string) => void
   onDeleteProduct: (id: string) => void
+  onEditProduct: (id: string) => void
+  onViewProduct: (id: string) => void
   getProductImage: (product: Product) => string
 }
 
@@ -25,6 +27,8 @@ const ProductList = memo(function ProductList({
   productImages,
   onSelectProduct,
   onDeleteProduct,
+  onEditProduct,
+  onViewProduct,
   getProductImage,
 }: ProductListProps) {
   const displayMode = viewMode
@@ -38,7 +42,9 @@ const ProductList = memo(function ProductList({
             product={product}
             isSelected={selectedProducts.includes(product.id.toString())}
             onSelect={onSelectProduct}
+            onEdit={onEditProduct}
             onDelete={onDeleteProduct}
+            onView={onViewProduct}
             imageSrc={productImages[product.id] || getProductImage(product)}
           />
         ))}
@@ -110,7 +116,10 @@ const ProductList = memo(function ProductList({
 
             {/* Mobile Actions */}
             <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-              <button className="flex-1 text-xs font-medium text-gray-700 hover:text-gray-900 py-1.5 rounded transition-colors">
+              <button
+                onClick={() => onEditProduct(product.id.toString())}
+                className="flex-1 text-xs font-medium text-gray-700 hover:text-gray-900 py-1.5 rounded transition-colors"
+              >
                 Edit
               </button>
               <button
@@ -150,7 +159,9 @@ const ProductList = memo(function ProductList({
                 product={product}
                 isSelected={selectedProducts.includes(product.id.toString())}
                 onSelect={onSelectProduct}
+                onEdit={onEditProduct}
                 onDelete={onDeleteProduct}
+                onView={onViewProduct}
                 imageSrc={productImages[product.id] || getProductImage(product)}
               />
             ))}

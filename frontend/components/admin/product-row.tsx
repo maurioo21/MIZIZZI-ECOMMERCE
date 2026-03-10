@@ -18,7 +18,9 @@ interface ProductRowProps {
   product: Product
   isSelected: boolean
   onSelect: (id: string) => void
+  onEdit: (id: string) => void
   onDelete?: (id: string) => void
+  onView: (id: string) => void
   imageSrc?: string
 }
 
@@ -34,7 +36,9 @@ const ProductRow = memo(function ProductRow({
   product,
   isSelected,
   onSelect,
+  onEdit,
   onDelete,
+  onView,
   imageSrc,
 }: ProductRowProps) {
   const router = useRouter()

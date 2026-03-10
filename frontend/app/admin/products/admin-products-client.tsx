@@ -1642,7 +1642,9 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
                 isMobile={isMobile}
                 productImages={productImages}
                 onSelectProduct={handleSelectProduct}
+                onEditProduct={handleEditProduct}
                 onDeleteProduct={handleDeleteProductFromList}
+                onViewProduct={handleViewProduct}
                 getProductImage={getProductImage}
               />
             )}
