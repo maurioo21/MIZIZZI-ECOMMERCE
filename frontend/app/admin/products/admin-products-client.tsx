@@ -1721,10 +1721,12 @@ export default function AdminProductsClient({ initialProducts }: AdminProductsCl
             )}
           </div>
         </Tabs>
-      </div>
 
       {/* Loading overlay - no AnimatePresence for better performance */}
       {dialogState.operationType && <LoadingOverlay message={dialogState.operationMessage || "Processing..."} />}
+    </div>
+  )
+}
     </div>
   )
 }
