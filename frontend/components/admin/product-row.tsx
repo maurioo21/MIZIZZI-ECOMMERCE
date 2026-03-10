@@ -48,8 +48,58 @@ const ProductRow = memo(function ProductRow({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteSuccess, setDeleteSuccess] = useState(false)
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // Calculate optimal menu position
+  useEffect(() => {
+    if (!isMenuOpen || !triggerRef.current) return
+
+    const triggerRect = triggerRef.current.getBoundingClientRect()
+    const menuHeight = 180 // Approximate height of menu
+    const viewportHeight = window.innerHeight
+    const padding = 8 // Gap between trigger and menu
+    const minBottomSpace = 20 // Minimum space to keep from bottom
+
+    // Check if there's enough space below
+    const spaceBelow = viewportHeight - triggerRect.bottom - minBottomSpace
+    const shouldFlipUp = spaceBelow < menuHeight
+
+    const topPosition = shouldFlipUp
+      ? triggerRect.top - menuHeight - padding
+      : triggerRect.bottom + padding
+
+    const rightPosition = window.innerWidth - triggerRect.right
+
+    setMenuPosition({
+      top: Math.max(10, topPosition), // Ensure min distance from top
+      right: Math.max(10, rightPosition), // Ensure min distance from right
+    })
+
+    // Recalculate on window resize for full responsiveness
+    const handleResize = () => {
+      if (!triggerRef.current) return
+      
+      const newTriggerRect = triggerRef.current.getBoundingClientRect()
+      const newSpaceBelow = window.innerHeight - newTriggerRect.bottom - minBottomSpace
+      const newShouldFlipUp = newSpaceBelow < menuHeight
+
+      const newTopPosition = newShouldFlipUp
+        ? newTriggerRect.top - menuHeight - padding
+        : newTriggerRect.bottom + padding
+
+      const newRightPosition = window.innerWidth - newTriggerRect.right
+
+      setMenuPosition({
+        top: Math.max(10, newTopPosition),
+        right: Math.max(10, newRightPosition),
+      })
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [isMenuOpen])
 
   // Memoized callbacks
   const handleSelect = useCallback((e: React.MouseEvent) => {
@@ -236,21 +286,23 @@ const ProductRow = memo(function ProductRow({
           </Button>
 
           {/* Custom Dropdown Menu - Using Portal to prevent z-index issues */}
-          {isMenuOpen && createPortal(
+          {isMenuOpen && menuPosition && createPortal(
             <div
               ref={menuRef}
-              className="fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 animate-in fade-in slide-in-from-top-1 duration-150"
+              className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 animate-in fade-in duration-150"
               onClick={(e) => e.stopPropagation()}
               role="menu"
               aria-orientation="vertical"
               style={{
                 position: 'fixed',
-                top: triggerRef.current ? triggerRef.current.getBoundingClientRect().bottom + 8 : 0,
-                right: triggerRef.current ? window.innerWidth - triggerRef.current.getBoundingClientRect().right : 0,
-                width: '192px'
+                top: `${menuPosition.top}px`,
+                right: `${menuPosition.right}px`,
+                width: '200px',
+                maxWidth: 'calc(100vw - 20px)',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
               }}
             >
-              <div className="px-3 py-2 text-xs font-semibold text-gray-700 uppercase tracking-wider">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wider border-b border-gray-100">
                 Actions
               </div>
               {menuItems.map((item, index) => (
@@ -264,12 +316,13 @@ const ProductRow = memo(function ProductRow({
                   }}
                   disabled={item.disabled}
                   className={`
-                    w-full px-3 py-2 text-sm flex items-center gap-3 transition-colors
+                    w-full px-3 py-2.5 text-sm flex items-center gap-3 transition-colors
                     ${item.color === "danger" 
                       ? "text-red-600 hover:bg-red-50 disabled:text-red-400" 
                       : "text-gray-700 hover:bg-blue-50 disabled:text-gray-400"
                     }
                     ${item.disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
+                    focus:outline-none focus:bg-gray-50
                   `}
                   role="menuitem"
                 >
