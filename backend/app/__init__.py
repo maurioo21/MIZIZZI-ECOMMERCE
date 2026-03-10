@@ -503,6 +503,7 @@ def create_app(config_name=None, enable_socketio=True):
         'user_wishlist_routes': Blueprint('user_wishlist_routes', __name__),
         'admin_wishlist_routes': Blueprint('admin_wishlist_routes', __name__),
         'products_routes': Blueprint('products_routes', __name__),
+        'product_details_routes': Blueprint('product_details', __name__),
         'categories_routes': Blueprint('categories_routes', __name__),
         'user_address_routes': Blueprint('user_address_routes', __name__),
         'admin_address_routes': Blueprint('admin_address_routes', __name__),
@@ -774,6 +775,12 @@ def create_app(config_name=None, enable_socketio=True):
         'products_routes': [
             ('app.routes.products.products_routes', 'products_routes'),
             ('routes.products.products_routes', 'products_routes')
+        ],
+        'product_details_routes': [
+            ('app.routes.products.product_details_optimized', 'product_details_bp'),
+            ('routes.products.product_details_optimized', 'product_details_bp'),
+            ('backend.app.routes.products.product_details_optimized', 'product_details_bp'),
+            ('backend.routes.products.product_details_optimized', 'product_details_bp'),
         ],
         'categories_routes': [
             ('app.routes.categories.categories_routes', 'categories_routes'),
