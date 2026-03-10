@@ -122,7 +122,7 @@ const CountdownTimer = memo(function CountdownTimer({ initialTimeLeft }: { initi
   )
 })
 
-function optimizeImageUrl(rawUrl?: string): string {
+function optimizeImageUrl(rawUrl?: string | null): string {
   if (!rawUrl || typeof rawUrl !== "string" || rawUrl.trim().length === 0) {
     return ""
   }
