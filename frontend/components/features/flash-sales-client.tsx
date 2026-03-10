@@ -14,14 +14,9 @@ import type { FlashSaleEvent, FlashSaleProduct } from "@/lib/server/get-flash-sa
 
 const LogoPlaceholder = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-white">
-    <motion.div
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="relative h-12 w-12 sm:h-16 sm:w-16"
-    >
+    <div className="relative h-12 w-12 sm:h-16 sm:w-16">
       <Image src="/logo.png" alt="Loading" fill sizes="64px" className="object-contain" />
-    </motion.div>
+    </div>
   </div>
 )
 
@@ -124,7 +119,8 @@ const getProductImageUrl = (product: Product): string => {
   return ""
 }
 
-const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | Product; isMobile: boolean }) => {
+const ProductCard = memo(
+  ({ product, isMobile, isAboveFold }: { product: FlashSaleProduct | Product; isMobile: boolean; isAboveFold?: boolean }) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
@@ -140,7 +136,9 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
   const isAlmostGone = flashProduct.is_almost_gone ?? (itemsLeft > 0 && itemsLeft <= 5)
   const isSoldOut = flashProduct.is_sold_out ?? itemsLeft === 0
 
-  const rating = product.rating || 3 + Math.random() * 2
+  // Use deterministic rating fallback based on product ID to avoid hydration mismatch
+  const ratingFallback = product.rating ?? (product.id ? (parseInt(product.id.toString().slice(-1)) % 2 + 3.5) : 4)
+  const rating = typeof ratingFallback === "number" ? Math.min(5, Math.max(1, ratingFallback)) : 4
 
   const handleImageLoad = useCallback(() => {
     setImageLoaded(true)
@@ -150,7 +148,7 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
     setImageError(true)
   }, [])
 
-  // Get secondary image URL from image_urls array
+  // Get secondary image URL - only from real backend data, no fallback query params
   const getSecondaryImageUrl = (): string => {
     const imgArray = product.image_urls
     if (imgArray && Array.isArray(imgArray) && imgArray.length > 1 && imgArray[1]) {
@@ -162,20 +160,6 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
         return cloudinaryService.generateOptimizedUrl(secondUrl)
       }
     }
-    
-    // TEMPORARY: If no secondary image in array, use a slight variation of primary for demo
-    // This shows the hover effect is working - remove when backend provides multiple images
-    if (imgArray && Array.isArray(imgArray) && imgArray.length > 0) {
-      const primaryUrl = imgArray[0]
-      if (typeof primaryUrl === "string" && primaryUrl.length > 0) {
-        if (primaryUrl.includes("?")) {
-          // Add angle parameter to show product from different angle (if API supports it)
-          return primaryUrl + "&angle=2"
-        }
-        return primaryUrl + "?angle=2"
-      }
-    }
-    
     return ""
   }
   
@@ -195,28 +179,8 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
     setIsHovering(false)
   }
 
-  // Debug: Check image data
-  useEffect(() => {
-    console.log("[v0] Flash Sale Product Image Data:", {
-      productId: product.id,
-      productName: product.name,
-      image_urls: product.image_urls,
-      imageUrlsCount: product.image_urls?.length,
-      hasMultipleImages,
-      secondaryImageUrl,
-    })
-  }, [product.id])
-
-  // Preload secondary image when component mounts for smooth hover
-  useEffect(() => {
-    if (hasMultipleImages && secondaryImageUrl && !isMobile) {
-      const link = document.createElement("link")
-      link.rel = "preload"
-      link.as = "image"
-      link.href = secondaryImageUrl
-      document.head.appendChild(link)
-    }
-  }, [secondaryImageUrl, hasMultipleImages, isMobile])
+  // Removed: Debug logging and universal image preloading
+  // Production optimization: Only preload on-hover if needed, not for every card
 
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
@@ -237,15 +201,12 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
                 alt={product.name}
                 fill
                 sizes={isMobile ? "25vw" : "16vw"}
-                className="object-cover transition-opacity duration-500 will-change-opacity"
+                className="object-cover transition-opacity duration-500"
                 style={{
                   opacity: isHovering && hasMultipleImages ? 0 : 1,
-                  transitionProperty: "opacity",
-                  transitionDuration: "500ms",
-                  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
-                loading="eager"
-                priority={true}
+                loading={isAboveFold ? "eager" : "lazy"}
+                priority={isAboveFold || false}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
                 crossOrigin="anonymous"
@@ -260,14 +221,11 @@ const ProductCard = memo(({ product, isMobile }: { product: FlashSaleProduct | P
                 alt={`${product.name} - alternate view`}
                 fill
                 sizes={isMobile ? "25vw" : "16vw"}
-                className="absolute inset-0 object-cover transition-opacity duration-500 will-change-opacity"
+                className="absolute inset-0 object-cover transition-opacity duration-500"
                 style={{
                   opacity: isHovering ? 1 : 0,
-                  transitionProperty: "opacity",
-                  transitionDuration: "500ms",
-                  transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
-                loading="eager"
+                loading="lazy"
                 priority={false}
                 crossOrigin="anonymous"
                 decoding="async"
@@ -534,7 +492,7 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
                   paddingBottom: "8px",
                 }}
               >
-                {products.map((product) => (
+                {products.map((product, index) => (
                   <div
                     key={product.id}
                     className="flex-shrink-0 pointer-events-auto"
@@ -545,7 +503,7 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
                       scrollSnapAlign: "start",
                     }}
                   >
-                    <ProductCard product={product as FlashSaleProduct} isMobile={true} />
+                    <ProductCard product={product as FlashSaleProduct} isMobile={true} isAboveFold={index < 3} />
                   </div>
                 ))}
               </div>
@@ -585,13 +543,9 @@ export function FlashSalesClient({ initialProducts, initialEvent }: FlashSalesCl
                     className="flex-shrink-0 pointer-events-auto"
                     style={{ 
                       width: `${isTablet ? 20 : 16.666}%`,
-                      willChange: "opacity",
                     }}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.15, delay: index * 0.02 }}
                   >
-                    <ProductCard product={product as FlashSaleProduct} isMobile={false} />
+                    <ProductCard product={product as FlashSaleProduct} isMobile={false} isAboveFold={index < itemsPerView} />
                   </motion.div>
                 ))}
               </motion.div>

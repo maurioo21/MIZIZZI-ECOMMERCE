@@ -13,14 +13,9 @@ import { cloudinaryService } from "@/services/cloudinary-service"
 
 const LogoPlaceholder = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-white">
-    <motion.div
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="relative h-12 w-12 sm:h-16 sm:w-16"
-    >
+    <div className="relative h-12 w-12 sm:h-16 sm:w-16">
       <Image src="/logo.png" alt="Loading" fill sizes="64px" className="object-contain" />
-    </motion.div>
+    </div>
   </div>
 )
 
@@ -72,7 +67,8 @@ function getProductImageUrl(product: Product): string {
   return ""
 }
 
-const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: boolean }) => {
+const ProductCard = memo(
+  ({ product, isMobile, isAboveFold }: { product: Product; isMobile: boolean; isAboveFold?: boolean }) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [showPlaceholder, setShowPlaceholder] = useState(true)
@@ -131,18 +127,10 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
   
   const secondaryImageUrl = getSecondaryImageUrl()
   const hasMultipleImages = Boolean(secondaryImageUrl)
-  const rating = product.rating || 3 + Math.random() * 2
+  const ratingFallback = product.rating ?? (product.id ? (parseInt(product.id.toString().slice(-1)) % 2 + 3.5) : 4)
+  const rating = typeof ratingFallback === "number" ? Math.min(5, Math.max(1, ratingFallback)) : 4
 
-  // Preload secondary image when component mounts for smooth hover
-  useEffect(() => {
-    if (hasMultipleImages && secondaryImageUrl && !isMobile) {
-      const link = document.createElement("link")
-      link.rel = "preload"
-      link.as = "image"
-      link.href = secondaryImageUrl
-      document.head.appendChild(link)
-    }
-  }, [secondaryImageUrl, hasMultipleImages, isMobile])
+  // Removed: Preload for all cards - only preload on-hover if sensible
 
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
@@ -198,8 +186,8 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="eager"
-                  priority={true}
+                  loading={isAboveFold ? "eager" : "lazy"}
+                  priority={isAboveFold || false}
                   onLoad={handleImageLoad}
                   onError={handleImageError}
                   crossOrigin="anonymous"
@@ -227,7 +215,7 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="eager"
+                  loading="lazy"
                   priority={false}
                   crossOrigin="anonymous"
                 />

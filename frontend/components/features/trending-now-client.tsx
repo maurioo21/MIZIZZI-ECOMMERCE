@@ -14,12 +14,7 @@ import { cloudinaryService } from "@/services/cloudinary-service"
 
 const LogoPlaceholder = () => (
   <div className="absolute inset-0 flex items-center justify-center bg-white">
-    <motion.div
-      initial={{ scale: 0.9, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="relative h-12 w-12 sm:h-16 sm:w-16"
-    >
+    <div className="relative h-12 w-12 sm:h-16 sm:w-16">
       <Image
         src="/images/screenshot-20from-202025-02-18-2013-30-22.png"
         alt="Loading"
@@ -27,7 +22,7 @@ const LogoPlaceholder = () => (
         sizes="48px"
         className="object-contain"
       />
-    </motion.div>
+    </div>
   </div>
 )
 
@@ -79,7 +74,8 @@ function getProductImageUrl(product: Product): string {
   return ""
 }
 
-const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: boolean }) => {
+const ProductCard = memo(
+  ({ product, isMobile, isAboveFold }: { product: Product; isMobile: boolean; isAboveFold?: boolean }) => {
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
   const [showPlaceholder, setShowPlaceholder] = useState(true)
@@ -106,9 +102,11 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
     setShowPlaceholder(true)
   }, [product.id])
 
-  const imageUrl = getProductImageUrl(product)
-  
-  // Get secondary image URL from image_urls array
+  // Use deterministic rating fallback based on product ID
+  const ratingFallback = product.rating ?? (product.id ? (parseInt(product.id.toString().slice(-1)) % 2 + 3.5) : 4)
+  const rating = typeof ratingFallback === "number" ? Math.min(5, Math.max(1, ratingFallback)) : 4
+
+  // Get secondary image URL - only from real backend data
   const getSecondaryImageUrl = (): string => {
     const imgArray = product.image_urls
     if (imgArray && Array.isArray(imgArray) && imgArray.length > 1 && imgArray[1]) {
@@ -120,36 +118,10 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
         return cloudinaryService.generateOptimizedUrl(secondUrl)
       }
     }
-    
-    // TEMPORARY: If no secondary image in array, use a slight variation of primary for demo
-    // This shows the hover effect is working - remove when backend provides multiple images
-    if (imgArray && Array.isArray(imgArray) && imgArray.length > 0) {
-      const primaryUrl = imgArray[0]
-      if (typeof primaryUrl === "string" && primaryUrl.length > 0) {
-        if (primaryUrl.includes("?")) {
-          return primaryUrl + "&angle=2"
-        }
-        return primaryUrl + "?angle=2"
-      }
-    }
-    
     return ""
   }
-  
-  const secondaryImageUrl = getSecondaryImageUrl()
-  const hasMultipleImages = Boolean(secondaryImageUrl)
-  const rating = product.rating || 3 + Math.random() * 2
 
-  // Preload secondary image when component mounts for smooth hover
-  useEffect(() => {
-    if (hasMultipleImages && secondaryImageUrl && !isMobile) {
-      const link = document.createElement("link")
-      link.rel = "preload"
-      link.as = "image"
-      link.href = secondaryImageUrl
-      document.head.appendChild(link)
-    }
-  }, [secondaryImageUrl, hasMultipleImages, isMobile])
+  // Removed: Preload for all cards
 
   return (
     <Link href={`/product/${product.slug || product.id}`} prefetch={false}>
@@ -199,8 +171,8 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="eager"
-                  priority={true}
+                  loading={isAboveFold ? "eager" : "lazy"}
+                  priority={isAboveFold || false}
                   onLoad={handleImageLoad}
                   onError={handleImageError}
                   crossOrigin="anonymous"
@@ -232,7 +204,7 @@ const ProductCard = memo(({ product, isMobile }: { product: Product; isMobile: b
                   fill
                   sizes={isMobile ? "25vw" : "16vw"}
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="eager"
+                  loading="lazy"
                   priority={false}
                   crossOrigin="anonymous"
                 />
@@ -413,7 +385,7 @@ export function TrendingNowClient({ initialProducts }: TrendingNowClientProps) {
                   paddingBottom: "8px",
                 }}
               >
-                {initialProducts.map((product) => (
+                {initialProducts.map((product, index) => (
                   <div
                     key={product.id}
                     className="flex-shrink-0 pointer-events-auto"
@@ -424,7 +396,7 @@ export function TrendingNowClient({ initialProducts }: TrendingNowClientProps) {
                       scrollSnapAlign: "start",
                     }}
                   >
-                    <ProductCard product={product} isMobile={true} />
+                    <ProductCard product={product} isMobile={true} isAboveFold={index < 3} />
                   </div>
                 ))}
               </div>
@@ -454,11 +426,8 @@ export function TrendingNowClient({ initialProducts }: TrendingNowClientProps) {
                     key={product.id}
                     className="flex-shrink-0 pointer-events-auto"
                     style={{ width: `${isTablet ? 20 : 16.666}%` }}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
                   >
-                    <ProductCard product={product} isMobile={false} />
+                    <ProductCard product={product} isMobile={false} isAboveFold={index < itemsPerView} />
                   </motion.div>
                 ))}
               </motion.div>
