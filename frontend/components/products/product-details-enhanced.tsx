@@ -1143,18 +1143,18 @@ export default function ProductDetailsEnhanced({
       </div>
 
       {/* Main Content - Three Column Layout */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-32 lg:pb-6">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT COLUMN: Image Gallery */}
           <motion.div {...appleVariants.fadeIn} className="lg:col-span-5">
             <div className="bg-white rounded-2xl overflow-hidden shadow-sm sticky top-6">
-              <div className="relative aspect-square md:aspect-[4/3] cursor-zoom-in group bg-gray-50" ref={imageRef} onClick={handleImageClick}>
+              <div className="relative aspect-[4/3] cursor-zoom-in group bg-gray-50" ref={imageRef} onClick={handleImageClick}>
                 <Image
                   src={productImages[selectedImage] || "/generic-product-display.png"}
                   alt={product?.name || "Product image"}
                   fill
                   sizes="(max-width: 768px) 100vw, 40vw"
-                  className="object-contain p-2 sm:p-4 md:p-6 transition-transform duration-500 group-hover:scale-105"
+                  className="object-contain p-6 transition-transform duration-500 group-hover:scale-105"
                   priority
                   loading="eager"
                   quality={85}
@@ -1205,13 +1205,13 @@ export default function ProductDetailsEnhanced({
               </div>
 
               {/* Thumbnails */}
-              <div className="p-3 sm:p-4 border-t border-gray-100">
+              <div className="p-4 border-t border-gray-100">
                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                   {productImages.map((img, i) => (
                     <button
                       key={i}
                       className={cn(
-                        "relative w-24 sm:w-20 h-24 sm:h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all bg-gray-50",
+                        "relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all bg-gray-50",
                         selectedImage === i
                           ? "border-[#8B1538] ring-2 ring-[#8B1538]/20"
                           : "border-gray-200 hover:border-gray-300",
@@ -1222,7 +1222,7 @@ export default function ProductDetailsEnhanced({
                         src={img || "/generic-product-display.png"}
                         alt={`Thumbnail ${i + 1}`}
                         fill
-                        sizes="(max-width: 640px) 96px, 80px"
+                        sizes="80px"
                         className="object-cover"
                         loading={i === 0 ? "eager" : "lazy"}
                         quality={75}
@@ -1345,8 +1345,8 @@ export default function ProductDetailsEnhanced({
             </div>
           </motion.div>
 
-          {/* RIGHT COLUMN: Purchase Panel (Sticky on Desktop, Hidden on Mobile) */}
-          <motion.div {...appleVariants.slideUp} className="lg:col-span-3 hidden lg:block">
+          {/* RIGHT COLUMN: Purchase Panel (Sticky) */}
+          <motion.div {...appleVariants.slideUp} className="lg:col-span-3">
             <div className="bg-white rounded-2xl shadow-sm sticky top-6">
               <div className="p-5 space-y-5">
                 {/* Variants */}
@@ -1412,8 +1412,8 @@ export default function ProductDetailsEnhanced({
                   </div>
                 )}
 
-                {/* Quantity - Desktop Only */}
-                <div className="hidden lg:block">
+                {/* Quantity */}
+                <div>
                   <label className="block text-sm font-semibold text-gray-900 mb-2">Quantity</label>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
@@ -1439,8 +1439,8 @@ export default function ProductDetailsEnhanced({
                   </div>
                 </div>
 
-                {/* Action Buttons - Desktop Only */}
-                <div className="hidden lg:block space-y-3 pt-2">
+                {/* Action Buttons */}
+                <div className="space-y-3 pt-2">
                   <motion.button
                     onClick={handleAddToCart}
                     disabled={isAddingToCart || !inventoryData?.is_in_stock}
@@ -1500,90 +1500,6 @@ export default function ProductDetailsEnhanced({
               </div>
             </div>
           </motion.div>
-        </div>
-
-        {/* Mobile Floating Action Bar */}
-        <div className="fixed bottom-0 left-0 right-0 lg:hidden bg-white border-t border-gray-100 z-40">
-          <div className="max-w-[1400px] mx-auto px-4 py-3 sm:px-6 lg:px-8">
-            <div className="space-y-2">
-              {/* Quantity and Price Row */}
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
-                  <button
-                    className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                    disabled={quantity <= 1}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <span className="text-sm font-bold text-gray-900 w-6 text-center">{quantity}</span>
-                  <button
-                    className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                    onClick={() => setQuantity((q) => Math.min(inventoryData?.available_quantity || 0, q + 1))}
-                    disabled={!inventoryData?.is_in_stock || quantity >= (inventoryData?.available_quantity || 0)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex-1 text-right">
-                  <div className="text-2xl font-black text-[#8B1538]">{formatPrice(currentPrice)}</div>
-                  {currentPrice < originalPrice && (
-                    <div className="text-xs text-gray-500 line-through">{formatPrice(originalPrice)}</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                <motion.button
-                  onClick={handleAddToCart}
-                  disabled={isAddingToCart || !inventoryData?.is_in_stock}
-                  className={cn(
-                    "flex-1 h-11 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 transition-all",
-                    isAddingToCart || !inventoryData?.is_in_stock
-                      ? "bg-gray-300 cursor-not-allowed"
-                      : "bg-[#8B1538] hover:bg-[#6B1028] shadow-lg shadow-[#8B1538]/20",
-                  )}
-                  whileTap={inventoryData?.is_in_stock ? { scale: 0.98 } : {}}
-                >
-                  {isAddingToCart ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span className="hidden sm:inline">Adding...</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingCart className="h-4 w-4" />
-                      <span className="hidden sm:inline">Add to Cart</span>
-                    </>
-                  )}
-                </motion.button>
-
-                <motion.button
-                  onClick={handleBuyViaWhatsApp}
-                  className="flex-1 h-11 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors"
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <FaWhatsapp className="h-4 w-4" />
-                  <span className="hidden sm:inline">WhatsApp</span>
-                </motion.button>
-
-                <motion.button
-                  onClick={handleToggleWishlist}
-                  disabled={isTogglingWishlist}
-                  className={cn(
-                    "w-11 h-11 rounded-xl border-2 flex items-center justify-center transition-all flex-shrink-0",
-                    isProductInWishlist
-                      ? "border-[#8B1538] bg-[#8B1538]/5 text-[#8B1538]"
-                      : "border-gray-200 text-gray-700 hover:border-[#8B1538] hover:text-[#8B1538]",
-                  )}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Heart className={cn("h-5 w-5", isProductInWishlist && "fill-current")} />
-                </motion.button>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Product Details Tabs */}
