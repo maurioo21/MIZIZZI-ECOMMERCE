@@ -2,8 +2,8 @@ import { cache } from "react";
 import { API_BASE_URL } from "../config";
 
 // ISR configuration for optimal performance
-// 60-second revalidation window ensures instant first load with fresh data on page rebuild
-const ISR_REVALIDATE_TIME = 60;
+// 30-second revalidation window ensures instant updates when admin changes carousel
+const ISR_REVALIDATE_TIME = 30;
 const ISR_TAGS = {
   carousel: ["carousel-items"],
   premium: ["premium-experiences"],
@@ -11,6 +11,36 @@ const ISR_TAGS = {
   features: ["feature-cards"],
   showcase: ["product-showcase"]
 };
+
+// Helper to normalize image URLs - prioritizes Cloudinary URLs for fast CDN delivery
+function normalizeImageUrl(url: string | undefined | null): string {
+  if (!url || url === "null" || url === "undefined" || url.trim() === "") {
+    return "";
+  }
+  
+  // If it's already a Cloudinary URL (has https and domain), return as-is (highest priority)
+  if (url.includes("res.cloudinary.com")) {
+    return url;
+  }
+  
+  // If it's already an http/https URL (other than Cloudinary), return as-is
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  
+  // If it's a data URL, return as-is
+  if (url.startsWith("data:")) {
+    return url;
+  }
+  
+  // If it's a relative path starting with /, construct full backend URL
+  if (url.startsWith("/")) {
+    return `${API_BASE_URL}${url}`;
+  }
+  
+  // Fallback - return as-is
+  return url;
+}
 
 export interface CarouselItem {
   image: string;
@@ -176,7 +206,7 @@ export const getCarouselItems = cache(async (): Promise<CarouselItem[]> => {
 
     if (data.success && data.items && data.items.length > 0) {
       return data.items.map((item: any) => ({
-        image: item.image_url,
+        image: normalizeImageUrl(item.image_url),
         title: item.title,
         description: item.description,
         buttonText: item.button_text || "Shop Now",

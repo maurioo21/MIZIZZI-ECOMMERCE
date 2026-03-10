@@ -181,7 +181,8 @@ def get_carousel_items():
             "discount": item.discount,
             "button_text": item.button_text,
             "link_url": item.link_url,
-            "image_url": item.image_url,
+            "image_url": item.image_url,  # Direct Cloudinary CDN URL
+            "image_public_id": item.image_public_id,  # For frontend reference
             "sort_order": item.sort_order
         } for item in items]
         
