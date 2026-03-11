@@ -4,6 +4,7 @@ import NextImage from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
+import { useMediaQuery } from "@/hooks/use-media-query"
 import {
   Heart,
   Share2,
@@ -104,7 +105,7 @@ export default function ProductDetailsEnhanced({
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const [exploreProducts, setExploreProducts] = useState<any[]>(
     exploreInitialProducts && exploreInitialProducts.length > 0 ? exploreInitialProducts :
-    similarProducts && similarProducts.length > 0 ? similarProducts : [],
+      similarProducts && similarProducts.length > 0 ? similarProducts : [],
   )
   const [explorePage, setExplorePage] = useState(1)
   const [exploreHasMore, setExploreHasMore] = useState(true)
@@ -357,7 +358,7 @@ export default function ProductDetailsEnhanced({
         }
 
         const data = await response.json()
-        
+
         if (data.success && Array.isArray(data.related)) {
           setExploreProducts(data.related)
           setExploreHasMore((data.total || 0) > 12)
@@ -1014,7 +1015,7 @@ export default function ProductDetailsEnhanced({
     try {
       // Use the new backend endpoint for random explore products
       const response = await fetch('/api/product-details/explore/random?limit=20')
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch: ${response.status}`)
       }
@@ -1024,7 +1025,7 @@ export default function ProductDetailsEnhanced({
       if (data.success && Array.isArray(data.products)) {
         // Filter out current product
         const filteredProducts = data.products.filter((p: any) => p.id !== product?.id)
-        
+
         if (filteredProducts.length > 0) {
           setExploreProducts((prev) => {
             setNewlyLoadedStartIndex(prev.length)
@@ -1817,7 +1818,7 @@ export default function ProductDetailsEnhanced({
                     : 0
                   const itemRating = item.rating || 3 + Math.random() * 2
                   const isNewlyLoaded = newlyLoadedStartIndex !== null && index >= newlyLoadedStartIndex
-                  
+
                   // Get primary and secondary images
                   const primaryImage = item.images?.[0]?.urls?.large || item.images?.[0]?.urls?.original || getProductImageUrl(item)
                   const secondaryImage = item.images?.[1]?.urls?.large || item.images?.[1]?.urls?.original
@@ -1841,7 +1842,7 @@ export default function ProductDetailsEnhanced({
                         className="h-full"
                       >
                         <div className="group h-full overflow-hidden bg-white border border-gray-100 rounded-lg transition-all duration-300 hover:shadow-lg">
-                          <div 
+                          <div
                             className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
                             onMouseEnter={() => {
                               if (hasHoverImage) setIsHovering(true)
@@ -1851,11 +1852,10 @@ export default function ProductDetailsEnhanced({
                             {/* Primary Image */}
                             {primaryImage && (
                               <div
-                                className={`absolute inset-0 transition-opacity duration-300 ${
-                                  !(isDesktop && isHovering && hasHoverImage)
+                                className={`absolute inset-0 transition-opacity duration-300 ${!(isDesktop && isHovering && hasHoverImage)
                                     ? "opacity-100"
                                     : "opacity-0"
-                                }`}
+                                  }`}
                               >
                                 <NextImage
                                   src={primaryImage || "/logo.png"}
@@ -1875,9 +1875,8 @@ export default function ProductDetailsEnhanced({
                             {/* Secondary Image - Only on desktop when hovering */}
                             {secondaryImage && isDesktop ? (
                               <div
-                                className={`absolute inset-0 transition-opacity duration-300 ${
-                                  isHovering && secondaryImageLoaded ? "opacity-100" : "opacity-0"
-                                }`}
+                                className={`absolute inset-0 transition-opacity duration-300 ${isHovering && secondaryImageLoaded ? "opacity-100" : "opacity-0"
+                                  }`}
                               >
                                 <NextImage
                                   src={secondaryImage}
@@ -1921,10 +1920,10 @@ export default function ProductDetailsEnhanced({
                                   <Star
                                     key={star}
                                     className={`h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-3.5 md:w-3.5 ${star <= Math.floor(itemRating)
-                                        ? "fill-yellow-400 text-yellow-400"
-                                        : star - 0.5 <= itemRating
-                                          ? "fill-yellow-400/50 text-yellow-400"
-                                          : "fill-gray-200 text-gray-200"
+                                      ? "fill-yellow-400 text-yellow-400"
+                                      : star - 0.5 <= itemRating
+                                        ? "fill-yellow-400/50 text-yellow-400"
+                                        : "fill-gray-200 text-gray-200"
                                       }`}
                                   />
                                 ))}
