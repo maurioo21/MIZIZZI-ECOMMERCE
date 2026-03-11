@@ -49,6 +49,31 @@ def add_cache_headers(response: Dict[str, Any], cache_key: str, from_cache: bool
     return response
 
 
+@product_details_bp.route('/debug/query/<int:product_id>', methods=['GET'])
+def debug_query(product_id: int):
+    """Debug endpoint to test database queries"""
+    try:
+        # Direct query
+        product = Product.query.filter_by(id=product_id).first()
+        if product:
+            return jsonify({
+                'status': 'found',
+                'product_id': product.id,
+                'name': product.name,
+                'is_active': product.is_active
+            }), 200
+        else:
+            return jsonify({
+                'status': 'not_found',
+                'product_id': product_id
+            }), 404
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @product_details_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
