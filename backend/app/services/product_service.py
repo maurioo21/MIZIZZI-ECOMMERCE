@@ -94,6 +94,7 @@ class ProductService:
     ) -> List[Product]:
         """
         Get related products with intelligent fallback strategy.
+        Only returns ACTIVE products (is_active == True).
         1. Same category + same brand
         2. Same category
         3. Same brand
@@ -120,7 +121,8 @@ class ProductService:
                 ).filter(
                     Product.id != product_id,
                     Product.category_id == category_id,
-                    Product.brand_id == product.brand_id
+                    Product.brand_id == product.brand_id,
+                    Product.is_active == True
                 ).limit(limit).all()
             
             # Strategy 2: Same category only
@@ -132,7 +134,8 @@ class ProductService:
                 ).filter(
                     Product.id != product_id,
                     Product.id.notin_([p.id for p in related]),
-                    Product.category_id == category_id
+                    Product.category_id == category_id,
+                    Product.is_active == True
                 ).limit(limit - len(related)).all()
                 related.extend(additional)
             
@@ -145,7 +148,8 @@ class ProductService:
                 ).filter(
                     Product.id != product_id,
                     Product.id.notin_([p.id for p in related]),
-                    Product.brand_id == product.brand_id
+                    Product.brand_id == product.brand_id,
+                    Product.is_active == True
                 ).limit(limit - len(related)).all()
                 related.extend(additional)
             
@@ -157,7 +161,8 @@ class ProductService:
                     selectinload(Product.images),
                 ).filter(
                     Product.id != product_id,
-                    Product.id.notin_([p.id for p in related])
+                    Product.id.notin_([p.id for p in related]),
+                    Product.is_active == True
                 ).order_by(Product.is_featured.desc(), Product.created_at.desc()).limit(limit - len(related)).all()
                 related.extend(additional)
             
@@ -169,7 +174,8 @@ class ProductService:
                     selectinload(Product.images),
                 ).filter(
                     Product.id != product_id,
-                    Product.id.notin_([p.id for p in related])
+                    Product.id.notin_([p.id for p in related]),
+                    Product.is_active == True
                 ).order_by(Product.id.desc()).limit(limit - len(related)).all()
                 related.extend(additional)
             
@@ -177,10 +183,11 @@ class ProductService:
             
         except Exception as e:
             logger.error(f"Error fetching related products: {e}", exc_info=True)
-            # Return at least some products even if there's an error
+            # Return at least some active products even if there's an error
             try:
                 fallback = Product.query.filter(
-                    Product.id != product_id
+                    Product.id != product_id,
+                    Product.is_active == True
                 ).options(
                     joinedload(Product.brand),
                     joinedload(Product.category),
