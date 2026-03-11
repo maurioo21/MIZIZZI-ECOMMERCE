@@ -265,7 +265,7 @@ def get_product_details(product_id: int):
             current_app.logger.info(f"[v0] Cache HIT: Product details {product_id}")
             return jsonify(json.loads(cached_data) if isinstance(cached_data, str) else cached_data), 200
         
-        # Query product with relationships
+        # Query product with relationships - first try active products
         product = Product.query.options(
             joinedload(Product.brand),
             joinedload(Product.category),
@@ -273,8 +273,21 @@ def get_product_details(product_id: int):
             joinedload(Product.variants)
         ).filter_by(id=product_id, is_active=True).first()
         
+        # If not found as active, try all products (for debugging)
         if not product:
-            return jsonify({'error': 'Product not found'}), 404
+            current_app.logger.warning(f"[v0] Active product {product_id} not found, checking all products")
+            product = Product.query.options(
+                joinedload(Product.brand),
+                joinedload(Product.category),
+                joinedload(Product.images),
+                joinedload(Product.variants)
+            ).filter_by(id=product_id).first()
+            
+            if not product:
+                current_app.logger.error(f"[v0] Product {product_id} not found in database")
+                return jsonify({'error': 'Product not found', 'product_id': product_id}), 404
+            else:
+                current_app.logger.warning(f"[v0] Product {product_id} found but is_active={product.is_active}")
         
         # Check if user is admin
         is_admin = False
@@ -444,24 +457,34 @@ def invalidate_product_cache(product_id: int):
 @product_details_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check for product details service."""
-    try:
-        # Test database connection
-        db.session.execute('SELECT 1')
-        db_status = 'healthy'
-    except Exception:
-        db_status = 'unhealthy'
-    
-    try:
-        # Test cache connection
-        cache_status = 'healthy' if getattr(product_cache, 'is_connected', False) else 'degraded'
-    except Exception:
-        cache_status = 'unhealthy'
-    
-    return jsonify({
+    health_info = {
         'status': 'ok',
         'service': 'product_details',
-        'database': db_status,
-        'cache': cache_status,
-        'cloudinary': 'connected' if cloudinary_service else 'unavailable',
-        'timestamp': datetime.utcnow().isoformat()
-    }), 200
+        'timestamp': datetime.utcnow().isoformat(),
+    }
+    
+    # Test database connection
+    try:
+        db.session.execute('SELECT 1')
+        product_count = Product.query.count()
+        active_product_count = Product.query.filter_by(is_active=True).count()
+        health_info['database'] = 'healthy'
+        health_info['products_total'] = product_count
+        health_info['products_active'] = active_product_count
+        
+        if product_count == 0:
+            health_info['warning'] = 'No products in database'
+    except Exception as e:
+        health_info['database'] = 'unhealthy'
+        health_info['db_error'] = str(e)
+    
+    # Test cache connection
+    try:
+        health_info['cache'] = 'healthy' if getattr(product_cache, 'is_connected', False) else 'degraded'
+    except Exception:
+        health_info['cache'] = 'unhealthy'
+    
+    # Test Cloudinary
+    health_info['cloudinary'] = 'connected' if cloudinary_service else 'unavailable'
+    
+    return jsonify(health_info), 200
