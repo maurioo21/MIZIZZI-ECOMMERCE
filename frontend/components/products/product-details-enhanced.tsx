@@ -76,12 +76,16 @@ const motionVariants = {
 }
 
 function getInitialInventory(product: any): InventoryState {
-  const stock = Number(product?.stock || 0)
+  // Backend returns stock.quantity or stock_quantity
+  const stockQuantity = product?.stock?.quantity || product?.stock_quantity || product?.stock || 0
+  const stock = Number(stockQuantity)
+  const isInStock = product?.stock?.is_in_stock ?? product?.is_in_stock ?? stock > 0
+  
   return {
     available_quantity: stock,
-    is_in_stock: stock > 0,
-    is_low_stock: stock > 0 && stock <= 5,
-    stock_status: stock === 0 ? "out_of_stock" : stock <= 5 ? "low_stock" : "in_stock",
+    is_in_stock: isInStock,
+    is_low_stock: isInStock && stock > 0 && stock <= 5,
+    stock_status: !isInStock ? "out_of_stock" : stock <= 5 ? "low_stock" : "in_stock",
     last_updated: undefined,
   }
 }
@@ -148,11 +152,11 @@ export default function ProductDetailsEnhanced({ product, similarProducts = [] }
 
   const primaryImage = useMemo(() => getProductImageUrl(product, selectedImageIndex, true), [product, selectedImageIndex])
 
-  const currentPrice = product?.sale_price || product?.price || 0
-  const originalPrice = product?.price || 0
+  const currentPrice = product?.pricing?.current_price || product?.sale_price || product?.price || 0
+  const originalPrice = product?.pricing?.original_price || product?.price || 0
   const discountPercent = originalPrice > currentPrice && currentPrice > 0 ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0
-  const rating = getSafeRating(product?.rating || product?.average_rating, 4)
-  const reviewCount = product?.review_count || product?.reviews?.length || 0
+  const rating = getSafeRating(product?.ratings?.average || product?.rating || product?.average_rating, 4)
+  const reviewCount = product?.ratings?.total_reviews || product?.review_count || product?.reviews?.length || 0
 
   const handleAddToCart = useCallback(async () => {
     if (!product?.id) return

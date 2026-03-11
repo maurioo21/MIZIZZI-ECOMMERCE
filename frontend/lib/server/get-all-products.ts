@@ -22,14 +22,28 @@ function extractProducts(payload: any): Product[] {
 }
 
 function normalizeProductPrices(product: Product): Product {
-  let price = product.price
-  let salePrice = product.sale_price
+  // Backend returns nested pricing object: pricing.current_price, pricing.original_price
+  // Or flat structure: price, sale_price
+  const pricing = (product as any).pricing
+  
+  let price: number
+  let salePrice: number | null
 
-  if (typeof price === "string") {
-    price = Number.parseFloat(price) || 0
-  }
-  if (typeof salePrice === "string") {
-    salePrice = Number.parseFloat(salePrice) || null
+  if (pricing && typeof pricing === "object") {
+    // Backend structure: pricing.current_price and pricing.original_price
+    price = typeof pricing.original_price === "string" 
+      ? Number.parseFloat(pricing.original_price) 
+      : pricing.original_price || 0
+    
+    salePrice = pricing.current_price && pricing.current_price !== pricing.original_price
+      ? typeof pricing.current_price === "string"
+        ? Number.parseFloat(pricing.current_price)
+        : pricing.current_price
+      : null
+  } else {
+    // Flat structure: price, sale_price
+    price = typeof product.price === "string" ? Number.parseFloat(product.price) || 0 : product.price || 0
+    salePrice = typeof product.sale_price === "string" ? Number.parseFloat(product.sale_price) || null : product.sale_price || null
   }
 
   return {
