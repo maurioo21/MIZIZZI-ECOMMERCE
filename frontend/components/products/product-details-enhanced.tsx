@@ -318,63 +318,37 @@ export default function ProductDetailsEnhanced({
         return
       }
 
-      // Only fetch more if we don't have enough from server
-      if (exploreProducts.length >= 12) {
+      // If we already have products, don't fetch again
+      if (exploreProducts.length > 0) {
+        setExploreLoading(false)
+        return
+      }
+
+      // Fetch from the backend's /related endpoint
+      if (!product?.id) {
         setExploreLoading(false)
         return
       }
 
       setExploreLoading(true)
       try {
-        let allProducts: any[] = []
-
-        // Try to get products from the same category
-        if (product?.category_id) {
-          try {
-            const categoryProducts = await productService.getProductsByCategory(String(product.category_id))
-            allProducts = categoryProducts.filter((p: any) => p.id !== product.id)
-          } catch (e) {
-            console.error("[v0] Error fetching category products:", e)
-          }
+        const response = await fetch(`/api/product-details/${product.id}/related?limit=12`)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch: ${response.status}`)
         }
 
-        // If not enough from category, fetch more general products
-        if (allProducts.length < 12) {
-          try {
-            const response = await fetch(`/api/products?limit=30&page=1`)
-            const data = await response.json()
-            const productsList = Array.isArray(data?.data) ? data.data :
-              Array.isArray(data?.products) ? data.products :
-                Array.isArray(data?.items) ? data.items :
-                  Array.isArray(data) ? data : []
-
-            const generalProducts = productsList.filter(
-              (p: any) => p.id !== product.id && !allProducts.some((ap: any) => ap.id === p.id),
-            )
-            allProducts = [...allProducts, ...generalProducts]
-          } catch (e) {
-            console.error("[v0] Error fetching general products:", e)
-          }
+        const data = await response.json()
+        if (data.success && Array.isArray(data.related)) {
+          setExploreProducts(data.related)
+          setExploreHasMore((data.total || 0) > 12)
+        } else {
+          setExploreProducts([])
+          setExploreHasMore(false)
         }
-
-        // Sort by category match, then price similarity, then rating
-        const productPrice = product?.sale_price || product?.price || 0
-        const sortedProducts = allProducts.sort((a: any, b: any) => {
-          const aCategoryMatch = a.category_id === product?.category_id ? 1 : 0
-          const bCategoryMatch = b.category_id === product?.category_id ? 1 : 0
-          if (aCategoryMatch !== bCategoryMatch) return bCategoryMatch - aCategoryMatch
-
-          const aPriceDiff = Math.abs((a.sale_price || a.price || 0) - productPrice)
-          const bPriceDiff = Math.abs((b.sale_price || b.price || 0) - productPrice)
-          if (aPriceDiff !== bPriceDiff) return aPriceDiff - bPriceDiff
-
-          return (b.rating || 0) - (a.rating || 0)
-        })
-
-        setExploreProducts(sortedProducts.slice(0, 12))
-        setExploreHasMore(sortedProducts.length > 12)
       } catch (error) {
-        console.error("[v0] Error in fetchRelatedProducts:", error)
+        console.error("[v0] Error fetching related products:", error)
+        setExploreProducts([])
+        setExploreHasMore(false)
       } finally {
         setExploreLoading(false)
       }
