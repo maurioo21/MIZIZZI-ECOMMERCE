@@ -297,78 +297,28 @@ export default function ProductDetailsEnhanced({
     }
   }, [productImages])
 
-  // Real-time product updates via WebSocket and polling
-  useEffect(() => {
-    if (!product?.id) return
-
-    const productId = String(product.id)
-    
-    // Subscribe to product updates
-    const handleProductUpdate = (updatedProduct: any) => {
-      if (String(updatedProduct.id) === productId) {
-        console.log("[v0] Real-time product update received from admin:", updatedProduct)
-        setProduct(updatedProduct)
-      }
-    }
-
-    // Listen for product_updated events
-    websocketService.on("product_updated", handleProductUpdate)
-
-    // Polling fallback for guaranteed instant updates
-    const pollInterval = setInterval(async () => {
-      try {
-        const latestProduct = await productService.getProduct(productId)
-        if (latestProduct) {
-          // Check if key product info changed (description, images, price, name)
-          if (
-            latestProduct.description !== product.description ||
-            latestProduct.name !== product.name ||
-            latestProduct.price !== product.price ||
-            latestProduct.sale_price !== product.sale_price ||
-            JSON.stringify(latestProduct.image_urls) !== JSON.stringify(product.image_urls)
-          ) {
-            console.log("[v0] Product changes detected via polling, updating display instantly")
-            setProduct(latestProduct)
-          }
-        }
-      } catch (error) {
-        console.error("[v0] Error polling for product updates:", error)
-      }
-    }, 3000) // Poll every 3 seconds for instant updates
-
-    return () => {
-      websocketService.off("product_updated", handleProductUpdate)
-      clearInterval(pollInterval)
-    }
-  }, [product?.id])
+  // Removed real-time updates - using SSR-provided data instead
+  // Product updates are handled on new page loads via SSR
 
   const fetchInventoryData = useCallback(async () => {
-    if (!product?.id) return
-    setInventoryError(null)
-    try {
-      const summary = await inventoryService.getProductInventorySummary(Number(product.id), selectedVariant?.id)
-      const available = summary.total_available_quantity ?? 0
-      const stock_status: "in_stock" | "low_stock" | "out_of_stock" =
-        available === 0 ? "out_of_stock" : summary.is_low_stock ? "low_stock" : "in_stock"
-      setInventoryData({
-        available_quantity: available,
-        is_in_stock: !!summary.is_in_stock,
-        is_low_stock: !!summary.is_low_stock,
-        stock_status,
-        last_updated: summary.items?.[0]?.last_updated,
-      })
-    } catch (error: any) {
-      console.error("[v0] Background inventory fetch error:", error)
-    }
-  }, [product?.id, product?.stock, selectedVariant?.id])
+    // SSR provides stock status from backend, no need for client-side fetch
+    // Inventory data is already available from initialProduct
+    return
+  }, [])
 
-  useEffect(() => {
-    fetchInventoryData()
-  }, [fetchInventoryData])
+  // Removed automatic inventory fetch - data comes from SSR
 
   useEffect(() => {
     const fetchRelatedProducts = async () => {
-      // Only fetch if we don't have products already and some initial products are not enough
+      // Start with server-provided similarProducts if available
+      if (similarProducts && similarProducts.length > 0) {
+        setExploreProducts(similarProducts.slice(0, 12))
+        setExploreHasMore(similarProducts.length > 12)
+        setExploreLoading(false)
+        return
+      }
+
+      // Only fetch more if we don't have enough from server
       if (exploreProducts.length >= 12) {
         setExploreLoading(false)
         return
@@ -378,7 +328,7 @@ export default function ProductDetailsEnhanced({
       try {
         let allProducts: any[] = []
 
-        // First: Try to get products from the same category
+        // Try to get products from the same category
         if (product?.category_id) {
           try {
             const categoryProducts = await productService.getProductsByCategory(String(product.category_id))
@@ -393,7 +343,6 @@ export default function ProductDetailsEnhanced({
           try {
             const response = await fetch(`/api/products?limit=30&page=1`)
             const data = await response.json()
-            // Handle different response structures safely
             const productsList = Array.isArray(data?.data) ? data.data : 
                                   Array.isArray(data?.products) ? data.products : 
                                   Array.isArray(data?.items) ? data.items : 
@@ -408,20 +357,17 @@ export default function ProductDetailsEnhanced({
           }
         }
 
-        // Smart sorting: prioritize by category match, then price similarity, then rating
+        // Sort by category match, then price similarity, then rating
         const productPrice = product?.sale_price || product?.price || 0
         const sortedProducts = allProducts.sort((a: any, b: any) => {
-          // Same category gets priority
           const aCategoryMatch = a.category_id === product?.category_id ? 1 : 0
           const bCategoryMatch = b.category_id === product?.category_id ? 1 : 0
           if (aCategoryMatch !== bCategoryMatch) return bCategoryMatch - aCategoryMatch
 
-          // Then sort by price similarity (closer price = higher priority)
           const aPriceDiff = Math.abs((a.sale_price || a.price || 0) - productPrice)
           const bPriceDiff = Math.abs((b.sale_price || b.price || 0) - productPrice)
           if (aPriceDiff !== bPriceDiff) return aPriceDiff - bPriceDiff
 
-          // Finally by rating
           return (b.rating || 0) - (a.rating || 0)
         })
 
@@ -434,13 +380,10 @@ export default function ProductDetailsEnhanced({
       }
     }
 
-    if (product?.id && exploreProducts.length < 12) {
+    if (product?.id) {
       fetchRelatedProducts()
-    } else if (!product?.id) {
-      // Handle case where product might be null initially
-      setExploreLoading(false)
     }
-  }, [product?.id, product?.category_id, product?.price, product?.sale_price, exploreProducts.length])
+  }, [product?.id])
 
   useEffect(() => {
     const run = async () => {
