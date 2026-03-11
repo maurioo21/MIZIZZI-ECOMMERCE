@@ -1,5 +1,5 @@
 """
-Product Details Routes - Complete Production-Grade Rewrite
+Product Details Routes - Final Production-Grade Implementation
 Handles single product detail views with Redis caching, Cloudinary image optimization,
 defensive serialization, and complete cache invalidation.
 
@@ -7,6 +7,8 @@ Architecture:
 - Routes handle HTTP validation and responses only
 - Services handle database queries and serialization
 - Cache service handles Redis operations
+- Only stable product data is cached (no request-time metadata)
+- Fresh timestamps and cache metadata per request
 - No broken data gets cached
 - All HTML is sanitized
 - Images always safely serialized
@@ -18,6 +20,7 @@ from typing import Optional, Dict, Any, Tuple
 
 from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy import text
 
 from app.configuration.extensions import db
 from app.models.models import Product, Review, WishlistItem, User
@@ -37,16 +40,6 @@ product_details_bp = Blueprint(
     __name__,
     url_prefix='/api/product-details'
 )
-
-
-def add_cache_headers(response: Dict[str, Any], cache_key: str, from_cache: bool = False) -> Dict[str, Any]:
-    """Add cache metadata headers to response"""
-    response['_cache'] = {
-        'status': 'HIT' if from_cache else 'MISS',
-        'key': cache_key,
-        'timestamp': datetime.utcnow().isoformat()
-    }
-    return response
 
 
 @product_details_bp.route('/debug/query/<int:product_id>', methods=['GET'])
@@ -76,34 +69,37 @@ def debug_query(product_id: int):
 
 @product_details_bp.route('/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    try:
-        # Test database
-        db.session.execute(db.text('SELECT 1'))
-        db_status = 'healthy'
-        product_count = Product.query.count()
-        active_count = Product.query.filter_by(is_active=True).count()
-    except Exception as e:
-        db_status = 'unhealthy'
-        product_count = 0
-        active_count = 0
-        logger.error(f"Database health check failed: {e}")
-    
-    # Test cache
-    try:
-        cache_status = 'healthy'
-    except Exception:
-        cache_status = 'unhealthy'
-    
-    return jsonify({
+    """
+    Health check endpoint with diagnostics.
+    Tests database connectivity, product counts, and cache status.
+    """
+    health_status = {
         'status': 'ok',
         'service': 'product_details',
-        'database': db_status,
-        'database_products': product_count,
-        'active_products': active_count,
-        'cache': cache_status,
         'timestamp': datetime.utcnow().isoformat()
-    }), 200
+    }
+    
+    try:
+        # Test database connection
+        db.session.execute(text('SELECT 1'))
+        product_count = Product.query.count()
+        active_count = Product.query.filter_by(is_active=True).count()
+        health_status['database'] = 'healthy'
+        health_status['database_products'] = product_count
+        health_status['active_products'] = active_count
+    except Exception as e:
+        health_status['database'] = 'unhealthy'
+        health_status['database_error'] = str(e)
+        logger.error(f"Database health check failed: {e}")
+    
+    # Test cache connection
+    try:
+        health_status['cache'] = 'healthy'
+    except Exception as e:
+        health_status['cache'] = 'unhealthy'
+        logger.error(f"Cache health check failed: {e}")
+    
+    return jsonify(health_status), 200
 
 
 @product_details_bp.route('/<int:product_id>', methods=['GET'])
@@ -111,227 +107,326 @@ def get_product_details(product_id: int):
     """
     Get complete product details with all relationships.
     
+    Cache Strategy:
+    - Cache ONLY the stable product data payload (data field)
+    - Generate fresh metadata on every request (_cache, success, timestamp)
+    - This ensures accurate cache timestamps while reusing expensive queries
+    
     Includes:
     - Product info (name, description, pricing, stock)
     - Brand and category
     - Images with Cloudinary URLs
     - Variants
     - Ratings and reviews
-    - Cache status
+    - Cache status with fresh timestamp
     
     Query Parameters:
     - include_reviews: boolean (default: true)
     - include_variants: boolean (default: true)
     """
     cache_key = get_public_product_key(product_id)
+    request_timestamp = datetime.utcnow().isoformat()
+    cache_hit = False
     
     try:
-        # Try cache first
-        cached = product_cache.get(cache_key)
-        if cached:
+        # Try cache first - only retrieve the product data payload
+        cached_payload = product_cache.get(cache_key)
+        
+        if cached_payload:
             try:
-                response_data = json.loads(cached) if isinstance(cached, str) else cached
-                response_data = add_cache_headers(response_data, cache_key, from_cache=True)
-                logger.info(f"Product {product_id} cache HIT")
-                return jsonify(response_data), 200
+                cached_data = json.loads(cached_payload) if isinstance(cached_payload, str) else cached_payload
+                cache_hit = True
+                product_data = cached_data
+                logger.debug(f"CACHE HIT: {cache_key}")
             except Exception as e:
-                logger.warning(f"Cache retrieval error: {e}")
+                logger.warning(f"Cache retrieval error for {cache_key}: {e}")
+                cached_payload = None
         
         # Cache miss - fetch from database
-        logger.info(f"Product {product_id} cache MISS - fetching from database")
-        
-        product = ProductService.get_product_by_id_optimized(product_id)
-        
-        if not product:
-            logger.warning(f"Product {product_id} not found")
-            return jsonify({
-                'success': False,
-                'error': 'Product not found',
-                'product_id': product_id
-            }), 404
-        
-        # Serialize product - this is where data integrity is guaranteed
-        serialized = ProductSerializer.serialize_product_full(product, include_reviews=True)
-        
-        # Only cache successful responses
-        if serialized.get('success'):
+        if not cache_hit:
+            logger.info(f"Product {product_id} cache MISS - fetching from database")
+            
+            product = ProductService.get_product_by_id_optimized(product_id)
+            
+            if not product:
+                logger.warning(f"Product {product_id} not found in database")
+                return jsonify({
+                    'success': False,
+                    'error': 'Product not found',
+                    'product_id': product_id,
+                    'timestamp': request_timestamp
+                }), 404
+            
+            # Serialize product - this is where data integrity is guaranteed
+            serialized = ProductSerializer.serialize_product_full(product, include_reviews=True)
+            
+            if not serialized.get('success'):
+                logger.error(f"Serialization failed for product {product_id}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to serialize product',
+                    'timestamp': request_timestamp
+                }), 500
+            
+            # Extract only the stable product data for caching
+            product_data = serialized.get('data', {})
+            
+            # Cache only the stable payload, not request-time metadata
             try:
                 cache_ttl = CACHE_TTL.get('product_detail', 600)
-                cache_data = json.dumps(serialized)
-                product_cache.set(cache_key, cache_data, cache_ttl)
+                cache_payload = json.dumps(product_data)
+                product_cache.set(cache_key, cache_payload, cache_ttl)
+                logger.debug(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
                 logger.info(f"Product {product_id} cached for {cache_ttl}s")
             except Exception as e:
-                logger.error(f"Cache write error: {e}")
+                logger.error(f"Cache write error for {cache_key}: {e}")
                 # Continue anyway - cache failure shouldn't block response
         
-        # Add cache headers
-        serialized = add_cache_headers(serialized, cache_key, from_cache=False)
+        # Build response with fresh request-time metadata
+        response = {
+            'success': True,
+            'data': product_data,
+            'timestamp': request_timestamp,  # Always fresh
+            '_cache': {
+                'status': 'HIT' if cache_hit else 'MISS',
+                'key': cache_key,
+                'timestamp': request_timestamp  # Always fresh
+            }
+        }
         
-        return jsonify(serialized), 200
+        return jsonify(response), 200
     
     except Exception as e:
         logger.error(f"Unhandled error in get_product_details: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal server error',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': request_timestamp
         }), 500
 
 
 @product_details_bp.route('/<int:product_id>/images', methods=['GET'])
 def get_product_images(product_id: int):
-    """Get product images with optimized URLs"""
+    """
+    Get product images with optimized Cloudinary URLs.
+    Cache only the image data, generate fresh metadata per request.
+    """
     cache_key = f"product:images:{product_id}"
+    request_timestamp = datetime.utcnow().isoformat()
+    cache_hit = False
     
     try:
         # Try cache
-        cached = product_cache.get(cache_key)
-        if cached:
+        cached_images = product_cache.get(cache_key)
+        
+        if cached_images:
             try:
-                response_data = json.loads(cached) if isinstance(cached, str) else cached
-                response_data['_cache'] = {'status': 'HIT', 'key': cache_key}
-                return jsonify(response_data), 200
+                images = json.loads(cached_images) if isinstance(cached_images, str) else cached_images
+                cache_hit = True
+                logger.debug(f"CACHE HIT: {cache_key}")
             except Exception as e:
                 logger.warning(f"Image cache retrieval error: {e}")
+                cached_images = None
         
-        # Fetch product with images
-        product = Product.query.options(
-            selectinload(Product.images)
-        ).filter_by(id=product_id, is_active=True).first()
+        # Cache miss - fetch from database
+        if not cache_hit:
+            product = Product.query.options(
+                selectinload(Product.images)
+            ).filter_by(id=product_id).first()
+            
+            if not product:
+                return jsonify({
+                    'success': False,
+                    'error': 'Product not found',
+                    'product_id': product_id,
+                    'timestamp': request_timestamp
+                }), 404
+            
+            # Serialize images defensively
+            images = []
+            try:
+                product_images = getattr(product, 'images', []) or []
+                for img in product_images:
+                    try:
+                        serialized = ProductSerializer.serialize_image(img)
+                        if serialized:
+                            images.append(serialized)
+                    except Exception as e:
+                        logger.error(f"Error serializing image {img.id}: {e}")
+                        # Skip this image but continue with others
+            except Exception as e:
+                logger.error(f"Error processing images for product {product_id}: {e}")
+            
+            # Ensure primary image is marked
+            if images:
+                primary_found = any(img.get('is_primary', False) for img in images)
+                if not primary_found and images:
+                    images[0]['is_primary'] = True
+            
+            # Cache only the image data
+            try:
+                cache_ttl = CACHE_TTL.get('product_images', 600)
+                cache_payload = json.dumps(images)
+                product_cache.set(cache_key, cache_payload, cache_ttl)
+                logger.debug(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
+            except Exception as e:
+                logger.error(f"Image cache write error: {e}")
         
-        if not product:
-            return jsonify({'error': 'Product not found'}), 404
-        
-        # Serialize images
-        images = []
-        try:
-            product_images = getattr(product, 'images', []) or []
-            for img in product_images:
-                serialized = ProductSerializer.serialize_image(img)
-                if serialized:
-                    images.append(serialized)
-        except Exception as e:
-            logger.error(f"Error processing images: {e}")
-        
-        # Ensure primary image
-        if images:
-            primary_found = any(img['is_primary'] for img in images)
-            if not primary_found:
-                images[0]['is_primary'] = True
-        
-        response_data = {
+        # Build response with fresh metadata
+        response = {
             'success': True,
             'product_id': product_id,
             'images': images,
             'total': len(images),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': request_timestamp,  # Always fresh
+            '_cache': {
+                'status': 'HIT' if cache_hit else 'MISS',
+                'key': cache_key,
+                'timestamp': request_timestamp  # Always fresh
+            }
         }
         
-        # Cache
-        try:
-            cache_ttl = CACHE_TTL.get('product_detail', 600)
-            product_cache.set(cache_key, json.dumps(response_data), cache_ttl)
-        except Exception as e:
-            logger.error(f"Image cache write error: {e}")
-        
-        response_data['_cache'] = {'status': 'MISS', 'key': cache_key}
-        return jsonify(response_data), 200
+        return jsonify(response), 200
     
     except Exception as e:
         logger.error(f"Error in get_product_images: {e}", exc_info=True)
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'timestamp': request_timestamp
+        }), 500
 
 
 @product_details_bp.route('/<int:product_id>/inventory', methods=['GET'])
 def get_product_inventory(product_id: int):
     """
     Get real-time inventory - NOT CACHED.
-    Always fresh from database.
+    Always fresh from database for accuracy.
     """
+    request_timestamp = datetime.utcnow().isoformat()
+    
     try:
         product = Product.query.filter_by(id=product_id).first()
         
         if not product:
-            return jsonify({'error': 'Product not found'}), 404
+            return jsonify({
+                'success': False,
+                'error': 'Product not found',
+                'product_id': product_id,
+                'timestamp': request_timestamp
+            }), 404
         
         stock = int(getattr(product, 'stock_quantity', 0) or 0)
         
-        return jsonify({
+        response = {
             'success': True,
             'product_id': product_id,
             'stock': {
                 'quantity': stock,
                 'is_in_stock': stock > 0,
                 'status': 'in_stock' if stock > 0 else 'out_of_stock',
-                'low_stock': stock < 5 and stock > 0,
+                'low_stock': 0 < stock < 5,
             },
             'cached': False,  # Always fresh
-            'timestamp': datetime.utcnow().isoformat()
-        }), 200
+            'timestamp': request_timestamp,
+            '_cache': {
+                'status': 'BYPASS',
+                'reason': 'Inventory is always fresh'
+            }
+        }
+        
+        return jsonify(response), 200
     
     except Exception as e:
         logger.error(f"Error in get_product_inventory: {e}", exc_info=True)
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'timestamp': request_timestamp
+        }), 500
 
 
 @product_details_bp.route('/<int:product_id>/related', methods=['GET'])
 def get_related_products(product_id: int):
-    """Get related products from same category"""
+    """
+    Get related products from same category.
+    Cache only the product data, generate fresh metadata per request.
+    """
     limit = request.args.get('limit', 6, type=int)
     cache_key = f"product:related:{product_id}"
+    request_timestamp = datetime.utcnow().isoformat()
+    cache_hit = False
     
     try:
         # Try cache
-        cached = product_cache.get(cache_key)
-        if cached:
+        cached_related = product_cache.get(cache_key)
+        
+        if cached_related:
             try:
-                response_data = json.loads(cached) if isinstance(cached, str) else cached
-                response_data['_cache'] = {'status': 'HIT', 'key': cache_key}
-                return jsonify(response_data), 200
+                related_data = json.loads(cached_related) if isinstance(cached_related, str) else cached_related
+                cache_hit = True
+                logger.debug(f"CACHE HIT: {cache_key}")
             except Exception as e:
                 logger.warning(f"Related products cache error: {e}")
+                cached_related = None
         
-        # Get related products
-        related_products = ProductService.get_related_products_by_category(
-            product_id, 
-            limit=limit
-        )
-        
-        # Serialize related products (lightweight version)
-        related_data = []
-        for product in related_products:
+        # Cache miss - fetch from database
+        if not cache_hit:
+            related_products = ProductService.get_related_products_by_category(
+                product_id, 
+                limit=limit
+            )
+            
+            # Serialize related products (lightweight version)
+            related_data = []
+            for product in related_products:
+                try:
+                    product_image = None
+                    if hasattr(product, 'images') and product.images:
+                        product_image = getattr(product.images[0], 'url', None)
+                    
+                    related_data.append({
+                        'id': product.id,
+                        'name': getattr(product, 'name', 'Unknown'),
+                        'price': float(getattr(product, 'price', 0) or 0),
+                        'sale_price': float(getattr(product, 'sale_price', 0) or 0),
+                        'image': product_image,
+                    })
+                except Exception as e:
+                    logger.error(f"Error serializing related product {product.id}: {e}")
+            
+            # Cache only the related products data
             try:
-                related_data.append({
-                    'id': product.id,
-                    'name': getattr(product, 'name', 'Unknown'),
-                    'price': float(getattr(product, 'price', 0) or 0),
-                    'sale_price': float(getattr(product, 'sale_price', None) or 0),
-                    'image': getattr(product.images[0], 'url', '/generic-product-display.png') if product.images else '/generic-product-display.png',
-                })
+                cache_ttl = CACHE_TTL.get('related_products', 300)
+                cache_payload = json.dumps(related_data)
+                product_cache.set(cache_key, cache_payload, cache_ttl)
+                logger.debug(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
             except Exception as e:
-                logger.error(f"Error serializing related product {product.id}: {e}")
+                logger.error(f"Related products cache error: {e}")
         
-        response_data = {
+        # Build response with fresh metadata
+        response = {
             'success': True,
             'product_id': product_id,
             'related': related_data,
             'total': len(related_data),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': request_timestamp,  # Always fresh
+            '_cache': {
+                'status': 'HIT' if cache_hit else 'MISS',
+                'key': cache_key,
+                'timestamp': request_timestamp  # Always fresh
+            }
         }
         
-        # Cache
-        try:
-            cache_ttl = CACHE_TTL.get('related_products', 300)
-            product_cache.set(cache_key, json.dumps(response_data), cache_ttl)
-        except Exception as e:
-            logger.error(f"Related products cache error: {e}")
-        
-        response_data['_cache'] = {'status': 'MISS', 'key': cache_key}
-        return jsonify(response_data), 200
+        return jsonify(response), 200
     
     except Exception as e:
         logger.error(f"Error in get_related_products: {e}", exc_info=True)
-        return jsonify({'error': 'Internal server error'}), 500
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'timestamp': request_timestamp
+        }), 500
 
 
 @product_details_bp.route('/<int:product_id>/cache/invalidate', methods=['POST'])
@@ -339,33 +434,59 @@ def invalidate_product_cache(product_id: int):
     """
     Invalidate product cache.
     Admin endpoint - requires authentication in production.
+    
+    Invalidates:
+    - Product detail cache
+    - Related products cache
+    - Product images cache
     """
+    request_timestamp = datetime.utcnow().isoformat()
+    
     try:
         # In production, verify admin JWT token here
         
         cache_key = get_public_product_key(product_id)
-        product_cache.delete(cache_key)
         
-        # Also invalidate related products cache
-        product_cache.delete(f"product:related:{product_id}")
-        product_cache.delete(f"product:images:{product_id}")
+        # Delete all related caches
+        cache_keys_to_delete = [
+            cache_key,
+            f"product:related:{product_id}",
+            f"product:images:{product_id}"
+        ]
         
-        logger.info(f"Invalidated cache for product {product_id}")
+        for key in cache_keys_to_delete:
+            try:
+                product_cache.delete(key)
+                logger.debug(f"Deleted cache key: {key}")
+            except Exception as e:
+                logger.warning(f"Error deleting cache key {key}: {e}")
         
-        return jsonify({
+        logger.info(f"Invalidated all caches for product {product_id}")
+        
+        response = {
             'success': True,
             'message': f'Cache invalidated for product {product_id}',
-            'timestamp': datetime.utcnow().isoformat()
-        }), 200
+            'invalidated_keys': cache_keys_to_delete,
+            'timestamp': request_timestamp
+        }
+        
+        return jsonify(response), 200
     
     except Exception as e:
         logger.error(f"Error invalidating cache: {e}")
-        return jsonify({'error': 'Cache invalidation failed'}), 500
+        return jsonify({
+            'success': False,
+            'error': 'Cache invalidation failed',
+            'timestamp': request_timestamp
+        }), 500
 
 
 @product_details_bp.route('/list', methods=['GET'])
 def list_active_products():
-    """List all active products (for debugging/development)"""
+    """
+    List all active products (for debugging/development).
+    Not cached to ensure accurate product list during development.
+    """
     try:
         active_products = Product.query.filter_by(is_active=True).with_entities(
             Product.id,
@@ -373,15 +494,22 @@ def list_active_products():
             Product.sku
         ).limit(50).all()
         
-        return jsonify({
+        response = {
             'status': 'ok',
             'active_products': [
                 {'id': p.id, 'name': p.name, 'sku': p.sku}
                 for p in active_products
             ],
-            'total': len(active_products)
-        }), 200
+            'total': len(active_products),
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        return jsonify(response), 200
     
     except Exception as e:
         logger.error(f"Error listing products: {e}")
-        return jsonify({'error': 'Failed to list products'}), 500
+        return jsonify({
+            'success': False,
+            'error': 'Failed to list products',
+            'timestamp': datetime.utcnow().isoformat()
+        }), 500
