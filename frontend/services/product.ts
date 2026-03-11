@@ -467,7 +467,7 @@ export const productService = {
 
       // Validate images structure
       if (product.images && Array.isArray(product.images)) {
-        product.images = product.images.filter((img: ProductImageType) => {
+        product.images = product.images.filter((img: ProductImage) => {
           const hasUrls = img.urls && typeof img.urls === 'object';
           const hasCriticalUrls = hasUrls && (img.urls.large || img.urls.original);
           if (!hasCriticalUrls) {
