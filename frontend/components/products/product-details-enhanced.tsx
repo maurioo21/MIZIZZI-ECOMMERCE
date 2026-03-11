@@ -1797,7 +1797,7 @@ export default function ProductDetailsEnhanced({
         </motion.div>
 
         {exploreProducts.length > 0 && (
-          <motion.div {...appleVariants.fadeIn} className="mt-8">
+          <div className="mt-8">
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -1829,19 +1829,8 @@ export default function ProductDetailsEnhanced({
 
                   return (
                     <Link key={`${item.id}-${index}`} href={`/product/${item.slug || item.id}`} prefetch={false}>
-                      <motion.div
-                        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 100,
-                          damping: 15,
-                          delay: isNewlyLoaded ? (index - (newlyLoadedStartIndex || 0)) * 0.05 : index * 0.02,
-                        }}
-                        whileHover={isDesktop ? { y: -2, transition: { duration: 0.18 } } : undefined}
-                        className="h-full"
-                      >
-                        <div className="group h-full overflow-hidden bg-white border border-gray-100 rounded-lg transition-all duration-300 hover:shadow-lg">
+                      <div className="h-full">
+                        <div className="group h-full overflow-hidden bg-white border border-gray-100 rounded-lg hover:shadow-lg">
                           <div
                             className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
                             onMouseEnter={() => {
@@ -1914,24 +1903,9 @@ export default function ProductDetailsEnhanced({
                               )}
                             </div>
 
-                            <div className="flex items-center gap-0.5 sm:gap-1">
-                              <div className="flex">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <Star
-                                    key={star}
-                                    className={`h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-3.5 md:w-3.5 ${star <= Math.floor(itemRating)
-                                      ? "fill-yellow-400 text-yellow-400"
-                                      : star - 0.5 <= itemRating
-                                        ? "fill-yellow-400/50 text-yellow-400"
-                                        : "fill-gray-200 text-gray-200"
-                                      }`}
-                                  />
-                                ))}
-                              </div>
-                            </div>
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
                     </Link>
                   )
                 })}
