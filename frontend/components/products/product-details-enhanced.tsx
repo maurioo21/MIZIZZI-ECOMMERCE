@@ -47,20 +47,14 @@ import { imageBatchService } from "@/services/image-batch-service"
 import type {
   ProductDetails,
   ProductImage,
-  getGalleryImages,
-  getGalleryImageUrl,
-  getZoomImageUrl,
-  getThumbnailImageUrl,
-  getCurrentDisplayPrice,
-  getDiscountInfo,
-  isInStock,
-  isLowStock,
-  getStockStatusText,
-  hasReviews,
-  getDisplayRating,
-  getReviewCount,
+  ProductPricing,
+  ProductStock,
+  ProductRatings,
+  ProductReview,
+  ProductBrand,
+  ProductCategory,
+  ProductDetailsResponse,
 } from "@/types/products"
-import * as ProductTypeHelpers from "@/types/products"
 
 interface ProductDetailsEnhancedProps {
   product: any

@@ -10,19 +10,6 @@ import { cloudinaryService } from "@/services/cloudinary-service"
 import type {
   ProductDetails,
   ProductDetailsResponse,
-  ProductImage as ProductImageType,
-  getPrimaryImage,
-  getGalleryImages,
-  getGalleryImageUrl,
-  getZoomImageUrl,
-  getCurrentDisplayPrice,
-  getDiscountInfo,
-  isInStock,
-  isLowStock,
-  getStockStatusText,
-  hasReviews,
-  getDisplayRating,
-  getReviewCount,
 } from "@/types/products"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://mizizzi-ecommerce-1.onrender.com"
