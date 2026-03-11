@@ -1124,8 +1124,8 @@ export default function ProductDetailsEnhanced({
         )}
       </AnimatePresence>
 
-      {/* Breadcrumbs - Hidden on Mobile */}
-      <div className="bg-white border-b border-gray-100 hidden sm:block">
+      {/* Breadcrumbs */}
+      <div className="bg-white border-b border-gray-100">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <nav className="flex items-center text-sm text-gray-500" aria-label="Breadcrumb">
             <Link href="/" className="flex items-center hover:text-[#8B1538] transition-colors">
@@ -1142,235 +1142,213 @@ export default function ProductDetailsEnhanced({
         </div>
       </div>
 
-      {/* Main Content - Responsive Layout */}
-      <div className="pb-28 sm:pb-6">
-        <div className="max-w-[1400px] mx-auto px-0 sm:px-6 lg:px-8 py-0 sm:py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 sm:gap-6">
-            {/* LEFT COLUMN: Image Gallery - Mobile Optimized */}
-            <motion.div {...appleVariants.fadeIn} className="lg:col-span-5">
-              <div className="bg-white rounded-0 sm:rounded-2xl overflow-hidden shadow-none sm:shadow-sm sticky top-0 sm:top-6 z-10">
-                {/* Main Image Container */}
-                <div 
-                  className="relative bg-gray-50 group cursor-zoom-in" 
-                  ref={imageRef} 
-                  onClick={handleImageClick}
-                  style={{ aspectRatio: "1/1.2" }}
-                >
-                  <Image
-                    src={productImages[selectedImage] || "/generic-product-display.png"}
-                    alt={product?.name || "Product image"}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 100vw, 45vw"
-                    className="object-contain p-3 sm:p-6 transition-transform duration-300"
-                    priority
-                    loading="eager"
-                    quality={90}
-                  />
+      {/* Main Content - Three Column Layout */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* LEFT COLUMN: Image Gallery */}
+          <motion.div {...appleVariants.fadeIn} className="lg:col-span-5">
+            <div className="bg-white rounded-2xl overflow-hidden shadow-sm sticky top-6">
+              <div className="relative aspect-[4/3] cursor-zoom-in group bg-gray-50" ref={imageRef} onClick={handleImageClick}>
+                <Image
+                  src={productImages[selectedImage] || "/generic-product-display.png"}
+                  alt={product?.name || "Product image"}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 40vw"
+                  className="object-contain p-6 transition-transform duration-500 group-hover:scale-105"
+                  priority
+                  loading="eager"
+                  quality={85}
+                  onError={() => {
+                    // Fallback to generic image if specific image fails
+                    console.log("[v0] Image failed to load:", productImages[selectedImage])
+                  }}
+                />
 
-                  {/* Discount Badge */}
-                  {discountPercentage > 0 && (
-                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 bg-[#FF6B35] text-white text-xs font-bold px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full">
-                      -{discountPercentage}%
-                    </div>
-                  )}
-
-                  {/* Navigation Arrows - Mobile optimized */}
-                  {productImages.length > 1 && (
-                    <>
-                      <button
-                        aria-label="Previous image"
-                        className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center shadow-lg opacity-50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-white"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedImage((prev) => (prev === 0 ? productImages.length - 1 : prev - 1))
-                        }}
-                      >
-                        <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" />
-                      </button>
-                      <button
-                        aria-label="Next image"
-                        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center shadow-lg opacity-50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-white"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedImage((prev) => (prev === productImages.length - 1 ? 0 : prev + 1))
-                        }}
-                      >
-                        <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-gray-700" />
-                      </button>
-                    </>
-                  )}
-
-                  {/* Image counter on mobile */}
-                  {productImages.length > 1 && (
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 sm:hidden bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
-                      {selectedImage + 1}/{productImages.length}
-                    </div>
-                  )}
-
-                  {/* Zoom hint - Desktop only */}
-                  <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-sm hidden sm:flex">
-                    <Maximize2 className="h-3.5 w-3.5" />
-                    <span>Click to zoom</span>
-                  </div>
-                </div>
-
-                {/* Thumbnails - Mobile optimized horizontal scroll */}
-                {productImages.length > 1 && (
-                  <div className="px-3 py-3 sm:p-4 border-t border-gray-100 bg-white">
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                      {productImages.map((img, i) => (
-                        <button
-                          key={i}
-                          className={cn(
-                            "relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all bg-gray-50",
-                            selectedImage === i
-                              ? "border-[#8B1538] ring-2 ring-[#8B1538]/20"
-                              : "border-gray-200 hover:border-gray-300",
-                          )}
-                          onClick={() => setSelectedImage(i)}
-                        >
-                          <Image
-                            src={img || "/generic-product-display.png"}
-                            alt={`Thumbnail ${i + 1}`}
-                            fill
-                            sizes="80px"
-                            className="object-cover"
-                            loading="lazy"
-                            quality={70}
-                          />
-                        </button>
-                      ))}
-                    </div>
+                {/* Discount Badge */}
+                {discountPercentage > 0 && (
+                  <div className="absolute top-4 left-4 bg-[#FF6B35] text-white text-xs font-bold px-3 py-1.5 rounded-full">
+                    -{discountPercentage}%
                   </div>
                 )}
-              </div>
-            </motion.div>
 
-            {/* CENTER COLUMN: Product Info */}
-            <motion.div {...appleVariants.fadeIn} className="lg:col-span-4 space-y-3 sm:space-y-4 px-4 sm:px-0 pt-4 sm:pt-0">
-              {/* Product Title & Rating - Mobile optimized card */}
-              <div className="bg-white rounded-lg sm:rounded-2xl p-4 sm:p-5 shadow-none sm:shadow-sm">
-                {/* Badges */}
-                <div className="flex flex-wrap gap-2 mb-2 sm:mb-3">
-                  {product?.is_flash_sale && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-semibold rounded-full">
-                      <Zap className="w-3 h-3" />
-                      Flash Sale
-                    </span>
-                  )}
-                  {product?.is_luxury_deal && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-purple-50 text-purple-600 text-xs font-semibold rounded-full">
-                      <Award className="w-3 h-3" />
-                      Premium
-                    </span>
-                  )}
-                </div>
+                {/* Navigation Arrows */}
+                {productImages.length > 1 && (
+                  <>
+                    <button
+                      aria-label="Previous image"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedImage((prev) => (prev === 0 ? productImages.length - 1 : prev - 1))
+                      }}
+                    >
+                      <ArrowLeft className="h-5 w-5 text-gray-700" />
+                    </button>
+                    <button
+                      aria-label="Next image"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedImage((prev) => (prev === productImages.length - 1 ? 0 : prev + 1))
+                      }}
+                    >
+                      <ArrowRight className="h-5 w-5 text-gray-700" />
+                    </button>
+                  </>
+                )}
 
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 leading-snug mb-2 sm:mb-3 line-clamp-2">{product?.name}</h1>
-
-                {/* Rating */}
-                <div className="flex items-center gap-2 sm:gap-3 mb-3">
-                  <div className="flex items-center gap-1">
-                    <StarRating rating={calculateAverageRating()} size={14} />
-                    <span className="text-sm font-semibold text-gray-900">{calculateAverageRating().toFixed(1)}</span>
-                  </div>
-                  <span className="text-xs sm:text-sm text-gray-500">({reviewSummary?.total_reviews || 0})</span>
-                </div>
-
-                {/* Price - Mobile prominent */}
-                <div className="flex items-baseline gap-2 sm:gap-3 mb-3">
-                  <span className="text-2xl sm:text-3xl font-black text-[#8B1538]">{formatPrice(currentPrice)}</span>
-                  {currentPrice < originalPrice && (
-                    <span className="text-base sm:text-lg text-gray-400 line-through">{formatPrice(originalPrice)}</span>
-                  )}
-                </div>
-
-                {/* Stock Status */}
-                <div
-                  className={cn(
-                    "inline-flex items-center px-2.5 py-1 sm:px-3 sm:py-1.5 text-xs sm:text-sm font-medium rounded-full border",
-                    stockDisplay.cls,
-                  )}
-                >
-                  <stockDisplay.icon className={cn("h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1", stockDisplay.ic)} />
-                  {stockDisplay.text}
+                {/* Zoom hint */}
+                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-sm">
+                  <Maximize2 className="h-3.5 w-3.5" />
+                  <span>Click to zoom</span>
                 </div>
               </div>
 
-              {/* Key Phone Specs - Mobile optimized */}
-              <div className="bg-white rounded-lg sm:rounded-2xl p-4 sm:p-5 shadow-none sm:shadow-sm">
-                <h3 className="text-sm font-bold text-gray-900 mb-3">Key Specs</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { label: "Storage", value: product?.storage || "64GB" },
-                    { label: "RAM", value: product?.ram || "4GB" },
-                    { label: "Battery", value: product?.battery || "4000mAh" },
-                    { label: "Camera", value: product?.camera || "13MP" },
-                  ].map((spec, i) => (
-                    <div key={i} className="p-2 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-600">{spec.label}</p>
-                      <p className="text-sm font-semibold text-gray-900">{spec.value}</p>
-                    </div>
+              {/* Thumbnails */}
+              <div className="p-4 border-t border-gray-100">
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  {productImages.map((img, i) => (
+                    <button
+                      key={i}
+                      className={cn(
+                        "relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all bg-gray-50",
+                        selectedImage === i
+                          ? "border-[#8B1538] ring-2 ring-[#8B1538]/20"
+                          : "border-gray-200 hover:border-gray-300",
+                      )}
+                      onClick={() => setSelectedImage(i)}
+                    >
+                      <Image
+                        src={img || "/generic-product-display.png"}
+                        alt={`Thumbnail ${i + 1}`}
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                        loading={i === 0 ? "eager" : "lazy"}
+                        quality={75}
+                      />
+                    </button>
                   ))}
                 </div>
               </div>
+            </div>
+          </motion.div>
 
-              {/* Seller Info - Compact */}
-              <div className="bg-white rounded-lg sm:rounded-2xl p-4 sm:p-5 shadow-none sm:shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-[#8B1538]/10 flex items-center justify-center flex-shrink-0">
-                      <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-[#8B1538]" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-sm text-gray-900 truncate">Mizizzi Store</span>
-                        <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[9px] font-bold rounded whitespace-nowrap">
-                          Official
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500">Verified Seller</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleShare}
-                    className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
-                  >
-                    <Share2 className="h-4 w-4 sm:h-5 sm:w-5" />
-                  </button>
-                </div>
+          {/* CENTER COLUMN: Product Info */}
+          <motion.div {...appleVariants.fadeIn} className="lg:col-span-4 space-y-4">
+            {/* Product Title & Rating */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {product?.is_flash_sale && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-semibold rounded-full">
+                    <Zap className="w-3 h-3" />
+                    Flash Sale
+                  </span>
+                )}
+                {product?.is_luxury_deal && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-600 text-xs font-semibold rounded-full">
+                    <Award className="w-3 h-3" />
+                    Premium
+                  </span>
+                )}
               </div>
 
-              {/* Trust Badges - Compact */}
-              <div className="bg-white rounded-lg sm:rounded-2xl p-4 sm:p-5 shadow-none sm:shadow-sm space-y-2">
-                <div className="flex items-center gap-2 sm:gap-3 text-sm">
-                  <Truck className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 text-xs sm:text-sm">Free Delivery</p>
+              <h1 className="text-xl font-bold text-gray-900 leading-tight mb-3">{product?.name}</h1>
+
+              {/* Rating */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-1.5">
+                  <StarRating rating={calculateAverageRating()} size={16} />
+                  <span className="text-sm font-semibold text-gray-900">{calculateAverageRating().toFixed(1)}</span>
+                </div>
+                <span className="text-sm text-gray-500">({reviewSummary?.total_reviews || 0} reviews)</span>
+              </div>
+
+              {/* Price */}
+              <div className="flex items-baseline gap-3 mb-4">
+                <span className="text-3xl font-black text-[#8B1538]">{formatPrice(currentPrice)}</span>
+                {currentPrice < originalPrice && (
+                  <span className="text-lg text-gray-400 line-through">{formatPrice(originalPrice)}</span>
+                )}
+              </div>
+
+              {/* Stock Status */}
+              <div
+                className={cn(
+                  "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-full border",
+                  stockDisplay.cls,
+                )}
+              >
+                <stockDisplay.icon className={cn("h-4 w-4 mr-1.5", stockDisplay.ic)} />
+                {stockDisplay.text}
+              </div>
+            </div>
+
+            {/* Seller Info */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-[#8B1538]/10 flex items-center justify-center">
+                    <Shield className="h-6 w-6 text-[#8B1538]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">Mizizzi Store</span>
+                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded">
+                        Official
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500">Verified Seller</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleShare}
+                  className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <Share2 className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Shipping & Returns */}
+            <div className="bg-white rounded-2xl p-5 shadow-sm">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                    <Truck className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">Free Delivery</p>
                     <p className="text-xs text-gray-500">Orders over KSh 2,000</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3 text-sm">
-                  <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 text-xs sm:text-sm">14-Day Returns</p>
-                    <p className="text-xs text-gray-500">Easy return policy</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+                    <RotateCcw className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">Easy Returns</p>
+                    <p className="text-xs text-gray-500">14-day return policy</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3 text-sm">
-                  <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-900 text-xs sm:text-sm">100% Genuine</p>
-                    <p className="text-xs text-gray-500">Verified products</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
+                    <ShieldCheck className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">100% Genuine</p>
+                    <p className="text-xs text-gray-500">Verified quality products</p>
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
+          </motion.div>
 
-            {/* RIGHT COLUMN: Purchase Panel - Desktop only, moved to mobile sticky bar */}
-            <motion.div {...appleVariants.slideUp} className="lg:col-span-3 hidden lg:block">
-              <div className="bg-white rounded-2xl shadow-sm sticky top-6">
-                <div className="p-5 space-y-5">
+          {/* RIGHT COLUMN: Purchase Panel (Sticky) */}
+          <motion.div {...appleVariants.slideUp} className="lg:col-span-3">
+            <div className="bg-white rounded-2xl shadow-sm sticky top-6">
+              <div className="p-5 space-y-5">
                 {/* Variants */}
                 {product?.variants?.length > 0 && (
                   <div className="space-y-4">
@@ -1524,89 +1502,7 @@ export default function ProductDetailsEnhanced({
           </motion.div>
         </div>
 
-        {/* Mobile Sticky Bottom Action Bar */}
-        <div className="fixed bottom-0 left-0 right-0 lg:hidden bg-white border-t border-gray-100 z-40 shadow-2xl shadow-black/5">
-          <div className="max-w-full mx-auto px-4 py-3">
-            <div className="flex gap-2 items-center">
-              {/* Quantity Selector */}
-              <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                <button
-                  className="w-9 h-9 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  disabled={quantity <= 1}
-                >
-                  <Minus className="h-3.5 w-3.5" />
-                </button>
-                <div className="w-10 h-9 flex items-center justify-center border-l border-r border-gray-200 bg-gray-50">
-                  <span className="text-xs font-bold text-gray-900">{quantity}</span>
-                </div>
-                <button
-                  className="w-9 h-9 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                  onClick={() => setQuantity((q) => Math.min(inventoryData?.available_quantity || 0, q + 1))}
-                  disabled={!inventoryData?.is_in_stock || quantity >= (inventoryData?.available_quantity || 0)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              {/* Price Display */}
-              <div className="flex-1 text-center">
-                <p className="text-sm text-gray-500">Total</p>
-                <p className="text-xl font-black text-[#8B1538]">{formatPrice(currentPrice * quantity)}</p>
-              </div>
-
-              {/* Add to Cart Button */}
-              <motion.button
-                onClick={handleAddToCart}
-                disabled={isAddingToCart || !inventoryData?.is_in_stock}
-                className={cn(
-                  "flex-1 h-10 rounded-lg text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all",
-                  isAddingToCart || !inventoryData?.is_in_stock
-                    ? "bg-gray-300 cursor-not-allowed"
-                    : "bg-[#8B1538] hover:bg-[#6B1028] shadow-lg shadow-[#8B1538]/20",
-                )}
-                whileTap={inventoryData?.is_in_stock ? { scale: 0.98 } : {}}
-              >
-                {isAddingToCart ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <ShoppingCart className="h-4 w-4" />
-                    <span className="hidden xs:inline">Cart</span>
-                  </>
-                )}
-              </motion.button>
-
-              {/* Buy via WhatsApp Button */}
-              <motion.button
-                onClick={handleBuyViaWhatsApp}
-                className="flex-1 h-10 rounded-lg bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                whileTap={{ scale: 0.98 }}
-              >
-                <FaWhatsapp className="h-4 w-4" />
-                <span className="hidden xs:inline">Chat</span>
-              </motion.button>
-
-              {/* Wishlist Button */}
-              <motion.button
-                onClick={handleToggleWishlist}
-                disabled={isTogglingWishlist}
-                className={cn(
-                  "w-10 h-10 rounded-lg border-2 flex items-center justify-center transition-all flex-shrink-0",
-                  isProductInWishlist
-                    ? "border-[#8B1538] bg-[#8B1538]/5 text-[#8B1538]"
-                    : "border-gray-200 text-gray-700 hover:border-[#8B1538] hover:text-[#8B1538]",
-                )}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Heart className={cn("h-4 w-4", isProductInWishlist && "fill-current")} />
-              </motion.button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Product Details Tabs */}
+        {/* Product Details Tabs */}
         <motion.div {...appleVariants.fadeIn} className="mt-8">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             {/* Tab Headers */}
