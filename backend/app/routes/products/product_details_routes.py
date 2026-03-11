@@ -446,11 +446,12 @@ def get_product_inventory(product_id: int):
 @product_details_bp.route('/<int:product_id>/related', methods=['GET'])
 def get_related_products(product_id: int):
     """
-    Get related products from same category.
+    Get related products from same category, brand, or popular products.
+    Returns full product data with optimized Cloudinary image URLs.
     Cache only the product data, generate fresh metadata per request.
     """
     limit = request.args.get('limit', 6, type=int)
-    cache_key = f"product:related:{product_id}"
+    cache_key = f"product:related:{product_id}:{limit}"
     request_timestamp = datetime.utcnow().isoformat()
     cache_hit = False
     
@@ -474,23 +475,40 @@ def get_related_products(product_id: int):
                 limit=limit
             )
             
-            # Serialize related products (lightweight version)
+            # Serialize related products with full details and Cloudinary image URLs
             related_data = []
             for product in related_products:
                 try:
-                    product_image = None
-                    if hasattr(product, 'images') and product.images:
-                        product_image = getattr(product.images[0], 'url', None)
-                    
-                    related_data.append({
-                        'id': product.id,
-                        'name': getattr(product, 'name', 'Unknown'),
-                        'price': float(getattr(product, 'price', 0) or 0),
-                        'sale_price': float(getattr(product, 'sale_price', 0) or 0),
-                        'image': product_image,
-                    })
+                    # Use the product serializer for consistent data format
+                    from app.services.product_serializer import ProductSerializer
+                    serialized = ProductSerializer.serialize_product_full(product)
+                    related_data.append(serialized)
                 except Exception as e:
                     logger.error(f"Error serializing related product {product.id}: {e}")
+                    # Fallback to basic serialization if full serializer fails
+                    try:
+                        related_data.append({
+                            'id': product.id,
+                            'name': getattr(product, 'name', 'Unknown'),
+                            'price': float(getattr(product, 'price', 0) or 0),
+                            'sale_price': float(getattr(product, 'sale_price', 0) or 0),
+                            'slug': getattr(product, 'slug', None),
+                            'rating': getattr(product, 'rating', 0),
+                            'images': [
+                                {
+                                    'id': img.id,
+                                    'urls': {
+                                        'thumbnail': cloudinary_service.generate_url(img.url, 150, 150),
+                                        'medium': cloudinary_service.generate_url(img.url, 400, 400),
+                                        'large': cloudinary_service.generate_url(img.url, 800, 800),
+                                        'original': img.url
+                                    }
+                                }
+                                for img in (product.images or [])
+                            ]
+                        })
+                    except Exception as fallback_e:
+                        logger.error(f"Fallback serialization failed for product {product.id}: {fallback_e}")
             
             # Cache only the related products data
             try:
