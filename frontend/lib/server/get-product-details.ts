@@ -65,7 +65,21 @@ export async function getProductDetails(productId: string | number, retryCount =
       ])
 
       if (!response.ok) {
-        console.error(`[v0] getProductDetails: HTTP ${response.status} for product ${id}`)
+        const statusText = response.statusText || 'Unknown'
+        console.error(`[v0] getProductDetails: HTTP ${response.status} ${statusText} for product ${id}`)
+        
+        // If 404, don't retry - product doesn't exist
+        if (response.status === 404) {
+          console.warn(`[v0] getProductDetails: Product ${id} not found on backend`)
+          return null
+        }
+        
+        // For other errors, might want to retry
+        if (response.status >= 500 && retryCount < 1) {
+          console.warn(`[v0] getProductDetails: Server error on attempt ${retryCount + 1}, retrying...`)
+          return getProductDetails(productId, retryCount + 1)
+        }
+        
         return null
       }
 
@@ -139,16 +153,24 @@ export async function getProductDetails(productId: string | number, retryCount =
 
       const isTimeout = fetchError instanceof Error && (fetchError.name === "AbortError" || fetchError.message === "Fetch timeout")
       
-      if (isTimeout && retryCount < 1) {
-        console.warn(`[v0] getProductDetails: Timeout on attempt ${retryCount + 1}, retrying...`)
-        // Retry once on timeout
-        return getProductDetails(productId, retryCount + 1)
+      if (isTimeout) {
+        if (retryCount < 1) {
+          console.warn(`[v0] getProductDetails: Timeout on attempt ${retryCount + 1}, retrying...`)
+          // Retry once on timeout
+          return getProductDetails(productId, retryCount + 1)
+        } else {
+          console.error(`[v0] getProductDetails: Request timeout after ${retryCount + 1} attempts, giving up`)
+          return null
+        }
       }
 
-      if (isTimeout) {
-        console.error(`[v0] getProductDetails: Request timeout after ${retryCount + 1} attempts`)
-      } else {
-        console.error(`[v0] getProductDetails: Fetch failed:`, fetchError instanceof Error ? fetchError.message : String(fetchError))
+      const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError)
+      console.error(`[v0] getProductDetails: Fetch failed on attempt ${retryCount + 1}: ${errorMsg}`)
+      
+      // Retry once on network errors (not timeouts)
+      if (retryCount < 1 && !(fetchError instanceof Error && fetchError.name === "AbortError")) {
+        console.warn(`[v0] getProductDetails: Network error on attempt ${retryCount + 1}, retrying...`)
+        return getProductDetails(productId, retryCount + 1)
       }
 
       return null

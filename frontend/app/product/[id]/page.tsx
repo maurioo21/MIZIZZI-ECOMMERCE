@@ -60,12 +60,20 @@ export default async function Page({ params }: PageProps) {
 
     let product
     if (isNumericId) {
+      console.log(`[v0] Fetching numeric product ID: ${id}`)
       product = await getProductDetails(id)
     } else {
+      console.log(`[v0] Fetching product by slug: ${id}`)
       product = await getProductDetailsBySlug(id)
     }
 
-    if (!product || !validateProductDetails(product)) {
+    if (!product) {
+      console.warn(`[v0] Product not found for ID/slug: ${id}`)
+      return notFound()
+    }
+
+    if (!validateProductDetails(product)) {
+      console.warn(`[v0] Product validation failed for ID: ${product?.id}, validation result: false`)
       return notFound()
     }
 
@@ -108,7 +116,8 @@ export default async function Page({ params }: PageProps) {
 
     return <ProductDetailsEnhanced product={product} similarProducts={relatedProducts} />
   } catch (error) {
-    console.error("Error loading product:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error(`[v0] Error loading product ${id}: ${errorMessage}`)
     return notFound()
   }
 }
