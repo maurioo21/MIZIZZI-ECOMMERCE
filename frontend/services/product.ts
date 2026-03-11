@@ -923,6 +923,72 @@ export const productService = {
   },
 
   /**
+   * Get a single product by ID
+   * @param productId The product ID (string)
+   * @returns Promise resolving to a product or null
+   */
+  async getProduct(productId: string): Promise<Product | null> {
+    try {
+      const cacheKey = `product-${productId}`
+      const cachedItem = productCache.get(cacheKey)
+
+      if (cachedItem && Date.now() - cachedItem.timestamp < CACHE_DURATION) {
+        if (process.env.NODE_ENV === "development") {
+          console.log(`Using cached product data for id ${productId}`)
+        }
+        return cachedItem.data[0] ?? null
+      }
+
+      // Fetch from API
+      const response = await api.get(`${API_BASE_URL}/api/products/${encodeURIComponent(productId)}`)
+
+      let product = response?.data
+      if (!product) return null
+
+      // Normalize price fields
+      product = this.normalizeProductPrices(product)
+
+      // Ensure images are present
+      if ((!product.image_urls || product.image_urls.length === 0) && product.id) {
+        try {
+          const images = await this.getProductImages(product.id.toString())
+          if (images && images.length > 0) {
+            product.image_urls = images.map((img) => img.url)
+            const primaryImage = images.find((img) => img.is_primary)
+            product.thumbnail_url = primaryImage?.url ?? images[0].url
+          }
+        } catch (err) {
+          console.error(`Error fetching images for product ${productId}:`, err)
+        }
+      }
+
+      product = {
+        ...product,
+        seller: product.seller || defaultSeller,
+      }
+
+      // Cache result
+      const now = Date.now()
+      productCache.set(cacheKey, {
+        data: [product],
+        timestamp: now,
+      })
+
+      if (product.id) {
+        productCache.set(`product-${product.id}`, {
+          data: [product],
+          timestamp: now,
+        })
+      }
+
+      return product
+    } catch (error) {
+      console.error(`Error fetching product ${productId}:`, error)
+      return null
+    }
+  },
+
+  /**
    * Get product for cart item
    * @param productId The product ID
    * @returns Promise resolving to a product or null
