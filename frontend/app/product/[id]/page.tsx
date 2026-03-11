@@ -49,19 +49,18 @@ async function getRelatedProducts(productId: string) {
     const response = await fetch(url, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
-      cache: "revalidate",
       next: { revalidate: 300 } // Cache for 5 minutes
     })
 
     if (!response.ok) {
-      console.warn(`[v0] Failed to fetch related products: ${response.status}`)
+      console.warn(`Failed to fetch related products: ${response.status}`)
       return []
     }
 
     const data = await response.json()
     return data.success && Array.isArray(data.related) ? data.related : []
   } catch (error) {
-    console.error("[v0] Error fetching related products:", error instanceof Error ? error.message : String(error))
+    console.error("Error fetching related products:", error instanceof Error ? error.message : String(error))
     return []
   }
 }
@@ -74,19 +73,18 @@ async function getExploreRandomProducts() {
     const response = await fetch(url, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
-      cache: "revalidate",
       next: { revalidate: 300 } // Cache for 5 minutes
     })
 
     if (!response.ok) {
-      console.warn(`[v0] Failed to fetch explore products: ${response.status}`)
+      console.warn(`Failed to fetch explore products: ${response.status}`)
       return []
     }
 
     const data = await response.json()
     return data.success && Array.isArray(data.products) ? data.products : []
   } catch (error) {
-    console.error("[v0] Error fetching explore products:", error instanceof Error ? error.message : String(error))
+    console.error("Error fetching explore products:", error instanceof Error ? error.message : String(error))
     return []
   }
 }
@@ -100,20 +98,16 @@ export default async function Page({ params }: PageProps) {
 
     let product
     if (isNumericId) {
-      console.log(`[v0] Fetching numeric product ID: ${id}`)
       product = await getProductDetails(id)
     } else {
-      console.log(`[v0] Fetching product by slug: ${id}`)
       product = await getProductDetailsBySlug(id)
     }
 
     if (!product) {
-      console.warn(`[v0] Product not found for ID/slug: ${id}`)
       return notFound()
     }
 
     if (!validateProductDetails(product)) {
-      console.warn(`[v0] Product validation failed for ID: ${product?.id}, validation result: false`)
       return notFound()
     }
 
