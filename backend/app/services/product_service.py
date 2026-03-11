@@ -37,9 +37,9 @@ class ProductService:
                 joinedload(Product.category),
                 
                 # One-to-many relationships with eager loading
-                selectinload(Product.images).joinedload(None),
-                selectinload(Product.variants).joinedload(None),
-                selectinload(Product.reviews).joinedload(None),
+                selectinload(Product.images),
+                selectinload(Product.variants),
+                selectinload(Product.reviews),
             ).filter(
                 Product.id == product_id
             ).first()
