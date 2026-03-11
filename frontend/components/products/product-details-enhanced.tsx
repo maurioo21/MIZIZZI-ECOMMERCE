@@ -44,6 +44,7 @@ import { websocketService } from "@/services/websocket"
 import { ImageZoomModal } from "./image-zoom-modal"
 import { reviewService, type Review, type ReviewSummary } from "@/services/review-service"
 import { imageBatchService } from "@/services/image-batch-service"
+import type { ProductDetails } from "@/types/product-details"
 
 interface ProductDetailsEnhancedProps {
   product: any
@@ -100,12 +101,26 @@ function normalizeProductsResponse(data: any): any[] {
 }
 
 function getInitialInventory(product: any): InventoryState {
-  const stock = Number(product?.stock || 0)
+  // Support new backend structure: product.stock.quantity
+  // Also support legacy structure: product.stock (number)
+  let stock = 0
+  let stockStatus: InventoryState["stock_status"] = "out_of_stock"
+
+  if (product?.stock && typeof product.stock === "object") {
+    // New backend structure
+    stock = Number(product.stock.quantity || 0)
+    stockStatus = product.stock.stock_status || "out_of_stock"
+  } else if (typeof product?.stock === "number") {
+    // Legacy structure
+    stock = Number(product.stock)
+    stockStatus = stock === 0 ? "out_of_stock" : stock <= 5 ? "low_stock" : "in_stock"
+  }
+
   return {
     available_quantity: stock,
     is_in_stock: stock > 0,
     is_low_stock: stock > 0 && stock <= 5,
-    stock_status: stock === 0 ? "out_of_stock" : stock <= 5 ? "low_stock" : "in_stock",
+    stock_status: stockStatus,
     last_updated: undefined,
   }
 }
@@ -138,6 +153,50 @@ function sanitizeHtml(html?: string): string {
   sanitized = sanitized.replace(/<iframe[\s\S]*?>[\s\S]*?<\/iframe>/gi, "")
 
   return sanitized
+}
+
+/**
+ * Extract images from new backend structure
+ * Supports both new nested urls structure and legacy flat image_urls array
+ */
+function extractProductImages(product: any): string[] {
+  if (!product) return ["/generic-product-display.png"]
+
+  // NEW: Try new backend structure first (product.images[].urls.large)
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    const newStructureUrls = product.images
+      .map((img: any) => {
+        if (img?.urls?.large) return img.urls.large
+        if (img?.urls?.original) return img.urls.original
+        if (img?.urls?.medium) return img.urls.medium
+        return null
+      })
+      .filter((url: string | null): url is string => !!url && typeof url === "string" && !url.startsWith("blob:"))
+
+    if (newStructureUrls.length > 0) {
+      return newStructureUrls.map((url) => safeCloudinaryUrl(url))
+    }
+  }
+
+  // LEGACY: Handle old image_urls structure (fallback)
+  if (product?.image_urls) {
+    if (Array.isArray(product.image_urls)) {
+      const urls = product.image_urls
+        .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
+        .map((u: string) => safeCloudinaryUrl(u))
+
+      if (urls.length > 0) return urls
+    } else if (typeof product.image_urls === "string" && product.image_urls.trim()) {
+      return [safeCloudinaryUrl(product.image_urls)]
+    }
+  }
+
+  // Fallback to thumbnail if available
+  if (product?.thumbnail_url && typeof product.thumbnail_url === "string") {
+    return [safeCloudinaryUrl(product.thumbnail_url)]
+  }
+
+  return ["/generic-product-display.png"]
 }
 
 function getProductImageUrl(product: any, index = 0, highQuality = false): string {
@@ -178,55 +237,74 @@ function getProductImageUrl(product: any, index = 0, highQuality = false): strin
 }
 
 function getProductImages(product: any): string[] {
-  let imageUrls: string[] = []
+  return extractProductImages(product)
+}
 
-  if (product?.image_urls) {
-    if (Array.isArray(product.image_urls)) {
-      if (
-        product.image_urls.length > 0 &&
-        typeof product.image_urls[0] === "string" &&
-        product.image_urls[0].length === 1
-      ) {
-        try {
-          const reconstructed = product.image_urls.join("")
-          const parsed = JSON.parse(reconstructed)
-          if (Array.isArray(parsed)) {
-            imageUrls = parsed
-              .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-              .map((u) => safeCloudinaryUrl(u))
-          }
-        } catch {
-          imageUrls = []
-        }
-      } else {
-        imageUrls = product.image_urls
-          .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-          .map((u: string) => safeCloudinaryUrl(u))
-      }
-    } else if (typeof product.image_urls === "string") {
-      try {
-        const parsed = JSON.parse(product.image_urls)
-        if (Array.isArray(parsed)) {
-          imageUrls = parsed
-            .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-            .map((u: string) => safeCloudinaryUrl(u))
-        }
-      } catch {
-        if (!product.image_urls.startsWith("blob:")) {
-          imageUrls = [safeCloudinaryUrl(product.image_urls)]
-        }
-      }
-    }
+/**
+ * Get current display price from product
+ * Handles both new backend structure (product.pricing.*) and legacy (product.sale_price / product.price)
+ */
+function getCurrentPrice(product: any): number {
+  if (!product) return 0
+
+  // New backend structure
+  if (product?.pricing && typeof product.pricing === "object") {
+    return Number(product.pricing.current_price || product.pricing.original_price || 0)
   }
 
-  const valid = imageUrls.filter((u) => typeof u === "string" && !!u.trim())
-  if (valid.length > 0) return valid
+  // Legacy structure
+  const salePrice = Number(product?.sale_price || 0)
+  const basePrice = Number(product?.price || 0)
+  return salePrice > 0 ? salePrice : basePrice
+}
 
-  if (product?.thumbnail_url && typeof product.thumbnail_url === "string") {
-    return [safeCloudinaryUrl(product.thumbnail_url)]
+/**
+ * Get original/list price from product
+ */
+function getOriginalPrice(product: any): number {
+  if (!product) return 0
+
+  // New backend structure
+  if (product?.pricing && typeof product.pricing === "object") {
+    return Number(product.pricing.original_price || 0)
   }
 
-  return ["/generic-product-display.png"]
+  // Legacy structure
+  return Number(product?.price || 0)
+}
+
+/**
+ * Get discount percentage from product
+ */
+function getDiscountPercentage(product: any): number {
+  if (!product) return 0
+
+  // New backend structure
+  if (product?.pricing && typeof product.pricing === "object") {
+    return Number(product.pricing.discount_percentage || 0)
+  }
+
+  // Legacy structure: calculate from prices
+  const original = getOriginalPrice(product)
+  const current = getCurrentPrice(product)
+  if (original <= 0 || original <= current) return 0
+  return Math.round(((original - current) / original) * 100)
+}
+
+/**
+ * Get rating from product
+ * Handles both new backend structure (product.ratings.average) and legacy (product.rating)
+ */
+function getProductRating(product: any): number {
+  if (!product) return 0
+
+  // New backend structure
+  if (product?.ratings && typeof product.ratings === "object") {
+    return getSafeRating(product.ratings.average, 0)
+  }
+
+  // Legacy structure
+  return getSafeRating(product?.rating, 0)
 }
 
 function StarRating({
@@ -333,23 +411,23 @@ export default function ProductDetailsEnhanced({
   const productImages = useMemo(() => getProductImages(product), [product])
 
   const currentPrice = useMemo(
-    () => selectedVariant?.price ?? product?.sale_price ?? product?.price ?? 0,
-    [selectedVariant?.price, product?.sale_price, product?.price],
+    () => selectedVariant?.price ?? getCurrentPrice(product),
+    [selectedVariant?.price, product],
   )
 
-  const originalPrice = Number(product?.price || 0)
+  const originalPrice = useMemo(
+    () => getOriginalPrice(product),
+    [product],
+  )
 
-  const discountPercentage = useMemo(() => {
-    const current = Number(currentPrice || 0)
-    if (originalPrice > current && current > 0) {
-      return Math.round(((originalPrice - current) / originalPrice) * 100)
-    }
-    return 0
-  }, [currentPrice, originalPrice])
+  const discountPercentage = useMemo(
+    () => getDiscountPercentage(product),
+    [product],
+  )
 
   const averageRating = useMemo(
-    () => getSafeRating(reviewSummary?.average_rating, 0),
-    [reviewSummary?.average_rating],
+    () => getProductRating(product),
+    [product],
   )
 
   const specifications = useMemo(() => {

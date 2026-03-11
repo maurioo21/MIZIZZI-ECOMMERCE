@@ -1,5 +1,6 @@
 import api from "@/lib/api"
 import type { Product, ProductImage, Category, Brand } from "@/types"
+import type { ProductDetails, ProductDetailsResponse } from "@/types/product-details"
 import { prefetchData } from "@/lib/api"
 // Add import for imageCache
 import { imageCache } from "@/services/image-cache"
@@ -146,6 +147,7 @@ function normalizeProductImages(product: Product): Product {
 // Cache maps with timestamps for expiration
 const productCache = new Map<string, { data: Product[]; timestamp: number }>()
 const productImagesCache = new Map<string, { data: ProductImage[]; timestamp: number }>()
+const productDetailsCache = new Map<string, { data: ProductDetails; timestamp: number }>()
 const categoriesCache = new Map<string, { data: Category[]; timestamp: number }>()
 const brandsCache = new Map<string, { data: Brand[]; timestamp: number }>()
 const productReviewsCache = new Map<string, { data: any[]; timestamp: number }>() // Separate cache for reviews
@@ -517,7 +519,72 @@ export const productService = {
   },
 
   /**
-   * Get product images using the batch service
+   * Get product details with new backend structure
+   * @param id The product ID or slug
+   * @returns Promise resolving to ProductDetails or null
+   */
+  async getProductDetails(id: string | number): Promise<ProductDetails | null> {
+    try {
+      const productId = String(id)
+      if (!productId || productId === "undefined" || productId === "null") {
+        console.error(`[v0] Invalid product ID: ${productId}`)
+        return null
+      }
+
+      // Check cache first
+      const cacheKey = `product-details-${productId}`
+      const now = Date.now()
+      const cachedItem = productDetailsCache.get(cacheKey)
+
+      if (cachedItem && now - cachedItem.timestamp < CACHE_DURATION) {
+        console.log(`[v0] Using cached product details for id ${productId}`)
+        return cachedItem.data
+      }
+
+      const url = `${API_BASE_URL}/api/product-details/${productId}`
+      console.log(`[v0] Fetching product details from: ${url}`)
+
+      const response = await api.get<ProductDetailsResponse>(url)
+
+      // Handle both new response format and legacy format
+      let productDetails: ProductDetails | null = null
+
+      if (response.data && typeof response.data === "object") {
+        // Check if it's the new wrapped format with _cache and data
+        if ("data" in response.data && "success" in response.data) {
+          const wrappedResponse = response.data as ProductDetailsResponse
+          productDetails = wrappedResponse.data
+        } else {
+          // Try to use it directly as ProductDetails
+          productDetails = response.data as ProductDetails
+        }
+      }
+
+      if (!productDetails) {
+        console.error(`[v0] No product details data returned for id ${productId}`)
+        return null
+      }
+
+      // Validate critical fields
+      if (!productDetails.pricing || !productDetails.stock || !productDetails.ratings) {
+        console.warn(`[v0] Product ${productId} missing critical nested fields`)
+      }
+
+      // Cache the result
+      productDetailsCache.set(cacheKey, {
+        data: productDetails,
+        timestamp: now,
+      })
+
+      return productDetails
+    } catch (error: any) {
+      console.error(`[v0] Error fetching product details for id ${id}:`, error)
+      if (error?.response?.status === 404) {
+        console.warn(`[v0] Product not found: ${id}`)
+      }
+      return null
+    }
+  },
    * @param productId The product ID
    * @returns Promise resolving to an array of product images
    */
