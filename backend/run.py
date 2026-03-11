@@ -96,7 +96,8 @@ def main():
 
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 5000))
-    debug = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+    # Default to False unless FLASK_DEBUG explicitly set to 'true'
+    debug = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
 
     try:
         if hasattr(app, 'socketio') and getattr(app, 'socketio') is not None:
