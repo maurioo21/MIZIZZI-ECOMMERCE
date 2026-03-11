@@ -265,37 +265,7 @@ def create_app(config_name=None, enable_socketio=True):
     # Set up database migrations
     Migrate(app, db)
     
-    # Add response timing headers for performance monitoring
-    @app.after_request
-    def add_response_timing(response):
-        """Add performance timing headers to responses for monitoring."""
-        # X-Response-Time is already set by some frameworks, but let's ensure it's there
-        if 'X-Response-Time' not in response.headers:
-            # This is set at request start in before_request if available
-            response.headers['X-Response-Time'] = '0ms'  # Fallback
-        
-        # Add Vary header for caching
-        response.headers['Vary'] = 'Accept-Encoding'
-        
-        return response
-    
-    @app.before_request
-    def before_request_timing():
-        """Track request start time for response timing."""
-        g.start_time = datetime.now()
-    
-    @app.after_request
-    def after_request_timing(response):
-        """Calculate and add response time to headers."""
-        if hasattr(g, 'start_time'):
-            elapsed_ms = (datetime.now() - g.start_time).total_seconds() * 1000
-            response.headers['X-Response-Time'] = f'{elapsed_ms:.1f}ms'
-            
-            # Log slow requests
-            if elapsed_ms > 500:  # More than 500ms
-                app.logger.warning(f"Slow request: {request.method} {request.path} took {elapsed_ms:.1f}ms")
-        
-        return response
+    # Configure CORS properly
     CORS(
         app,
         origins=['http://localhost:3000', 'http://127.0.0.1:3000', 'https://mizizzi-shop.vercel.app'],

@@ -12,7 +12,6 @@ from flask_cors import CORS
 from flask_migrate import Migrate
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_compress import Compress
 from limits.strategies import FixedWindowRateLimiter, MovingWindowRateLimiter
 from limits.storage import MemoryStorage
 import logging
@@ -29,7 +28,6 @@ mail = Mail()
 cache = Cache()
 cors = CORS()
 migrate = Migrate()
-compress = Compress()
 
 # Limiter - key_func is REQUIRED as first positional argument
 limiter = Limiter(
@@ -169,10 +167,6 @@ def init_extensions(app):
     
     # Migrations
     migrate.init_app(app, db)
-    
-    # Compression - gzip response compression for faster delivery
-    compress.init_app(app)
-    app.logger.info("Flask-Compress initialized (gzip compression enabled)")
     
     # Rate limiting - Initialize with proper storage backend
     try:

@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 
-from flask import Blueprint, request, jsonify, current_app, make_response
+from flask import Blueprint, request, jsonify, current_app
 from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy import text
 
@@ -33,21 +33,6 @@ from app.services.product_service import ProductService
 from app.services.product_serializer import ProductSerializer
 
 logger = logging.getLogger(__name__)
-
-
-def add_cache_headers(response: 'flask.Response', cache_ttl: int) -> 'flask.Response':
-    """
-    Add HTTP caching headers for CDN and browser caching.
-    
-    For public product data:
-    - max-age: browser cache duration (seconds)
-    - s-maxage: CDN cache duration (seconds)  
-    - public: allow caching by proxies/CDN
-    - stale-while-revalidate: serve stale while updating
-    """
-    response.headers['Cache-Control'] = f'public, max-age={cache_ttl}, s-maxage={cache_ttl * 2}, stale-while-revalidate={cache_ttl}'
-    response.headers['Vary'] = 'Accept-Encoding'
-    return response
 
 # Initialize blueprint
 product_details_bp = Blueprint(
@@ -204,12 +189,7 @@ def get_product_details_by_slug(slug: str):
             }
         }
         
-        # Create Flask response object and add caching headers
-        flask_response = make_response(jsonify(response), 200)
-        cache_ttl = CACHE_TTL.get('product_detail', 600)
-        add_cache_headers(flask_response, cache_ttl)
-        
-        return flask_response
+        return jsonify(response), 200
     
     except Exception as e:
         logger.error(f"Unhandled error in get_product_details_by_slug: {e}", exc_info=True)
@@ -311,12 +291,10 @@ def get_product_details(product_id: int):
             }
         }
         
-        # Create Flask response object and add caching headers
-        flask_response = make_response(jsonify(response), 200)
-        cache_ttl = CACHE_TTL.get('product_detail', 600)
-        add_cache_headers(flask_response, cache_ttl)
-        
-        return flask_response
+        return jsonify(response), 200
+    
+    except Exception as e:
+        logger.error(f"Unhandled error in get_product_details: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal server error',
