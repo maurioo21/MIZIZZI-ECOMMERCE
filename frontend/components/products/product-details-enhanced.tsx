@@ -368,7 +368,8 @@ export default function ProductDetailsEnhanced({
           try {
             const response = await fetch(`/api/products?limit=30&page=1`)
             const data = await response.json()
-            const generalProducts = (data?.products || data?.items || data || []).filter(
+            const productsArray = Array.isArray(data?.products) ? data.products : Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []
+            const generalProducts = productsArray.filter(
               (p: any) => p.id !== product.id && !allProducts.some((ap: any) => ap.id === p.id),
             )
             allProducts = [...allProducts, ...generalProducts]
