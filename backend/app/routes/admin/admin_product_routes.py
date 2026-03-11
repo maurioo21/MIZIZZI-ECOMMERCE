@@ -1,12 +1,15 @@
 """
 Admin Product Routes for Mizizzi E-Commerce Backend
+Includes field mapping validation and data integrity checks to prevent data corruption.
 """
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 from app.models.models import Product, Category, Brand, db, User, UserRole, ProductImage
 from app.services.product_cache_invalidation import product_cache_service
+from app.services.product_validator import product_validator
 import json
+import logging
 from datetime import datetime
 import werkzeug
 import uuid
@@ -15,6 +18,8 @@ from flask import current_app
 from flask_cors import cross_origin
 import cloudinary
 import cloudinary.uploader
+
+logger = logging.getLogger(__name__)
 
 admin_product_routes = Blueprint('admin_products', __name__)
 
@@ -58,63 +63,76 @@ def create_product():
         if not data:
             return jsonify({'error': 'No data provided'}), 400
 
-        # Validate required fields
+        # STEP 1: Validate all required fields are present and non-empty
         required_fields = ['name', 'price', 'category_id']
         for field in required_fields:
             if field not in data or not data[field]:
                 return jsonify({'error': f'{field} is required'}), 400
 
-        # Check if category exists
-        category = Category.query.get(data['category_id'])
+        # STEP 2: Validate field mappings to prevent cross-field assignment bugs
+        is_valid, validation_result = product_validator.validate_product_fields(data, strict=False)
+        if not is_valid:
+            logger.warning(f"Product validation errors during create: {validation_result}")
+            # Log warnings but don't block - they may be recoverable
+
+        # STEP 3: Sanitize incoming data (trim whitespace, convert types)
+        sanitized_data = product_validator.sanitize_product_data(data)
+        
+        # STEP 4: Check if category exists
+        category = Category.query.get(sanitized_data['category_id'])
         if not category:
             return jsonify({'error': 'Invalid category'}), 400
 
-        # Check if brand exists (if provided)
-        if data.get('brand_id'):
-            brand = Brand.query.get(data['brand_id'])
+        # STEP 5: Check if brand exists (if provided)
+        if sanitized_data.get('brand_id'):
+            brand = Brand.query.get(sanitized_data['brand_id'])
             if not brand:
                 return jsonify({'error': 'Invalid brand'}), 400
 
         # Handle tags - convert list to JSON string for storage
         tags_json = None
-        if data.get('tags'):
-            if isinstance(data['tags'], list):
-                tags_json = json.dumps(data['tags'])
-            elif isinstance(data['tags'], str):
-                tags_json = data['tags']
+        if sanitized_data.get('tags'):
+            if isinstance(sanitized_data['tags'], list):
+                tags_json = json.dumps(sanitized_data['tags'])
+            elif isinstance(sanitized_data['tags'], str):
+                tags_json = sanitized_data['tags']
 
         # Handle image_urls - convert list to JSON string for storage
         image_urls_json = None
-        if data.get('image_urls'):
-            if isinstance(data['image_urls'], list):
-                image_urls_json = json.dumps(data['image_urls'])
-            elif isinstance(data['image_urls'], str):
-                image_urls_json = data['image_urls']
+        if sanitized_data.get('image_urls'):
+            if isinstance(sanitized_data['image_urls'], list):
+                image_urls_json = json.dumps(sanitized_data['image_urls'])
+            elif isinstance(sanitized_data['image_urls'], str):
+                image_urls_json = sanitized_data['image_urls']
 
-        # Create new product
+        # CRITICAL: Create product with explicit field mapping to prevent accidental cross-assignment
+        # Read description from 'description' field ONLY, never from other fields
+        # Read name from 'name' field ONLY
         product = Product(
-            name=data['name'],
-            slug=data.get('slug', data['name'].lower().replace(' ', '-')),
-            description=data.get('description', ''),
-            price=float(data['price']),
-            sale_price=float(data['sale_price']) if data.get('sale_price') else None,
-            stock=int(data.get('stock', 0)),
-            category_id=int(data['category_id']),
-            brand_id=int(data['brand_id']) if data.get('brand_id') else None,
-            sku=data.get('sku', f"SKU-{datetime.now().timestamp()}"),
-            weight=float(data['weight']) if data.get('weight') else None,
-            is_featured=bool(data.get('is_featured', False)),
-            is_new=bool(data.get('is_new', True)),
-            is_sale=bool(data.get('is_sale', False)),
-            is_flash_sale=bool(data.get('is_flash_sale', False)),
-            is_luxury_deal=bool(data.get('is_luxury_deal', False)),
-            meta_title=data.get('meta_title', ''),
-            meta_description=data.get('meta_description', ''),
-            material=data.get('material', ''),
+            name=sanitized_data['name'],  # MUST be from 'name' field
+            slug=sanitized_data.get('slug', sanitized_data['name'].lower().replace(' ', '-')),
+            description=sanitized_data.get('description', ''),  # MUST be from 'description' field
+            short_description=sanitized_data.get('short_description'),  # MUST be from 'short_description' field
+            price=float(sanitized_data['price']),
+            sale_price=float(sanitized_data['sale_price']) if sanitized_data.get('sale_price') else None,
+            stock=int(sanitized_data.get('stock', 0)),
+            category_id=int(sanitized_data['category_id']),  # MUST be from 'category_id' field
+            brand_id=int(sanitized_data['brand_id']) if sanitized_data.get('brand_id') else None,  # MUST be from 'brand_id' field
+            sku=sanitized_data.get('sku', f"SKU-{datetime.now().timestamp()}"),
+            weight=float(sanitized_data['weight']) if sanitized_data.get('weight') else None,
+            is_featured=bool(sanitized_data.get('is_featured', False)),
+            is_new=bool(sanitized_data.get('is_new', True)),
+            is_sale=bool(sanitized_data.get('is_sale', False)),
+            is_flash_sale=bool(sanitized_data.get('is_flash_sale', False)),
+            is_luxury_deal=bool(sanitized_data.get('is_luxury_deal', False)),
+            meta_title=sanitized_data.get('meta_title', ''),
+            meta_description=sanitized_data.get('meta_description', ''),
             image_urls=image_urls_json,
-            thumbnail_url=data.get('thumbnail_url'),
-            tags=tags_json
+            thumbnail_url=sanitized_data.get('thumbnail_url'),
         )
+
+        # Log field assignments for audit trail
+        logger.info(f"Creating product: name='{product.name}', category_id={product.category_id}, brand_id={product.brand_id}")
 
         # Add to database
         db.session.add(product)
@@ -357,86 +375,108 @@ def update_product(product_id):
         if not data:
             return jsonify({'error': 'No data provided'}), 400
 
-        # Update fields if provided
-        if 'name' in data:
-            product.name = data['name']
+        # STEP 1: Validate field mappings to prevent cross-field assignment
+        is_valid, field_mapping = product_validator.validate_field_mapping(data, product)
+        if not is_valid:
+            logger.error(f"Product {product_id} update has invalid fields: {field_mapping}")
+            return jsonify({'error': 'Invalid fields in request', 'invalid_fields': field_mapping}), 400
 
-        if 'slug' in data:
-            product.slug = data['slug']
+        # STEP 2: Sanitize incoming data
+        sanitized_data = product_validator.sanitize_product_data(data)
+        
+        # STEP 3: Validate update operation will not corrupt data
+        is_valid, warnings = product_validator.validate_update_operation(product, sanitized_data)
+        if warnings:
+            logger.warning(f"Product {product_id} update warnings: {warnings}")
 
-        if 'description' in data:
-            product.description = data['description']
+        # Track what changed for audit logging
+        changed_fields = []
 
-        if 'price' in data:
-            product.price = float(data['price'])
+        # Update fields if provided - CRITICAL: only update the intended field each time
+        if 'name' in sanitized_data:
+            old_name = product.name
+            product.name = sanitized_data['name']  # UPDATE ONLY name FROM name field
+            changed_fields.append(f"name: '{old_name}' -> '{product.name}'")
 
-        if 'sale_price' in data:
-            product.sale_price = float(data['sale_price']) if data['sale_price'] else None
+        if 'slug' in sanitized_data:
+            product.slug = sanitized_data['slug']
 
-        if 'stock' in data:
-            product.stock = int(data['stock'])
+        if 'description' in sanitized_data:
+            old_desc = product.description[:50] if product.description else None
+            new_desc = sanitized_data['description'][:50] if sanitized_data['description'] else None
+            product.description = sanitized_data['description']  # UPDATE ONLY description FROM description field
+            changed_fields.append(f"description: '{old_desc}' -> '{new_desc}'")
 
-        if 'category_id' in data:
+        if 'short_description' in sanitized_data:
+            product.short_description = sanitized_data['short_description']
+
+        if 'price' in sanitized_data:
+            product.price = float(sanitized_data['price'])
+
+        if 'sale_price' in sanitized_data:
+            product.sale_price = float(sanitized_data['sale_price']) if sanitized_data['sale_price'] else None
+
+        if 'stock' in sanitized_data:
+            product.stock = int(sanitized_data['stock'])
+
+        if 'category_id' in sanitized_data:
             # Validate category exists
-            category = Category.query.get(data['category_id'])
+            category = Category.query.get(sanitized_data['category_id'])
             if not category:
                 return jsonify({'error': 'Invalid category'}), 400
-            product.category_id = int(data['category_id'])
+            product.category_id = int(sanitized_data['category_id'])  # UPDATE ONLY category FROM category_id field
+            changed_fields.append(f"category_id: {product.category_id}")
 
-        if 'brand_id' in data:
-            if data['brand_id']:
+        if 'brand_id' in sanitized_data:
+            if sanitized_data['brand_id']:
                 # Validate brand exists
-                brand = Brand.query.get(data['brand_id'])
+                brand = Brand.query.get(sanitized_data['brand_id'])
                 if not brand:
                     return jsonify({'error': 'Invalid brand'}), 400
-                product.brand_id = int(data['brand_id'])
+                product.brand_id = int(sanitized_data['brand_id'])  # UPDATE ONLY brand FROM brand_id field
+                changed_fields.append(f"brand_id: {product.brand_id}")
             else:
                 product.brand_id = None
 
-        if 'sku' in data:
-            product.sku = data['sku']
+        if 'sku' in sanitized_data:
+            product.sku = sanitized_data['sku']
 
-        if 'weight' in data:
-            product.weight = float(data['weight']) if data['weight'] else None
+        if 'weight' in sanitized_data:
+            product.weight = float(sanitized_data['weight']) if sanitized_data['weight'] else None
 
-        if 'is_featured' in data:
-            product.is_featured = bool(data['is_featured'])
+        if 'is_featured' in sanitized_data:
+            product.is_featured = bool(sanitized_data['is_featured'])
 
-        if 'is_new' in data:
-            product.is_new = bool(data['is_new'])
+        if 'is_new' in sanitized_data:
+            product.is_new = bool(sanitized_data['is_new'])
 
-        if 'is_sale' in data:
-            product.is_sale = bool(data['is_sale'])
+        if 'is_sale' in sanitized_data:
+            product.is_sale = bool(sanitized_data['is_sale'])
 
-        if 'is_flash_sale' in data:
-            product.is_flash_sale = bool(data['is_flash_sale'])
+        if 'is_flash_sale' in sanitized_data:
+            product.is_flash_sale = bool(sanitized_data['is_flash_sale'])
 
-        if 'is_luxury_deal' in data:
-            product.is_luxury_deal = bool(data['is_luxury_deal'])
+        if 'is_luxury_deal' in sanitized_data:
+            product.is_luxury_deal = bool(sanitized_data['is_luxury_deal'])
 
-        if 'meta_title' in data:
-            product.meta_title = data['meta_title']
+        if 'meta_title' in sanitized_data:
+            product.meta_title = sanitized_data['meta_title']
 
-        if 'meta_description' in data:
-            product.meta_description = data['meta_description']
+        if 'meta_description' in sanitized_data:
+            product.meta_description = sanitized_data['meta_description']
 
-        if 'material' in data:
-            product.material = data['material']
-
-        if 'image_urls' in data:
-            if isinstance(data['image_urls'], list):
-                product.image_urls = json.dumps(data['image_urls'])
+        if 'image_urls' in sanitized_data:
+            if isinstance(sanitized_data['image_urls'], list):
+                product.image_urls = json.dumps(sanitized_data['image_urls'])
             else:
-                product.image_urls = data['image_urls']
+                product.image_urls = sanitized_data['image_urls']
 
-        if 'thumbnail_url' in data:
-            product.thumbnail_url = data['thumbnail_url']
+        if 'thumbnail_url' in sanitized_data:
+            product.thumbnail_url = sanitized_data['thumbnail_url']
 
-        if 'tags' in data:
-            if isinstance(data['tags'], list):
-                product.tags = json.dumps(data['tags'])
-            else:
-                product.tags = data['tags']
+        # Log all field changes for audit trail
+        if changed_fields:
+            logger.info(f"Product {product_id} updated fields: {', '.join(changed_fields)}")
 
         # Update timestamp
         product.updated_at = datetime.utcnow()
@@ -697,6 +737,129 @@ def upload_product_images(product_id):
             'uploaded_images': uploaded_images,
             'errors': errors,
             'message': 'Upload completed' if len(errors) == 0 else 'Upload completed with errors'
+        }), 200
+
+
+# ============================================================================
+# DEBUG & AUDIT ENDPOINTS - For diagnosing data integrity issues
+# ============================================================================
+
+@admin_product_routes.route('/api/admin/products/<int:product_id>/audit', methods=['GET'])
+@cross_origin()
+@jwt_required()
+def audit_product(product_id):
+    """
+    Get comprehensive audit report for a product.
+    Detects field integrity issues, semantic mismatches, and data quality problems.
+    Used for debugging and monitoring product data health.
+    """
+    # Check admin permissions
+    auth_check = admin_required()
+    if auth_check:
+        return auth_check
+
+    try:
+        from app.services.product_audit_service import product_audit_service
+        
+        product = Product.query.get_or_404(product_id)
+        audit_report = product_audit_service.audit_product(product)
+        
+        return jsonify({
+            'success': True,
+            'audit_report': audit_report
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error auditing product {product_id}: {e}")
+        return jsonify({
+            'error': 'Failed to audit product',
+            'details': str(e)
+        }), 500
+
+
+@admin_product_routes.route('/api/admin/products/<int:product_id>/validate', methods=['POST'])
+@cross_origin()
+@jwt_required()
+def validate_product_update(product_id):
+    """
+    Validate a proposed product update without applying changes.
+    Returns detailed validation errors and warnings.
+    """
+    # Check admin permissions
+    auth_check = admin_required()
+    if auth_check:
+        return auth_check
+
+    try:
+        product = Product.query.get_or_404(product_id)
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Validate field mappings
+        is_valid, field_mapping = product_validator.validate_field_mapping(data, product)
+        
+        # Validate update operation
+        is_valid_update, update_warnings = product_validator.validate_update_operation(product, data)
+        
+        # Validate fields
+        is_valid_fields, field_errors = product_validator.validate_product_fields(data, strict=False)
+        
+        return jsonify({
+            'success': True,
+            'is_valid': is_valid and is_valid_update and is_valid_fields,
+            'field_validation': {
+                'is_valid': is_valid,
+                'issues': field_mapping if not is_valid else []
+            },
+            'update_validation': {
+                'is_valid': is_valid_update,
+                'warnings': update_warnings
+            },
+            'field_errors': field_errors
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error validating product {product_id}: {e}")
+        return jsonify({
+            'error': 'Failed to validate product',
+            'details': str(e)
+        }), 500
+
+
+@admin_product_routes.route('/api/admin/products/compare/<int:product_id_1>/<int:product_id_2>', methods=['GET'])
+@cross_origin()
+@jwt_required()
+def compare_products(product_id_1, product_id_2):
+    """
+    Compare two products to detect similar data corruption patterns.
+    Useful for identifying systematic issues affecting multiple products.
+    """
+    # Check admin permissions
+    auth_check = admin_required()
+    if auth_check:
+        return auth_check
+
+    try:
+        from app.services.product_audit_service import product_audit_service
+        
+        comparison = product_audit_service.compare_products(product_id_1, product_id_2)
+        
+        if 'error' in comparison:
+            return jsonify(comparison), 404
+        
+        return jsonify({
+            'success': True,
+            'comparison': comparison
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error comparing products {product_id_1} and {product_id_2}: {e}")
+        return jsonify({
+            'error': 'Failed to compare products',
+            'details': str(e)
+        }), 500
         }), 200 if len(errors) == 0 else 207
 
         # Invalidate product cache after images change

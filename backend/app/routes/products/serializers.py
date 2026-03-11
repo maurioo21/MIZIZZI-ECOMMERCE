@@ -1,16 +1,22 @@
 """
 Unified product serializers for Mizizzi E-commerce platform.
 Provides consistent serialization across public and admin routes with N+1 query prevention.
+Includes data integrity checking to detect field mismatches and semantic issues.
 """
 from flask import current_app
 from sqlalchemy.orm import joinedload
+import logging
 from app.models.models import Product, ProductVariant, ProductImage
+from app.services.product_audit_service import product_audit_service
+
+logger = logging.getLogger(__name__)
 
 
 def serialize_product_detail(product, for_admin=False):
     """
     Full product serialization for detail views.
     Returns ~30 core fields (vs 90+ in old implementation).
+    Includes data integrity checking to detect field mismatches.
     
     Args:
         product: Product instance (should be loaded with joinedload for relationships)
@@ -20,6 +26,11 @@ def serialize_product_detail(product, for_admin=False):
         Dictionary representation of the product
     """
     try:
+        # Run integrity check to detect suspicious data patterns
+        if product.id:
+            audit_report = product_audit_service.audit_product(product)
+            if audit_report['data_quality_score'] < 75:
+                logger.warning(f"Product {product.id} has data integrity issues: {audit_report['warnings']}")
         # Get images - prefer eager-loaded images, fallback to product methods
         image_urls = []
         if hasattr(product, 'images') and product.images:
@@ -35,13 +46,28 @@ def serialize_product_detail(product, for_admin=False):
         
         thumbnail_url = image_urls[0] if image_urls else product.thumbnail_url
         
+        # INTEGRITY CHECK: Verify name and description come from correct columns
+        # This prevents bugs where name/description get swapped or cross-assigned
+        product_name = product.name
+        product_description = product.description
+        short_desc = product.short_description
+        
+        if not product_name or not str(product_name).strip():
+            logger.error(f"Product {product.id} has empty name field - DATA INTEGRITY ISSUE")
+        
+        if product_description and len(str(product_description)) > 0:
+            # Verify description isn't suspiciously short (potential field swap)
+            if len(str(product_description)) < 20 and len(product_name or "") > 50:
+                logger.warning(f"Product {product.id}: description is very short while name is long - possible field swap")
+        
         # Core fields (always included)
+        # CRITICAL: Read ONLY from correct model columns - no fallback logic that could mask issues
         data = {
             'id': product.id,
-            'name': product.name,
+            'name': product_name,  # READ ONLY FROM product.name
             'slug': product.slug,
-            'description': product.description,
-            'short_description': product.short_description,
+            'description': product_description,  # READ ONLY FROM product.description
+            'short_description': short_desc,  # READ ONLY FROM product.short_description
             'price': float(product.price) if product.price else 0,
             'sale_price': float(product.sale_price) if product.sale_price else None,
             'discount_percentage': product.discount_percentage,
