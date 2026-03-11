@@ -19,6 +19,27 @@ interface ImageZoomModalProps {
 function getProcessedImageUrls(product: Product): string[] {
   const urls: string[] = []
 
+  // First try the new backend format with Cloudinary variants
+  if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
+    try {
+      product.images.forEach((img: any) => {
+        if (img && (img?.urls?.large || img?.urls?.original || img?.url)) {
+          const imageUrl = img.urls?.large || img.urls?.original || img.urls?.medium || img.url
+          if (typeof imageUrl === 'string' && imageUrl.trim() && !imageUrl.startsWith('blob:')) {
+            urls.push(imageUrl)
+          }
+        }
+      })
+      if (urls.length > 0) {
+        console.log("[v0] Extracted images from backend format:", urls)
+        return urls
+      }
+    } catch (e) {
+      console.error("[v0] Error extracting from backend format:", e)
+    }
+  }
+
+  // Fallback to old image_urls format
   if (product?.image_urls) {
     if (Array.isArray(product.image_urls)) {
       // Handle malformed array (single characters)

@@ -213,17 +213,26 @@ export default function ProductDetailsEnhanced({
     let imageUrls: string[] = []
     
     // First try to get images from the new backend structure with Cloudinary variants
-    if (p?.images && Array.isArray(p.images)) {
-      imageUrls = p.images
-        .filter((img: any) => img?.urls?.original)
-        .map((img: any) => img.urls.original) // Use original quality Cloudinary URL
+    if (p?.images && Array.isArray(p.images) && p.images.length > 0) {
+      try {
+        imageUrls = p.images
+          .filter((img: any) => img && (img?.urls?.large || img?.urls?.original || img?.url))
+          .map((img: any) => {
+            // Prefer large for display, fallback to original, then url
+            return img.urls?.large || img.urls?.original || img.urls?.medium || img.url || ''
+          })
+          .filter((url: string) => url && typeof url === 'string' && url.trim() !== '')
+      } catch (e) {
+        // Fallback to other formats
+      }
     }
     
-    // Fallback to image_urls array format
+    // If still no images, try image_urls array format (old backend format)
     if (imageUrls.length === 0 && p?.image_urls) {
-      if (Array.isArray(p.image_urls)) {
-        if (p.image_urls.length > 0 && typeof p.image_urls[0] === "string" && p.image_urls[0].length === 1) {
-          try {
+      try {
+        if (Array.isArray(p.image_urls)) {
+          if (p.image_urls.length > 0 && typeof p.image_urls[0] === "string" && p.image_urls[0].length === 1) {
+            // Malformed array - join strings
             const reconstructed = p.image_urls.join("")
             const parsed = JSON.parse(reconstructed)
             if (Array.isArray(parsed)) {
@@ -231,37 +240,31 @@ export default function ProductDetailsEnhanced({
                 .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
                 .map((u: string) => (u.startsWith("http") ? u : cloudinaryService.generateOptimizedUrl(u)))
             }
-          } catch {
-            imageUrls = []
+          } else {
+            imageUrls = p.image_urls
+              .filter((u: string): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
+              .map((u: string) => (u.startsWith("http") ? u : cloudinaryService.generateOptimizedUrl(u)))
           }
-        } else {
-          imageUrls = p.image_urls
-            .filter((u: string): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-            .map((u: string) => (u.startsWith("http") ? u : cloudinaryService.generateOptimizedUrl(u)))
-        }
-      } else if (typeof p.image_urls === "string") {
-        try {
+        } else if (typeof p.image_urls === "string") {
           const parsed = JSON.parse(p.image_urls)
           if (Array.isArray(parsed)) {
             imageUrls = parsed
               .filter((u): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
               .map((u) => (u.startsWith("http") ? u : cloudinaryService.generateOptimizedUrl(u)))
           }
-        } catch {
-          if (!p.image_urls.startsWith("blob:")) {
-            imageUrls = [
-              p.image_urls.startsWith("http") ? p.image_urls : cloudinaryService.generateOptimizedUrl(p.image_urls),
-            ]
-          }
         }
+      } catch (e) {
+        // Fallback to thumbnail
       }
     }
     
     const valid = imageUrls.filter((u): u is string => Boolean(u && typeof u === "string" && u.trim() !== ""))
+    
     // Fallback to thumbnail_url if no image_urls found
     if (valid.length === 0 && p?.thumbnail_url && typeof p.thumbnail_url === "string") {
       return [p.thumbnail_url]
     }
+    
     // Final fallback to generic placeholder
     return valid.length ? valid : ["/generic-product-display.png"]
   }

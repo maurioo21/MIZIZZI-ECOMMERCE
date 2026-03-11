@@ -388,6 +388,8 @@ class ProductSerializer:
                     },
                     
                     'images': images,
+                    'thumbnail_url': getattr(product, 'thumbnail_url', None),
+                    'image_urls': getattr(product, 'image_urls', None),
                     'variants': variants,
                     
                     'ratings': {
