@@ -102,6 +102,105 @@ def health_check():
     return jsonify(health_status), 200
 
 
+@product_details_bp.route('/by-slug/<slug>', methods=['GET'])
+def get_product_details_by_slug(slug: str):
+    """
+    Get complete product details by slug with all relationships.
+    
+    Cache Strategy:
+    - Cache ONLY the stable product data payload (data field)
+    - Generate fresh metadata on every request (_cache, success, timestamp)
+    - This ensures accurate cache timestamps while reusing expensive queries
+    
+    Includes:
+    - Product info (name, description, pricing, stock)
+    - Brand and category
+    - Images with Cloudinary URLs
+    - Variants
+    - Ratings and reviews
+    - Cache status with fresh timestamp
+    """
+    cache_key = f"product:slug:{slug}"
+    request_timestamp = datetime.utcnow().isoformat()
+    cache_hit = False
+    
+    try:
+        # Try cache first - only retrieve the product data payload
+        cached_payload = product_cache.get(cache_key)
+        
+        if cached_payload:
+            try:
+                cached_data = json.loads(cached_payload) if isinstance(cached_payload, str) else cached_payload
+                cache_hit = True
+                product_data = cached_data
+                logger.debug(f"CACHE HIT: {cache_key}")
+            except Exception as e:
+                logger.warning(f"Cache retrieval error for {cache_key}: {e}")
+                cached_payload = None
+        
+        # Cache miss - fetch from database
+        if not cache_hit:
+            logger.info(f"Product slug '{slug}' cache MISS - fetching from database")
+            
+            product = ProductService.get_product_by_slug_optimized(slug)
+            
+            if not product:
+                logger.warning(f"Product with slug '{slug}' not found in database")
+                return jsonify({
+                    'success': False,
+                    'error': 'Product not found',
+                    'slug': slug,
+                    'timestamp': request_timestamp
+                }), 404
+            
+            # Serialize product - this is where data integrity is guaranteed
+            serialized = ProductSerializer.serialize_product_full(product, include_reviews=True)
+            
+            if not serialized.get('success'):
+                logger.error(f"Serialization failed for product slug '{slug}'")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to serialize product',
+                    'timestamp': request_timestamp
+                }), 500
+            
+            # Extract only the stable product data for caching
+            product_data = serialized.get('data', {})
+            
+            # Cache only the stable payload, not request-time metadata
+            try:
+                cache_ttl = CACHE_TTL.get('product_detail', 600)
+                cache_payload = json.dumps(product_data)
+                product_cache.set(cache_key, cache_payload, cache_ttl)
+                logger.debug(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
+                logger.info(f"Product slug '{slug}' cached for {cache_ttl}s")
+            except Exception as e:
+                logger.error(f"Cache write error for {cache_key}: {e}")
+                # Continue anyway - cache failure shouldn't block response
+        
+        # Build response with fresh request-time metadata
+        response = {
+            'success': True,
+            'data': product_data,
+            'timestamp': request_timestamp,  # Always fresh
+            '_cache': {
+                'status': 'HIT' if cache_hit else 'MISS',
+                'key': cache_key,
+                'timestamp': request_timestamp  # Always fresh
+            }
+        }
+        
+        return jsonify(response), 200
+    
+    except Exception as e:
+        logger.error(f"Unhandled error in get_product_details_by_slug: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'timestamp': request_timestamp
+        }), 500
+
+
 @product_details_bp.route('/<int:product_id>', methods=['GET'])
 def get_product_details(product_id: int):
     """

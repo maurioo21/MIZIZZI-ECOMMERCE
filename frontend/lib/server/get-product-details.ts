@@ -198,7 +198,7 @@ export async function getProductDetailsBySlug(slug: string, retryCount = 0): Pro
     }
 
     // Use the backend's dedicated slug lookup endpoint
-    const backendUrl = `${API_BASE_URL}/api/products/slug/${trimmedSlug}`
+    const backendUrl = `${API_BASE_URL}/api/product-details/by-slug/${trimmedSlug}`
 
     const controller = new AbortController()
     const timeoutMs = 30000

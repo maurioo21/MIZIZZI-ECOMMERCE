@@ -51,6 +51,42 @@ class ProductService:
             return None
 
     @staticmethod
+    def get_product_by_slug_optimized(slug: str) -> Optional[Product]:
+        """
+        Get product by slug with all relationships eagerly loaded.
+        Uses joinedload and selectinload to prevent N+1 queries.
+        
+        Loads:
+        - Brand
+        - Category  
+        - Images (sorted by primary + order)
+        - Variants
+        - Reviews
+        
+        Note: Fetches both active and inactive products. 
+        Frontend/API layer decides visibility based on permissions.
+        """
+        try:
+            product = Product.query.options(
+                # One-to-one relationships
+                joinedload(Product.brand),
+                joinedload(Product.category),
+                
+                # One-to-many relationships with eager loading
+                selectinload(Product.images),
+                selectinload(Product.variants),
+                selectinload(Product.reviews),
+            ).filter(
+                Product.slug == slug
+            ).first()
+            
+            return product
+            
+        except Exception as e:
+            logger.error(f"Error fetching product by slug {slug}: {e}")
+            return None
+
+    @staticmethod
     def get_related_products_by_category(
         product_id: int, 
         category_id: Optional[int] = None,
