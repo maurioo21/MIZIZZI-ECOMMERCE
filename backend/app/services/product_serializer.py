@@ -32,6 +32,112 @@ class ProductSerializer:
     """Safely serializes product data for API responses"""
 
     @staticmethod
+    def sanitize_sku(sku: Optional[str]) -> Optional[str]:
+        """
+        Clean SKU value. Return None if SKU is invalid, empty, false-like, or literally 'false'.
+        """
+        if not sku:
+            return None
+        
+        sku_str = str(sku).strip()
+        
+        # Don't return 'false' string, empty strings, or falsy values
+        if not sku_str or sku_str.lower() == 'false' or sku_str == '0':
+            return None
+        
+        return sku_str
+
+    @staticmethod
+    def clean_product_name(name: Optional[str]) -> str:
+        """Trim and clean product name"""
+        if not name:
+            return "Product"
+        
+        return str(name).strip()
+
+    @staticmethod
+    def build_cloudinary_variant_urls(image_url: str) -> Dict[str, str]:
+        """
+        Generate optimized Cloudinary URLs for different sizes from a single image URL.
+        If URL contains cloudinary.com, apply transformations for different sizes.
+        Otherwise, return the original URL for all sizes.
+        
+        Cloudinary transformation examples:
+        - thumbnail: small, lightweight (~100px)
+        - medium: medium preview (~300px)
+        - large: detail view (~600px)
+        - original: full quality
+        """
+        if not image_url:
+            return {
+                'thumbnail': '',
+                'medium': '',
+                'large': '',
+                'original': '',
+            }
+        
+        # Check if it's a Cloudinary URL
+        if 'cloudinary.com' in image_url:
+            try:
+                # Extract the base URL and public ID from Cloudinary URL
+                # Format: https://res.cloudinary.com/{cloud}/image/upload/v{version}/{public_id}
+                
+                # Simple approach: insert transform parameters before /v or at the end
+                if '/upload/' in image_url:
+                    # Insert transformation before the public ID
+                    base_url = image_url.split('/upload/')[0] + '/upload/'
+                    remaining = '/upload/'.join(image_url.split('/upload/')[1:])
+                    
+                    return {
+                        'thumbnail': f"{base_url}w_120,h_120,c_fill,q_60/{remaining}",
+                        'medium': f"{base_url}w_400,h_400,c_fill,q_75/{remaining}",
+                        'large': f"{base_url}w_800,h_800,c_fill,q_85/{remaining}",
+                        'original': image_url,
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to generate Cloudinary variants: {e}")
+                # Fall through to return original URL for all sizes
+        
+        # Non-Cloudinary or error: return original for all sizes
+        return {
+            'thumbnail': image_url,
+            'medium': image_url,
+            'large': image_url,
+            'original': image_url,
+        }
+
+    @staticmethod
+    def serialize_product_image(image: ProductImage) -> Optional[Dict[str, Any]]:
+        """
+        Safely serialize product image with optimized Cloudinary URLs.
+        Returns lightweight payload with only needed fields for frontend.
+        """
+        if not image or not hasattr(image, 'id'):
+            return None
+        
+        try:
+            # Get image URL with fallback
+            image_url = getattr(image, 'url', None) or getattr(image, 'image_url', None)
+            
+            if not image_url:
+                logger.warning(f"Image {image.id}: No URL found")
+                return None
+            
+            # Generate optimized Cloudinary URLs
+            urls = ProductSerializer.build_cloudinary_variant_urls(image_url)
+            
+            return {
+                'id': image.id,
+                'alt_text': getattr(image, 'alt_text', None) or "Product image",
+                'is_primary': bool(getattr(image, 'is_primary', False)),
+                'display_order': int(getattr(image, 'sort_order', 0) or 0),
+                'urls': urls,
+            }
+        except Exception as e:
+            logger.error(f"Error serializing image {image.id}: {e}")
+            return None
+
+    @staticmethod
     def sanitize_html(html_content: Optional[str]) -> str:
         """
         Sanitize HTML description to remove dangerous tags and images.
@@ -146,9 +252,12 @@ class ProductSerializer:
             return {'error': 'Invalid product'}
         
         try:
-            # Safe attribute access for basic fields
-            product_name = getattr(product, 'name', 'Unknown Product')
-            product_sku = getattr(product, 'sku', '')
+            # Clean and trim product name
+            product_name = ProductSerializer.clean_product_name(getattr(product, 'name', 'Unknown Product'))
+            
+            # Sanitize SKU - return None if invalid/false
+            product_sku = ProductSerializer.sanitize_sku(getattr(product, 'sku', ''))
+            
             product_description = getattr(product, 'description', '')
             
             # Sanitize HTML description
@@ -185,18 +294,23 @@ class ProductSerializer:
             try:
                 product_images = getattr(product, 'images', []) or []
                 
-                # Ensure primary image exists
-                primary_found = False
-                for img in product_images:
-                    serialized = ProductSerializer.serialize_image(img)
+                # Sort by primary first, then display order
+                sorted_images = sorted(
+                    product_images,
+                    key=lambda img: (not getattr(img, 'is_primary', False), getattr(img, 'sort_order', 0) or 0, getattr(img, 'id', 0))
+                )
+                
+                # Serialize each image with new helper
+                for img in sorted_images:
+                    serialized = ProductSerializer.serialize_product_image(img)
                     if serialized:
                         images.append(serialized)
-                        if serialized['is_primary']:
-                            primary_found = True
                 
-                # If no primary, mark first as primary
-                if images and not primary_found:
-                    images[0]['is_primary'] = True
+                # Ensure one primary image
+                if images:
+                    primary_found = any(img['is_primary'] for img in images)
+                    if not primary_found:
+                        images[0]['is_primary'] = True
                     
             except Exception as e:
                 logger.error(f"Error processing product images: {e}")

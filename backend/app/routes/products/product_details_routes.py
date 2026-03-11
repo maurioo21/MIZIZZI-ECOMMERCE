@@ -133,7 +133,7 @@ def get_product_details_by_slug(slug: str):
                 cached_data = json.loads(cached_payload) if isinstance(cached_payload, str) else cached_payload
                 cache_hit = True
                 product_data = cached_data
-                logger.debug(f"CACHE HIT: {cache_key}")
+                logger.info(f"CACHE HIT: {cache_key}")
             except Exception as e:
                 logger.warning(f"Cache retrieval error for {cache_key}: {e}")
                 cached_payload = None
@@ -172,8 +172,7 @@ def get_product_details_by_slug(slug: str):
                 cache_ttl = CACHE_TTL.get('product_detail', 600)
                 cache_payload = json.dumps(product_data)
                 product_cache.set(cache_key, cache_payload, cache_ttl)
-                logger.debug(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
-                logger.info(f"Product slug '{slug}' cached for {cache_ttl}s")
+                logger.info(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
             except Exception as e:
                 logger.error(f"Cache write error for {cache_key}: {e}")
                 # Continue anyway - cache failure shouldn't block response
@@ -236,7 +235,7 @@ def get_product_details(product_id: int):
                 cached_data = json.loads(cached_payload) if isinstance(cached_payload, str) else cached_payload
                 cache_hit = True
                 product_data = cached_data
-                logger.debug(f"CACHE HIT: {cache_key}")
+                logger.info(f"CACHE HIT: {cache_key}")
             except Exception as e:
                 logger.warning(f"Cache retrieval error for {cache_key}: {e}")
                 cached_payload = None
@@ -275,8 +274,7 @@ def get_product_details(product_id: int):
                 cache_ttl = CACHE_TTL.get('product_detail', 600)
                 cache_payload = json.dumps(product_data)
                 product_cache.set(cache_key, cache_payload, cache_ttl)
-                logger.debug(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
-                logger.info(f"Product {product_id} cached for {cache_ttl}s")
+                logger.info(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
             except Exception as e:
                 logger.error(f"Cache write error for {cache_key}: {e}")
                 # Continue anyway - cache failure shouldn't block response
