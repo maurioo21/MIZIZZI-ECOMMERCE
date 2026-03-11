@@ -724,7 +724,14 @@ export default function ProductDetailsEnhanced({
           const images = await imageBatchService.fetchProductImages(String(productId))
           if (Array.isArray(images) && images.length > 0) {
             refreshed.image_urls = images
-              .map((img: any) => img?.url || img?.image_url)
+              .map((img: any) => {
+                // Handle both new structure (img.urls.large) and legacy structure (img.url)
+                if (img?.urls?.large) return img.urls.large;
+                if (img?.urls?.original) return img.urls.original;
+                if (img?.url) return img.url;
+                if (img?.image_url) return img.image_url;
+                return null;
+              })
               .filter(Boolean)
           }
         }
@@ -1321,7 +1328,14 @@ export default function ProductDetailsEnhanced({
         if (isCancelled) return
 
         const imageUrls = Array.isArray(images)
-          ? images.map((img: any) => img?.url || img?.image_url).filter(Boolean)
+          ? images.map((img: any) => {
+              // Handle both new structure (img.urls.large) and legacy structure (img.url)
+              if (img?.urls?.large) return img.urls.large;
+              if (img?.urls?.original) return img.urls.original;
+              if (img?.url) return img.url;
+              if (img?.image_url) return img.image_url;
+              return null;
+            }).filter(Boolean)
           : []
 
         setProduct((prev: any) => ({

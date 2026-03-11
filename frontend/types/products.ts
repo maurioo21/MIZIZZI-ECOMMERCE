@@ -173,7 +173,7 @@ export interface ProductDetails {
   preorder_release_date?: string;
   preorder_message?: string;
   // Backward compatibility: legacy properties (use pricing.* fields instead)
-  price?: number;
+  price: number;  // Required for Product type compatibility
   sale_price?: number | null;
   thumbnail_url?: string;
   image_urls?: string[];
