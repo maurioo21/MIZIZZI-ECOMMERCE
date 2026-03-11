@@ -211,7 +211,16 @@ export default function ProductDetailsEnhanced({
 
   const getProductImages = (p: any): string[] => {
     let imageUrls: string[] = []
-    if (p?.image_urls) {
+    
+    // First try to get images from the new backend structure with Cloudinary variants
+    if (p?.images && Array.isArray(p.images)) {
+      imageUrls = p.images
+        .filter((img: any) => img?.urls?.original)
+        .map((img: any) => img.urls.original) // Use original quality Cloudinary URL
+    }
+    
+    // Fallback to image_urls array format
+    if (imageUrls.length === 0 && p?.image_urls) {
       if (Array.isArray(p.image_urls)) {
         if (p.image_urls.length > 0 && typeof p.image_urls[0] === "string" && p.image_urls[0].length === 1) {
           try {
@@ -247,6 +256,7 @@ export default function ProductDetailsEnhanced({
         }
       }
     }
+    
     const valid = imageUrls.filter((u): u is string => Boolean(u && typeof u === "string" && u.trim() !== ""))
     // Fallback to thumbnail_url if no image_urls found
     if (valid.length === 0 && p?.thumbnail_url && typeof p.thumbnail_url === "string") {
@@ -271,6 +281,18 @@ export default function ProductDetailsEnhanced({
       setOptimisticWishlistState(null)
     }
   }, [actualWishlistState, optimisticWishlistState])
+
+  // Preload all product images for instant display
+  useEffect(() => {
+    if (productImages && productImages.length > 0) {
+      productImages.forEach((imageUrl) => {
+        if (imageUrl && imageUrl.startsWith('http')) {
+          const img = new Image()
+          img.src = imageUrl
+        }
+      })
+    }
+  }, [productImages])
 
   // Real-time product updates via WebSocket and polling
   useEffect(() => {
@@ -368,7 +390,13 @@ export default function ProductDetailsEnhanced({
           try {
             const response = await fetch(`/api/products?limit=30&page=1`)
             const data = await response.json()
-            const generalProducts = (data?.products || data?.items || data || []).filter(
+            // Handle different response structures safely
+            const productsList = Array.isArray(data?.data) ? data.data : 
+                                  Array.isArray(data?.products) ? data.products : 
+                                  Array.isArray(data?.items) ? data.items : 
+                                  Array.isArray(data) ? data : []
+            
+            const generalProducts = productsList.filter(
               (p: any) => p.id !== product.id && !allProducts.some((ap: any) => ap.id === p.id),
             )
             allProducts = [...allProducts, ...generalProducts]
