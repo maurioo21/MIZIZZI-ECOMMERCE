@@ -151,23 +151,48 @@ export async function getProductDetails(productId: string | number): Promise<Pro
 
 /**
  * Get product details by slug
- * Extracts numeric ID from slug prefix and fetches product
+ * Extracts numeric ID from slug (format: brand-id-description or id-description)
+ * Examples: "itel-43-qled..." -> extracts 43, "7-pieces-..." -> extracts 7
  */
 export async function getProductDetailsBySlug(slug: string): Promise<Product | null> {
   try {
     const trimmedSlug = slug.trim()
 
+    // If slug is purely numeric, use directly
     if (/^\d+$/.test(trimmedSlug)) {
+      console.log(`[v0] getProductDetailsBySlug: Pure numeric slug, fetching ID: ${trimmedSlug}`)
       return getProductDetails(trimmedSlug)
     }
 
-    const numericMatch = trimmedSlug.match(/^(\d+)/)
-    if (numericMatch) {
-      const productId = numericMatch[1]
+    // Try to extract numeric ID from slug
+    // First, look for pattern: starts with digits OR has digits after first dash
+    // Examples: "7pieces-..." -> 7, "itel-43-qled-..." -> 43
+    
+    // Method 1: Extract first sequence of digits (handles "7pieces-..." format)
+    const firstDigitMatch = trimmedSlug.match(/^(\d+)/)
+    if (firstDigitMatch) {
+      const productId = firstDigitMatch[1]
+      console.log(`[v0] getProductDetailsBySlug: Found ID at start: ${productId}`)
       return getProductDetails(productId)
     }
 
-    console.error(`[v0] getProductDetailsBySlug: No numeric ID in slug: ${trimmedSlug}`)
+    // Method 2: Extract digits after first dash (handles "itel-43-qled-..." format)
+    const dashDigitMatch = trimmedSlug.match(/-(\d+)(?:-|$)/)
+    if (dashDigitMatch) {
+      const productId = dashDigitMatch[1]
+      console.log(`[v0] getProductDetailsBySlug: Found ID after dash: ${productId}`)
+      return getProductDetails(productId)
+    }
+
+    // Method 3: Extract any sequence of consecutive digits (fallback)
+    const anyDigitMatch = trimmedSlug.match(/\d+/)
+    if (anyDigitMatch) {
+      const productId = anyDigitMatch[0]
+      console.log(`[v0] getProductDetailsBySlug: Found ID from any digits: ${productId}`)
+      return getProductDetails(productId)
+    }
+
+    console.error(`[v0] getProductDetailsBySlug: No numeric ID found in slug: ${trimmedSlug}`)
     return null
   } catch (error) {
     console.error("[v0] getProductDetailsBySlug: Error:", error instanceof Error ? error.message : String(error))
