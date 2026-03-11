@@ -1809,10 +1809,10 @@ export default function ProductDetailsEnhanced({
                 </Link>
               </div>
 
-              {/* Products Grid - Show only first 10 products */}
-              {/* Changed grid columns to reflect 10 products initially (2 rows of 5) */}
+              {/* Products Grid - Same as product-grid.tsx */}
+              {/* Changed grid columns to reflect 12 products (2 rows of 6) */}
               <div className="grid grid-cols-2 gap-[1px] bg-gray-100 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {exploreProducts.slice(0, 10).map((item, index) => {
+                {exploreProducts.map((item, index) => {
                   const itemDiscount = item.sale_price
                     ? Math.round(((item.price - item.sale_price) / item.price) * 100)
                     : 0
@@ -1895,8 +1895,8 @@ export default function ProductDetailsEnhanced({
                 })}
               </div>
 
-              {/* Show More Button - Only show if more than 10 products available */}
-              {exploreProducts.length > 10 && (
+              {/* Show More Button - Same as product-grid.tsx with loading state */}
+              {exploreHasMore && (
                 <div className="flex justify-center py-6 sm:py-8 bg-white border-t border-gray-100">
                   <button
                     onClick={fetchMoreExploreProducts}
