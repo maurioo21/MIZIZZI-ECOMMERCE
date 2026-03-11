@@ -1809,8 +1809,7 @@ export default function ProductDetailsEnhanced({
                 </Link>
               </div>
 
-              {/* Products Grid - Same as product-grid.tsx */}
-              {/* Changed grid columns to reflect 12 products (2 rows of 6) */}
+              {/* Products Grid - Show all 20 products instantly */}
               <div className="grid grid-cols-2 gap-[1px] bg-gray-100 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                 {exploreProducts.map((item, index) => {
                   const itemDiscount = item.sale_price
@@ -1818,6 +1817,14 @@ export default function ProductDetailsEnhanced({
                     : 0
                   const itemRating = item.rating || 3 + Math.random() * 2
                   const isNewlyLoaded = newlyLoadedStartIndex !== null && index >= newlyLoadedStartIndex
+                  
+                  // Get primary and secondary images
+                  const primaryImage = item.images?.[0]?.urls?.large || item.images?.[0]?.urls?.original || getProductImageUrl(item)
+                  const secondaryImage = item.images?.[1]?.urls?.large || item.images?.[1]?.urls?.original
+                  const [isHovering, setIsHovering] = useState(false)
+                  const [secondaryImageLoaded, setSecondaryImageLoaded] = useState(false)
+                  const isDesktop = useMediaQuery("(min-width: 1024px)")
+                  const hasHoverImage = Boolean(secondaryImage) && isDesktop
 
                   return (
                     <Link key={`${item.id}-${index}`} href={`/product/${item.slug || item.id}`} prefetch={false}>
@@ -1830,24 +1837,60 @@ export default function ProductDetailsEnhanced({
                           damping: 15,
                           delay: isNewlyLoaded ? (index - (newlyLoadedStartIndex || 0)) * 0.05 : index * 0.02,
                         }}
-                        whileHover={{ y: -8 }}
+                        whileHover={isDesktop ? { y: -2, transition: { duration: 0.18 } } : undefined}
                         className="h-full"
                       >
                         <div className="group h-full overflow-hidden bg-white border border-gray-100 rounded-lg transition-all duration-300 hover:shadow-lg">
-                          <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
-                            <NextImage
-                              src={getProductImageUrl(item) || "/logo.png"}
-                              alt={item.name}
-                              fill
-                              sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
-                              className="object-cover transition-transform duration-300 group-hover:scale-105"
-                              loading="lazy"
-                              onError={(e) => {
-                                // Fallback to Mizizzi logo if image fails to load
-                                const target = e.target as HTMLImageElement
-                                target.src = "/logo.png"
-                              }}
-                            />
+                          <div 
+                            className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
+                            onMouseEnter={() => {
+                              if (hasHoverImage) setIsHovering(true)
+                            }}
+                            onMouseLeave={() => setIsHovering(false)}
+                          >
+                            {/* Primary Image */}
+                            {primaryImage && (
+                              <div
+                                className={`absolute inset-0 transition-opacity duration-300 ${
+                                  !(isDesktop && isHovering && hasHoverImage)
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                }`}
+                              >
+                                <NextImage
+                                  src={primaryImage || "/logo.png"}
+                                  alt={item.name}
+                                  fill
+                                  sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, 16vw"
+                                  className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement
+                                    target.src = "/logo.png"
+                                  }}
+                                />
+                              </div>
+                            )}
+
+                            {/* Secondary Image - Only on desktop when hovering */}
+                            {secondaryImage && isDesktop ? (
+                              <div
+                                className={`absolute inset-0 transition-opacity duration-300 ${
+                                  isHovering && secondaryImageLoaded ? "opacity-100" : "opacity-0"
+                                }`}
+                              >
+                                <NextImage
+                                  src={secondaryImage}
+                                  alt={`${item.name} alternate view`}
+                                  fill
+                                  sizes="16vw"
+                                  className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                                  loading="lazy"
+                                  onLoad={() => setSecondaryImageLoaded(true)}
+                                  onError={() => setSecondaryImageLoaded(false)}
+                                />
+                              </div>
+                            ) : null}
 
                             {item.sale_price && itemDiscount > 0 && (
                               <div className="absolute top-0.5 left-0.5 sm:top-1 sm:left-1 bg-[#8B1538] text-white text-[8px] sm:text-[10px] md:text-xs font-medium px-1 sm:px-1.5 py-0.5 rounded-sm z-20">
@@ -1894,56 +1937,6 @@ export default function ProductDetailsEnhanced({
                   )
                 })}
               </div>
-
-              {/* Show More Button - Same as product-grid.tsx with loading state */}
-              {exploreHasMore && (
-                <div className="flex justify-center py-6 sm:py-8 bg-white border-t border-gray-100">
-                  <button
-                    onClick={fetchMoreExploreProducts}
-                    disabled={exploreLoading}
-                    className="relative flex items-center justify-center px-12 sm:px-16 py-2.5 sm:py-3 bg-white text-gray-600 font-medium rounded-full border border-gray-300 hover:border-gray-400 hover:text-gray-800 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed min-w-[180px] sm:min-w-[200px] tracking-widest uppercase text-xs sm:text-sm"
-                    style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
-                  >
-                    <AnimatePresence mode="wait">
-                      {exploreLoading ? (
-                        <motion.div
-                          key="spinner"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
-                          className="flex items-center justify-center"
-                        >
-                          <div className="relative w-5 h-5">
-                            {[...Array(12)].map((_, i) => (
-                              <motion.span
-                                key={i}
-                                className="absolute left-1/2 top-0 w-[2px] h-[5px] rounded-full origin-[50%_10px]"
-                                style={{
-                                  transform: `translateX(-50%) rotate(${i * 30}deg)`,
-                                  backgroundColor: "#8B1538",
-                                }}
-                                animate={{
-                                  opacity: [0.15, 1, 0.15],
-                                }}
-                                transition={{
-                                  duration: 1,
-                                  repeat: Number.POSITIVE_INFINITY,
-                                  delay: i * (1 / 12),
-                                  ease: "linear",
-                                }}
-                              />
-                            ))}
-                          </div>
-                        </motion.div>
-                      ) : (
-                        <motion.span key="text" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                          Show More
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
-                  </button>
-                </div>
-              )}
             </div>
           </motion.div>
         )}
