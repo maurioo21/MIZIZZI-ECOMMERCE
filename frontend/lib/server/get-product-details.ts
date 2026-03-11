@@ -25,9 +25,9 @@ interface ProductDetailsResponse {
 /**
  * Server-side function to fetch complete product details from backend
  * This is the single source of truth for product data
- * Fetches directly from backend API_BASE_URL
+ * Fetches directly from backend API_BASE_URL with timeout and retry logic
  */
-export async function getProductDetails(productId: string | number): Promise<Product | null> {
+export async function getProductDetails(productId: string | number, retryCount = 0): Promise<Product | null> {
   try {
     const id = String(productId).trim()
 
@@ -40,23 +40,29 @@ export async function getProductDetails(productId: string | number): Promise<Pro
     const backendUrl = `${API_BASE_URL}/api/product-details/${id}`
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000)
+    // Increased timeout to 30 seconds for slow backends, with retry logic for up to 2 attempts
+    const timeoutMs = 30000
 
     try {
-      const response = await fetch(backendUrl, {
-        method: "GET",
-        signal: controller.signal,
-        next: {
-          revalidate: 300,
-          tags: [`product-${id}`, "products"],
-        },
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-      })
-
-      clearTimeout(timeoutId)
+      console.log(`[v0] getProductDetails: Fetching product ${id} (attempt ${retryCount + 1})`)
+      
+      const response = await Promise.race([
+        fetch(backendUrl, {
+          method: "GET",
+          signal: controller.signal,
+          next: {
+            revalidate: 300,
+            tags: [`product-${id}`, "products"],
+          },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+        }),
+        new Promise<Response>((_, reject) =>
+          setTimeout(() => reject(new Error("Fetch timeout")), timeoutMs)
+        ),
+      ])
 
       if (!response.ok) {
         console.error(`[v0] getProductDetails: HTTP ${response.status} for product ${id}`)
@@ -129,14 +135,20 @@ export async function getProductDetails(productId: string | number): Promise<Pro
       console.log(`[v0] getProductDetails: Success - ${normalizedProduct.name}`)
       return normalizedProduct
     } catch (fetchError) {
-      clearTimeout(timeoutId)
+      controller.abort()
 
-      if (fetchError instanceof Error && fetchError.name === "AbortError") {
-        console.error(`[v0] getProductDetails: Request timeout`)
+      const isTimeout = fetchError instanceof Error && (fetchError.name === "AbortError" || fetchError.message === "Fetch timeout")
+      
+      if (isTimeout && retryCount < 1) {
+        console.warn(`[v0] getProductDetails: Timeout on attempt ${retryCount + 1}, retrying...`)
+        // Retry once on timeout
+        return getProductDetails(productId, retryCount + 1)
+      }
+
+      if (isTimeout) {
+        console.error(`[v0] getProductDetails: Request timeout after ${retryCount + 1} attempts`)
       } else {
-        console.error(`[v0] getProductDetails: Fetch failed`, {
-          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
-        })
+        console.error(`[v0] getProductDetails: Fetch failed:`, fetchError instanceof Error ? fetchError.message : String(fetchError))
       }
 
       return null
