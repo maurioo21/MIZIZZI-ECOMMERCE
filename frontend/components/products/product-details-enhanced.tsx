@@ -1604,8 +1604,9 @@ export default function ProductDetailsEnhanced({
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Product Details Tabs */}
+      {/* Product Details Tabs */}
         <motion.div {...appleVariants.fadeIn} className="mt-8">
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             {/* Tab Headers */}
