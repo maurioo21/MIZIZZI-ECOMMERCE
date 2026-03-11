@@ -1712,9 +1712,9 @@ export default function ProductDetailsEnhanced({
         </div>
       </motion.div>
 
-        {exploreProducts.length > 0 && (
-          <motion.div {...appleVariants.fadeIn} className="mt-8">
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      {exploreProducts.length > 0 && (
+        <motion.div {...appleVariants.fadeIn} className="mt-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <h2 className="text-lg font-bold text-gray-900">Explore Your Interest</h2>
