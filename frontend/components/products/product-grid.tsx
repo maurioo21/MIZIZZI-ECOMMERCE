@@ -8,9 +8,10 @@ import {
   useRef,
   useMemo,
 } from "react"
+import { motion } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
-import { ShoppingBag, Package } from "lucide-react"
+import { ShoppingBag, Star, Package } from "lucide-react"
 
 import { productService } from "@/services/product"
 import { cloudinaryService } from "@/services/cloudinary-service"
@@ -34,6 +35,8 @@ type ProductResponse =
       pages?: number
     }
 
+const GRID_ANIMATION_ENABLED = false
+
 const LogoPlaceholder = memo(function LogoPlaceholder() {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-white">
@@ -51,7 +54,37 @@ const LogoPlaceholder = memo(function LogoPlaceholder() {
   )
 })
 
-// Removed StarRating component for performance optimization
+const StarRating = memo(function StarRating({
+  rating = 4,
+}: {
+  rating?: number
+}) {
+  const safeRating = Math.min(5, Math.max(0, rating))
+
+  return (
+    <div className="flex items-center" aria-label={`Rated ${safeRating} out of 5`}>
+      <div className="flex">
+        {[1, 2, 3, 4, 5].map((star) => {
+          const full = star <= Math.floor(safeRating)
+          const half = !full && star - 0.5 <= safeRating
+
+          return (
+            <Star
+              key={star}
+              className={`h-3 w-3 sm:h-3.5 sm:w-3.5 ${
+                full
+                  ? "fill-yellow-400 text-yellow-400"
+                  : half
+                    ? "fill-yellow-400/50 text-yellow-400"
+                    : "fill-gray-200 text-gray-200"
+              }`}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+})
 
 function optimizeImageUrl(rawUrl?: string | null): string {
   if (!rawUrl || typeof rawUrl !== "string") return ""
@@ -256,7 +289,19 @@ const ProductCard = memo(function ProductCard({
     return clearPlaceholderTimer
   }, [product.id, primaryImage, secondaryImage, clearPlaceholderTimer])
 
-  const motionProps = {} // Animations disabled for performance
+  const motionProps = GRID_ANIMATION_ENABLED
+    ? {
+        initial: { opacity: 0, y: 10 },
+        animate: {
+          opacity: 1,
+          y: 0,
+          transition: {
+            duration: 0.2,
+            delay: isNewlyLoaded ? index * 0.03 : index * 0.01,
+          },
+        },
+      }
+    : {}
 
   return (
     <Link
@@ -265,7 +310,11 @@ const ProductCard = memo(function ProductCard({
       aria-label={`View ${product.name}`}
       scroll
     >
-      <div className="h-full">
+      <motion.div
+        {...motionProps}
+        whileHover={isDesktop ? { y: -2, transition: { duration: 0.18 } } : undefined}
+        className="h-full"
+      >
         <article className="group h-full overflow-hidden border-b border-r border-gray-100 bg-white transition-shadow duration-200 hover:shadow-sm">
           <div
             className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
@@ -343,9 +392,10 @@ const ProductCard = memo(function ProductCard({
               ) : null}
             </div>
 
+            <StarRating rating={rating} />
           </div>
         </article>
-      </div>
+      </motion.div>
     </Link>
   )
 })
