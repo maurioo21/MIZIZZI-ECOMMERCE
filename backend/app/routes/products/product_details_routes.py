@@ -486,7 +486,6 @@ def get_related_products(product_id: int):
                         'slug': product.slug,
                         'price': float(product.price or 0),
                         'sale_price': float(product.sale_price or 0),
-                        'rating': float(product.rating or 0) if product.rating else 0,
                         'stock': {
                             'is_in_stock': getattr(product, 'stock', 0) > 0,
                             'quantity': getattr(product, 'stock', 0),

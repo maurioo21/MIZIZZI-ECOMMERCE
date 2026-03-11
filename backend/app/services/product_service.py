@@ -97,7 +97,7 @@ class ProductService:
         1. Same category + same brand
         2. Same category
         3. Same brand
-        4. Popular products (by rating)
+        4. Popular products (by featured status and newest)
         5. Any other products
         Excludes the current product. Always tries to return products.
         """
@@ -149,7 +149,7 @@ class ProductService:
                 ).limit(limit - len(related)).all()
                 related.extend(additional)
             
-            # Strategy 4: Popular products (ordered by rating)
+            # Strategy 4: Popular products (ordered by featured and newest)
             if len(related) < limit:
                 additional = Product.query.options(
                     joinedload(Product.brand),
@@ -158,7 +158,7 @@ class ProductService:
                 ).filter(
                     Product.id != product_id,
                     Product.id.notin_([p.id for p in related])
-                ).order_by(Product.rating.desc(), Product.id.desc()).limit(limit - len(related)).all()
+                ).order_by(Product.is_featured.desc(), Product.created_at.desc()).limit(limit - len(related)).all()
                 related.extend(additional)
             
             # Strategy 5: Any other products (last resort - ensures we always have something)
