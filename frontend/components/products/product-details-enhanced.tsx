@@ -1009,32 +1009,40 @@ export default function ProductDetailsEnhanced({
 
     setExploreLoading(true)
     try {
-      const nextPage = explorePage + 1
-      const response = await fetch(
-        `/api/products?limit=12&page=${nextPage}${product?.category?.slug ? `&category_slug=${product.category.slug}` : ""}`,
-      )
+      // Use the new backend endpoint for random explore products
+      const response = await fetch('/api/product-details/explore/random?limit=20')
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch: ${response.status}`)
+      }
+
       const data = await response.json()
 
-      const products = data?.products || data?.items || data || []
-      const filteredData = products.filter((p: any) => p.id !== product?.id)
-
-      if (filteredData.length > 0) {
-        setExploreProducts((prev) => {
-          setNewlyLoadedStartIndex(prev.length)
-          return [...prev, ...filteredData]
-        })
-        setExplorePage(nextPage)
-        setExploreHasMore(filteredData.length >= 12)
+      if (data.success && Array.isArray(data.products)) {
+        // Filter out current product
+        const filteredProducts = data.products.filter((p: any) => p.id !== product?.id)
+        
+        if (filteredProducts.length > 0) {
+          setExploreProducts((prev) => {
+            setNewlyLoadedStartIndex(prev.length)
+            return [...prev, ...filteredProducts]
+          })
+          setExplorePage((prev) => prev + 1)
+          // Only show "Load More" if we got the max limit (20 products)
+          setExploreHasMore(filteredProducts.length >= 20)
+        } else {
+          setExploreHasMore(false)
+        }
       } else {
         setExploreHasMore(false)
       }
     } catch (error) {
-      console.error("[v0] Error fetching more explore products:", error)
+      console.error("Error fetching more explore products:", error)
       setExploreHasMore(false)
     } finally {
       setExploreLoading(false)
     }
-  }, [exploreLoading, exploreHasMore, explorePage, product?.id, product?.category?.slug])
+  }, [exploreLoading, exploreHasMore, product?.id])
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">

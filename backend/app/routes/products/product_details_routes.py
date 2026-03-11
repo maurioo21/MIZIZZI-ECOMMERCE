@@ -548,6 +548,118 @@ def get_related_products(product_id: int):
         }), 500
 
 
+@product_details_bp.route('/explore/random', methods=['GET'])
+def get_explore_random_products():
+    """
+    Get random products for "Explore Your Interest" section.
+    Returns up to 20 random products with lightweight data format.
+    Useful for discovery and to show variety when related products aren't enough.
+    """
+    limit = request.args.get('limit', 20, type=int)
+    limit = min(limit, 20)  # Maximum 20 products
+    request_timestamp = datetime.utcnow().isoformat()
+    cache_hit = False
+    cache_key = f"products:explore:random"
+    
+    try:
+        # Try cache first
+        cached_products = product_cache.get(cache_key)
+        
+        if cached_products:
+            try:
+                explore_data = json.loads(cached_products) if isinstance(cached_products, str) else cached_products
+                cache_hit = True
+                logger.debug(f"CACHE HIT: {cache_key}")
+            except Exception as e:
+                logger.warning(f"Explore products cache error: {e}")
+                cached_products = None
+        
+        # Cache miss - fetch random products from database
+        if not cache_hit:
+            # Use database ORDER BY RAND() for random products
+            # Get all active products and randomize
+            all_products = Product.query.options(
+                joinedload(Product.brand),
+                joinedload(Product.category),
+                selectinload(Product.images),
+            ).filter(
+                Product.is_active == True
+            ).order_by(
+                db.func.random()  # PostgreSQL uses random(), MySQL uses RAND()
+            ).limit(limit).all()
+            
+            # Serialize explore products with lightweight format
+            explore_data = []
+            for product in all_products:
+                try:
+                    # Build lightweight product object
+                    product_dict = {
+                        'id': product.id,
+                        'name': product.name or 'Unknown',
+                        'slug': product.slug,
+                        'price': float(product.price or 0),
+                        'sale_price': float(product.sale_price or 0),
+                        'stock': {
+                            'is_in_stock': getattr(product, 'stock', 0) > 0,
+                            'quantity': getattr(product, 'stock', 0),
+                            'stock_status': 'in_stock' if getattr(product, 'stock', 0) > 0 else 'out_of_stock'
+                        },
+                        'images': []
+                    }
+                    
+                    # Add images with Cloudinary URLs
+                    if product.images:
+                        for img in product.images:
+                            if img.url:
+                                product_dict['images'].append({
+                                    'id': img.id,
+                                    'is_primary': img.is_primary or False,
+                                    'urls': {
+                                        'thumbnail': f"{img.url.replace('/upload/', '/upload/w_120,h_120,c_fill,q_60/')}",
+                                        'medium': f"{img.url.replace('/upload/', '/upload/w_400,h_400,c_fill,q_75/')}",
+                                        'large': f"{img.url.replace('/upload/', '/upload/w_800,h_800,c_fill,q_85/')}",
+                                        'original': img.url
+                                    }
+                                })
+                    
+                    explore_data.append(product_dict)
+                except Exception as e:
+                    logger.error(f"Error serializing explore product {product.id}: {e}", exc_info=True)
+                    continue
+            
+            # Cache the explore products
+            try:
+                cache_ttl = CACHE_TTL.get('explore_random', 300)  # 5 min cache
+                cache_payload = json.dumps(explore_data)
+                product_cache.set(cache_key, cache_payload, cache_ttl)
+                logger.debug(f"CACHE SET: {cache_key} (TTL: {cache_ttl}s)")
+            except Exception as e:
+                logger.error(f"Explore products cache error: {e}")
+        
+        # Build response with fresh metadata
+        response = {
+            'success': True,
+            'products': explore_data,
+            'total': len(explore_data),
+            'timestamp': request_timestamp,
+            '_cache': {
+                'status': 'HIT' if cache_hit else 'MISS',
+                'key': cache_key,
+                'timestamp': request_timestamp
+            }
+        }
+        
+        return jsonify(response), 200
+    
+    except Exception as e:
+        logger.error(f"Error in get_explore_random_products: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error',
+            'timestamp': request_timestamp
+        }), 500
+
+
 @product_details_bp.route('/<int:product_id>/cache/invalidate', methods=['POST'])
 def invalidate_product_cache(product_id: int):
     """
