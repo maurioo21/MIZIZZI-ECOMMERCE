@@ -50,6 +50,7 @@ interface ProductDetailsEnhancedProps {
   initialReviews?: Review[]
   similarProducts?: any[]
   recentlyViewedProducts?: any[]
+  exploreInitialProducts?: any[]
 }
 
 const PRIMARY_COLOR = "#8B1538" // Cherry red (brand color)
@@ -89,6 +90,7 @@ export default function ProductDetailsEnhanced({
   initialReviews,
   similarProducts,
   recentlyViewedProducts,
+  exploreInitialProducts,
 }: ProductDetailsEnhancedProps) {
   const router = useRouter()
   const { isAuthenticated, user } = useAuth()
@@ -101,6 +103,7 @@ export default function ProductDetailsEnhanced({
   const [quantity, setQuantity] = useState(1)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
   const [exploreProducts, setExploreProducts] = useState<any[]>(
+    exploreInitialProducts && exploreInitialProducts.length > 0 ? exploreInitialProducts :
     similarProducts && similarProducts.length > 0 ? similarProducts : [],
   )
   const [explorePage, setExplorePage] = useState(1)

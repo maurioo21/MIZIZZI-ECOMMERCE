@@ -41,12 +41,52 @@ function determineProductType(product: any) {
   return "regular"
 }
 
-async function getRelatedProducts(categoryId: string, currentProductId: string) {
+async function getRelatedProducts(productId: string) {
   try {
-    // For now, return empty array as we'll fetch related products client-side
-    // This prevents unnecessary server-side calls
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+    const url = `${apiBaseUrl}/api/product-details/${productId}/related?limit=12`
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "revalidate",
+      next: { revalidate: 300 } // Cache for 5 minutes
+    })
+
+    if (!response.ok) {
+      console.warn(`[v0] Failed to fetch related products: ${response.status}`)
+      return []
+    }
+
+    const data = await response.json()
+    return data.success && Array.isArray(data.related) ? data.related : []
+  } catch (error) {
+    console.error("[v0] Error fetching related products:", error instanceof Error ? error.message : String(error))
     return []
-  } catch {
+  }
+}
+
+async function getExploreRandomProducts() {
+  try {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+    const url = `${apiBaseUrl}/api/product-details/explore/random?limit=20`
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+      cache: "revalidate",
+      next: { revalidate: 300 } // Cache for 5 minutes
+    })
+
+    if (!response.ok) {
+      console.warn(`[v0] Failed to fetch explore products: ${response.status}`)
+      return []
+    }
+
+    const data = await response.json()
+    return data.success && Array.isArray(data.products) ? data.products : []
+  } catch (error) {
+    console.error("[v0] Error fetching explore products:", error instanceof Error ? error.message : String(error))
     return []
   }
 }
@@ -110,11 +150,13 @@ export default async function Page({ params }: PageProps) {
       ]
     }
 
-    const relatedProducts = product.category_id
-      ? await getRelatedProducts(String(product.category_id), String(product.id))
+    const relatedProducts = product.id
+      ? await getRelatedProducts(String(product.id))
       : []
+    
+    const exploreProducts = await getExploreRandomProducts()
 
-    return <ProductDetailsEnhanced product={product} similarProducts={relatedProducts} />
+    return <ProductDetailsEnhanced product={product} similarProducts={relatedProducts} exploreInitialProducts={exploreProducts} />
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error(`[v0] Error loading product ${id}: ${errorMessage}`)
