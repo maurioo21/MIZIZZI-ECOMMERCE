@@ -36,14 +36,19 @@ export async function getProductDetails(productId: string | number): Promise<Pro
       return null
     }
 
-    // Try the product-details endpoint first (new dedicated endpoint)
+    console.log(`[v0] getProductDetails: Fetching product ${id} via local proxy`)
+
+    // Use the local Next.js proxy instead of calling backend directly
+    // This avoids network issues and respects the deployment environment
+    const localEndpoint = `/api/product-details/${id}`
+    
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
 
     try {
-      const detailsEndpoint = `${API_BASE_URL}/api/product-details/${id}`
+      console.log(`[v0] getProductDetails: Calling local endpoint ${localEndpoint}`)
       
-      const response = await fetch(detailsEndpoint, {
+      const response = await fetch(`http://localhost:3000${localEndpoint}`, {
         method: "GET",
         signal: controller.signal,
         next: {
@@ -58,8 +63,10 @@ export async function getProductDetails(productId: string | number): Promise<Pro
 
       clearTimeout(timeoutId)
 
+      console.log(`[v0] getProductDetails: Response status ${response.status}`)
+
       if (!response.ok) {
-        console.error(`[v0] getProductDetails: HTTP ${response.status} from ${detailsEndpoint}`)
+        console.error(`[v0] getProductDetails: HTTP ${response.status}`)
         return null
       }
 
@@ -94,7 +101,7 @@ export async function getProductDetails(productId: string | number): Promise<Pro
             : [],
       }
 
-      console.log(`[v0] getProductDetails: Successfully fetched product ${id} with name: ${normalizedProduct.name}`)
+      console.log(`[v0] getProductDetails: Successfully fetched product ${id}: ${normalizedProduct.name}`)
 
       return normalizedProduct
     } catch (fetchError) {
@@ -103,13 +110,13 @@ export async function getProductDetails(productId: string | number): Promise<Pro
       if (fetchError instanceof Error && fetchError.name === "AbortError") {
         console.error(`[v0] getProductDetails: Request timeout for product ${id}`)
       } else {
-        console.error(`[v0] getProductDetails: Fetch failed for ${id}:`, fetchError)
+        console.error(`[v0] getProductDetails: Fetch failed:`, fetchError instanceof Error ? fetchError.message : String(fetchError))
       }
       
       return null
     }
   } catch (error) {
-    console.error("[v0] getProductDetails: Critical error:", error)
+    console.error("[v0] getProductDetails: Critical error:", error instanceof Error ? error.message : String(error))
     return null
   }
 }
@@ -122,9 +129,11 @@ export async function getProductDetails(productId: string | number): Promise<Pro
 export async function getProductDetailsBySlug(slug: string): Promise<Product | null> {
   try {
     const trimmedSlug = slug.trim()
+    console.log(`[v0] getProductDetailsBySlug: Processing slug: ${trimmedSlug}`)
 
     // If it's already numeric, use directly
     if (/^\d+$/.test(trimmedSlug)) {
+      console.log(`[v0] getProductDetailsBySlug: Slug is numeric ID, fetching directly`)
       return getProductDetails(trimmedSlug)
     }
 
@@ -140,7 +149,7 @@ export async function getProductDetailsBySlug(slug: string): Promise<Product | n
     console.error(`[v0] getProductDetailsBySlug: Could not extract numeric ID from slug: ${trimmedSlug}`)
     return null
   } catch (error) {
-    console.error("[v0] getProductDetailsBySlug: Critical error:", error)
+    console.error("[v0] getProductDetailsBySlug: Critical error:", error instanceof Error ? error.message : String(error))
     return null
   }
 }
