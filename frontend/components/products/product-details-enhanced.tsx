@@ -1406,183 +1406,24 @@ export default function ProductDetailsEnhanced({
       </div>
 
       {/* Product Details Tabs */}
-                {/* Variants */}
-                {product?.variants?.length > 0 && (
-                  <div className="space-y-4">
-                    {/* Color Variants */}
-                    {Array.from(new Set(product.variants.map((v: any) => v.color))).filter(Boolean).length > 0 && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">Color</label>
-                        <div className="flex flex-wrap gap-2">
-                          {(Array.from(new Set(product.variants.map((v: any) => v.color))) as string[])
-                            .filter(Boolean)
-                            .map((color, i) => {
-                              const active = selectedVariant?.color === color
-                              return (
-                                <button
-                                  key={i}
-                                  onClick={() => {
-                                    const v = product.variants.find((x: any) => x.color === color)
-                                    if (v) handleVariantSelection(v)
-                                  }}
-                                  className={cn(
-                                    "px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                                    active ? "bg-[#8B1538] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                                  )}
-                                >
-                                  {color}
-                                </button>
-                              )
-                            })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Size Variants */}
-                    {Array.from(new Set(product.variants.map((v: any) => v.size))).filter(Boolean).length > 0 && (
-                      <div>
-                        <label className="block text-sm font-semibold text-gray-900 mb-2">Size</label>
-                        <div className="flex flex-wrap gap-2">
-                          {(Array.from(new Set(product.variants.map((v: any) => v.size))) as string[])
-                            .filter(Boolean)
-                            .map((size, i) => {
-                              const active = selectedVariant?.size === size
-                              return (
-                                <button
-                                  key={i}
-                                  onClick={() => {
-                                    const v = product.variants.find((x: any) => x.size === size)
-                                    if (v) handleVariantSelection(v)
-                                  }}
-                                  className={cn(
-                                    "px-4 py-2 rounded-lg text-sm font-medium transition-all",
-                                    active ? "bg-[#8B1538] text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                                  )}
-                                >
-                                  {size}
-                                </button>
-                              )
-                            })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Quantity */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-900 mb-2">Quantity</label>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
-                      <button
-                        className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                        onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                        disabled={quantity <= 1}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <div className="w-12 h-10 flex items-center justify-center border-l border-r border-gray-200 bg-gray-50">
-                        <span className="text-sm font-bold text-gray-900">{quantity}</span>
-                      </div>
-                      <button
-                        className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-40 transition-colors"
-                        onClick={() => setQuantity((q) => Math.min(inventoryData?.available_quantity || 0, q + 1))}
-                        disabled={!inventoryData?.is_in_stock || quantity >= (inventoryData?.available_quantity || 0)}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <span className="text-sm text-gray-500">{inventoryData?.available_quantity || 0} available</span>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-3 pt-2">
-                  <motion.button
-                    onClick={handleAddToCart}
-                    disabled={isAddingToCart || !inventoryData?.is_in_stock}
-                    className={cn(
-                      "w-full h-12 rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2 transition-all",
-                      isAddingToCart || !inventoryData?.is_in_stock
-                        ? "bg-gray-300 cursor-not-allowed"
-                        : "bg-[#8B1538] hover:bg-[#6B1028] shadow-lg shadow-[#8B1538]/20",
-                    )}
-                    whileTap={inventoryData?.is_in_stock ? { scale: 0.98 } : {}}
-                  >
-                    {isAddingToCart ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Adding...
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingCart className="h-4 w-4" />
-                        Add to Cart
-                      </>
-                    )}
-                  </motion.button>
-
-                  <motion.button
-                    onClick={handleBuyViaWhatsApp}
-                    className="w-full h-12 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-sm font-bold flex items-center justify-center gap-2 transition-colors"
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <FaWhatsapp className="h-5 w-5" />
-                    Buy via WhatsApp
-                  </motion.button>
-
-                  <motion.button
-                    onClick={handleToggleWishlist}
-                    disabled={isTogglingWishlist}
-                    className={cn(
-                      "w-full h-12 rounded-xl border-2 text-sm font-bold flex items-center justify-center gap-2 transition-all",
-                      isProductInWishlist
-                        ? "border-[#8B1538] bg-[#8B1538]/5 text-[#8B1538]"
-                        : "border-gray-200 text-gray-700 hover:border-[#8B1538] hover:text-[#8B1538]",
-                    )}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <Heart className={cn("h-4 w-4", isProductInWishlist && "fill-current")} />
-                    {isProductInWishlist ? "Saved to Wishlist" : "Add to Wishlist"}
-                  </motion.button>
-                </div>
-
-                {/* Payment Methods */}
-                <div className="pt-4 border-t border-gray-100">
-                  <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                    <CreditCard className="h-4 w-4" />
-                    <span>Visa, Mastercard, M-Pesa, Airtel Money</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Product Details Tabs */}
-        <motion.div {...appleVariants.fadeIn} className="mt-8">
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <motion.div {...appleVariants.fadeIn} className="mt-12 lg:mt-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-none overflow-hidden border-t border-neutral-100">
             {/* Tab Headers */}
-            <div className="border-b border-gray-100">
+            <div className="border-b border-neutral-100">
               <div className="flex">
                 {["details", "specs", "reviews"].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab as any)}
                     className={cn(
-                      "flex-1 py-4 px-6 text-sm font-semibold transition-all relative",
-                      activeTab === tab ? "text-[#8B1538]" : "text-gray-500 hover:text-gray-700",
+                      "flex-1 py-4 px-6 text-sm font-light tracking-wide uppercase transition-all relative",
+                      activeTab === tab ? "text-neutral-900 border-b-2 border-neutral-900" : "text-neutral-500 hover:text-neutral-700",
                     )}
                   >
                     {tab === "details" && "Product Details"}
                     {tab === "specs" && "Specifications"}
                     {tab === "reviews" && `Reviews (${reviewSummary?.total_reviews || 0})`}
-                    {activeTab === tab && (
-                      <motion.div
-                        layoutId="activeTab"
-                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#8B1538]"
-                      />
-                    )}
                   </button>
                 ))}
               </div>
