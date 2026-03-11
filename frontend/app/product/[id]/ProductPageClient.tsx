@@ -139,7 +139,7 @@ export default function ProductPageClient({ params }: { params: { id: Promise<st
       <>
         {/* Mobile View - Hidden on Desktop */}
         <div className="block lg:hidden">
-          <ProductDetailsMobile product={product} initialReviews={product.reviews} />
+          <ProductDetailsMobile product={product} />
         </div>
 
         {/* Desktop View - Hidden on Mobile */}

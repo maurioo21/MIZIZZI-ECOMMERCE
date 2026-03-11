@@ -27,12 +27,11 @@ import { formatPrice, cn } from "@/lib/utils"
 import { productService } from "@/services/product"
 import { inventoryService } from "@/services/inventory-service"
 import { cloudinaryService } from "@/services/cloudinary-service"
-import { reviewService, type Review, type ReviewSummary } from "@/services/review-service"
+import { reviewService, type ReviewSummary } from "@/services/review-service"
 import { useAuth } from "@/contexts/auth/auth-context"
 
 interface ProductDetailsMobileProps {
   product: any
-  initialReviews?: Review[]
 }
 
 const PRIMARY_COLOR = "#8B1538"
@@ -40,7 +39,7 @@ const PRIMARY_HOVER = "#6B1028"
 const ACCENT_COLOR = "#FF6B35"
 const SUCCESS_COLOR = "#10B981"
 
-export default function ProductDetailsMobile({ product: initialProduct, initialReviews }: ProductDetailsMobileProps) {
+export default function ProductDetailsMobile({ product: initialProduct }: ProductDetailsMobileProps) {
   const { toast } = useToast()
   const { isAuthenticated, user } = useAuth()
 
