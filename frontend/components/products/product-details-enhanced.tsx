@@ -1051,8 +1051,8 @@ export default function ProductDetailsEnhanced({
       )
       const data = await response.json()
 
-      const products = data?.products || data?.items || data || []
-      const filteredData = products.filter((p: any) => p.id !== product?.id)
+      const productsArray = Array.isArray(data?.products) ? data.products : Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : []
+      const filteredData = productsArray.filter((p: any) => p.id !== product?.id)
 
       if (filteredData.length > 0) {
         setExploreProducts((prev) => {
