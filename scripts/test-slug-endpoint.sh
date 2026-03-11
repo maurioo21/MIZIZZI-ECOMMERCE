@@ -3,7 +3,7 @@
 # Test script for the new slug-based product endpoint
 
 # Configuration
-BACKEND_URL="http://localhost:8000"
+BACKEND_URL="http://localhost:5000"
 SLUG="7pieces-automatic-buckle-belt-business-casual-for-men"
 
 echo "========================================"

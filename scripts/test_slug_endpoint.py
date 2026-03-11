@@ -9,7 +9,7 @@ import json
 import sys
 
 # Configuration
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = "http://localhost:5000"
 SLUG = "7pieces-automatic-buckle-belt-business-casual-for-men"
 
 def test_slug_endpoint():
