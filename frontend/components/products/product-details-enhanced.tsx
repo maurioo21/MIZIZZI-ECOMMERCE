@@ -169,7 +169,21 @@ export default function ProductDetailsEnhanced({
 
   // Helpers
   const getProductImageUrl = (p: any, index = 0, highQuality = false): string => {
-    // Try thumbnail_url first for grid items
+    // First try to get Cloudinary image from images array (from backend /related endpoint)
+    if (p?.images && Array.isArray(p.images) && p.images.length > index) {
+      const img = p.images[index]
+      if (img?.urls?.large) {
+        return img.urls.large
+      }
+      if (img?.urls?.original) {
+        return img.urls.original
+      }
+      if (img?.urls?.medium) {
+        return img.urls.medium
+      }
+    }
+
+    // Try thumbnail_url next
     if (
       !highQuality &&
       p?.thumbnail_url &&
@@ -179,6 +193,7 @@ export default function ProductDetailsEnhanced({
       return p.thumbnail_url
     }
 
+    // Try image_urls array
     if (p?.image_urls && p.image_urls.length > index) {
       const url = p.image_urls[index]
       if (typeof url === "string" && url.startsWith("blob:")) {
@@ -312,6 +327,7 @@ export default function ProductDetailsEnhanced({
     const fetchRelatedProducts = async () => {
       // Start with server-provided similarProducts if available
       if (similarProducts && similarProducts.length > 0) {
+        console.log("[v0] Using server-provided similarProducts:", similarProducts.length)
         setExploreProducts(similarProducts.slice(0, 12))
         setExploreHasMore(similarProducts.length > 12)
         setExploreLoading(false)
@@ -320,28 +336,36 @@ export default function ProductDetailsEnhanced({
 
       // If we already have products, don't fetch again
       if (exploreProducts.length > 0) {
+        console.log("[v0] Already have explore products")
         setExploreLoading(false)
         return
       }
 
       // Fetch from the backend's /related endpoint
       if (!product?.id) {
+        console.log("[v0] No product ID available")
         setExploreLoading(false)
         return
       }
 
       setExploreLoading(true)
       try {
-        const response = await fetch(`/api/product-details/${product.id}/related?limit=12`)
+        const url = `/api/product-details/${product.id}/related?limit=12`
+        console.log("[v0] Fetching related products from:", url)
+        const response = await fetch(url)
         if (!response.ok) {
           throw new Error(`Failed to fetch: ${response.status}`)
         }
 
         const data = await response.json()
+        console.log("[v0] Related products response:", data)
+        
         if (data.success && Array.isArray(data.related)) {
+          console.log("[v0] Setting explore products:", data.related.length)
           setExploreProducts(data.related)
           setExploreHasMore((data.total || 0) > 12)
         } else {
+          console.log("[v0] Invalid response structure")
           setExploreProducts([])
           setExploreHasMore(false)
         }
@@ -355,6 +379,7 @@ export default function ProductDetailsEnhanced({
     }
 
     if (product?.id) {
+      console.log("[v0] Product loaded, fetching related:", product.id)
       fetchRelatedProducts()
     }
   }, [product?.id])
