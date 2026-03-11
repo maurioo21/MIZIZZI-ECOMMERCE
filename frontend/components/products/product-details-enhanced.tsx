@@ -1709,7 +1709,8 @@ export default function ProductDetailsEnhanced({
               </AnimatePresence>
             </div>
           </div>
-        </motion.div>
+        </div>
+      </motion.div>
 
         {exploreProducts.length > 0 && (
           <motion.div {...appleVariants.fadeIn} className="mt-8">
