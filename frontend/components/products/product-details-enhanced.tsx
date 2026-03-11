@@ -169,12 +169,41 @@ function extractImagesFromProductDetails(product: any): string[] {
   
   // New structure: product.images is array with URLs object
   if (Array.isArray(product.images) && product.images.length > 0) {
-    const urls = product.images
+    const urls = (product.images as any[])
       .map((img: any) => {
         if (img.urls && typeof img.urls === 'object') {
           // Prefer large, fallback to original, then medium, then thumbnail
           return img.urls.large || img.urls.original || img.urls.medium || img.urls.thumbnail || '';
         }
+        return '';
+      })
+      .filter((url: string) => url && typeof url === 'string' && !url.startsWith('blob:'))
+      .map((url: string) => safeCloudinaryUrl(url));
+    
+    if (urls.length > 0) return urls;
+  }
+  
+  // Legacy structure: product.image_urls is already array of URLs
+  if (Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+    const urls = (product.image_urls as any[])
+      .map((url: string) => {
+        if (typeof url === 'string' && url.trim()) {
+          return safeCloudinaryUrl(url);
+        }
+        return '';
+      })
+      .filter((url: string) => url);
+    
+    if (urls.length > 0) return urls;
+  }
+  
+  // Legacy structure: image_urls as string or single URL
+  if (typeof product.image_urls === 'string' && product.image_urls.trim()) {
+    return [safeCloudinaryUrl(product.image_urls)];
+  }
+  
+  return [];
+}
         return '';
       })
       .filter((url: string) => url && typeof url === 'string' && !url.startsWith('blob:'))
@@ -345,12 +374,77 @@ function getProductImages(product: any): string[] {
 
   // NEW: Try to extract from new ProductDetails structure first (product.images with urls object)
   if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
-    const newStructureUrls = product.images
+    const newStructureUrls = (product.images as any[])
       .map((img: any) => {
         if (img.urls && typeof img.urls === 'object') {
           // Use large for gallery
           return img.urls.large || img.urls.original || '';
         }
+        return '';
+      })
+      .filter((url: string) => url && typeof url === 'string' && !url.startsWith('blob:'))
+      .map((url) => safeCloudinaryUrl(url));
+    
+    if (newStructureUrls.length > 0) {
+      return newStructureUrls;
+    }
+  }
+
+  // LEGACY: Handle old image_urls structure
+  if (product?.image_urls) {
+    if (Array.isArray(product.image_urls)) {
+      if (
+        product.image_urls.length > 0 &&
+        typeof product.image_urls[0] === "string" &&
+        product.image_urls[0].length === 1
+      ) {
+        try {
+          const reconstructed = product.image_urls.join("")
+          const parsed = JSON.parse(reconstructed)
+          if (Array.isArray(parsed)) {
+            imageUrls = (parsed as any[])
+              .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
+              .map((u) => safeCloudinaryUrl(u))
+          }
+        } catch {
+          imageUrls = []
+        }
+      } else {
+        imageUrls = (product.image_urls as any[])
+          .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
+          .map((u: string) => safeCloudinaryUrl(u))
+      }
+    } else if (typeof product.image_urls === "string") {
+      const s = product.image_urls.trim()
+      if (s && !s.startsWith("blob:")) {
+        try {
+          const parsed = JSON.parse(s)
+          if (Array.isArray(parsed)) {
+            imageUrls = (parsed as any[])
+              .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "")
+              .map((u) => safeCloudinaryUrl(u))
+          } else if (typeof parsed === "string") {
+            imageUrls = [safeCloudinaryUrl(parsed)]
+          }
+        } catch {
+          imageUrls = [safeCloudinaryUrl(s)]
+        }
+      }
+    }
+  }
+
+  // If still no images, use thumbnail
+  if (imageUrls.length === 0 && product?.thumbnail_url) {
+    imageUrls = [safeCloudinaryUrl(product.thumbnail_url)]
+  }
+
+  // If still no images, use fallback
+  if (imageUrls.length === 0) {
+    imageUrls = ["/generic-product-display.png"]
+  }
+
+  return imageUrls
+}
         return '';
       })
       .filter((url: string) => url && typeof url === 'string' && !url.startsWith('blob:'))
