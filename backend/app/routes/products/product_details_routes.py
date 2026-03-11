@@ -6,6 +6,7 @@ Provides complete product information with high performance similar to enterpris
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
 from sqlalchemy.orm import joinedload
+from sqlalchemy import text
 from datetime import datetime
 import json
 from typing import Optional, Dict, Any
@@ -465,7 +466,7 @@ def health_check():
     
     # Test database connection
     try:
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         product_count = Product.query.count()
         active_product_count = Product.query.filter_by(is_active=True).count()
         health_info['database'] = 'healthy'
