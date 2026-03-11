@@ -36,10 +36,9 @@ export async function getProductDetails(productId: string | number): Promise<Pro
       return null
     }
 
-    const backendUrl = `${API_BASE_URL}/api/product-details/${id}`
-    console.log(`[v0] getProductDetails: API_BASE_URL = ${API_BASE_URL}`)
-    console.log(`[v0] getProductDetails: Full URL = ${backendUrl}`)
-    console.log(`[v0] getProductDetails: Fetching from backend: ${backendUrl}`)
+    // Use /api/products/{id} endpoint - the main working products endpoint
+    const backendUrl = `${API_BASE_URL}/api/products/${id}`
+    console.log(`[v0] getProductDetails: Fetching from ${backendUrl}`)
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000)
@@ -64,73 +63,70 @@ export async function getProductDetails(productId: string | number): Promise<Pro
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error(`[v0] getProductDetails: HTTP ${response.status} for product ${id}`, {
-          statusText: response.statusText,
+        console.error(`[v0] getProductDetails: HTTP ${response.status}`, {
           errorBody: errorText.substring(0, 200)
         })
         return null
       }
 
-      const responseData = (await response.json()) as ProductDetailsResponse | Product
+      const responseDataRaw = await response.json()
+      const responseData = responseDataRaw as ProductDetailsResponse | Product | unknown
 
-      console.log(`[v0] getProductDetails: Response data structure:`, {
-        hasData: "data" in responseData,
-        hasId: responseData.id !== undefined,
-        keys: Object.keys(responseData).slice(0, 5)
-      })
+      const hasData = responseData && typeof responseData === "object" && "data" in (responseData as any)
+      const hasId = !hasData && responseData && typeof responseData === "object" && "id" in (responseData as any)
 
-      const product = "data" in responseData ? responseData.data : responseData
+      const product = hasData ? (responseData as ProductDetailsResponse).data : (responseData as Product)
 
-      if (!product || !product.id) {
-        console.error("[v0] getProductDetails: Invalid product data structure", {
-          productExists: !!product,
-          productId: product?.id,
-          productKeys: product ? Object.keys(product).slice(0, 5) : []
-        })
+      if (!product || !(product as any).id) {
+        console.error("[v0] getProductDetails: Invalid product structure")
         return null
       }
 
-      const normalizedProduct: Product = {
-        ...product,
-        price: typeof product.price === "string" ? Number.parseFloat(product.price) : product.price || 0,
-        sale_price: product.sale_price
-          ? typeof product.sale_price === "string"
-            ? Number.parseFloat(product.sale_price)
-            : product.sale_price
-          : null,
-        seller: product.seller || defaultSeller,
-        product_type: (product.product_type ?? "regular") as Product["product_type"],
-        reviews: Array.isArray(product.reviews) ? product.reviews : [],
-        images: Array.isArray(product.images)
-          ? product.images
-          : product.image_urls
-            ? Array.isArray(product.image_urls)
-              ? product.image_urls
-              : [product.image_urls]
-            : [],
+      // Normalize images into an array of objects
+      let imagesArray: Array<{ url: string } | any> = []
+      if (Array.isArray((product as any).images)) {
+        imagesArray = (product as any).images.map((img: any) => (typeof img === "string" ? { url: img } : img)).filter(Boolean)
+      } else if ((product as any).image_urls) {
+        const imageUrls = (product as any).image_urls
+        if (Array.isArray(imageUrls)) {
+          imagesArray = imageUrls.map((u: any) => (typeof u === "string" ? { url: u } : u)).filter(Boolean)
+        } else if (typeof imageUrls === "string") {
+          imagesArray = [{ url: imageUrls }]
+        }
       }
 
-      console.log(`[v0] getProductDetails: Success - ${normalizedProduct.name} (ID: ${normalizedProduct.id})`)
+      const normalizedProduct: Product = {
+        ...(product as any),
+        price: typeof (product as any).price === "string" ? Number.parseFloat((product as any).price) : (product as any).price || 0,
+        sale_price: (product as any).sale_price
+          ? typeof (product as any).sale_price === "string"
+            ? Number.parseFloat((product as any).sale_price)
+            : (product as any).sale_price
+          : null,
+        seller: (product as any).seller || defaultSeller,
+        product_type: ((product as any).product_type ?? "regular") as Product["product_type"],
+        reviews: Array.isArray((product as any).reviews) ? (product as any).reviews : [],
+        images: imagesArray as { url: string }[],
+      }
+
+      console.log(`[v0] getProductDetails: Success - ${normalizedProduct.name}`)
       return normalizedProduct
     } catch (fetchError) {
       clearTimeout(timeoutId)
 
       if (fetchError instanceof Error && fetchError.name === "AbortError") {
-        console.error(`[v0] getProductDetails: Request timeout (15s) for product ${id}`)
+        console.error(`[v0] getProductDetails: Request timeout`)
       } else {
-        console.error(`[v0] getProductDetails: Fetch failed:`, {
-          errorName: fetchError instanceof Error ? fetchError.name : typeof fetchError,
-          errorMessage: fetchError instanceof Error ? fetchError.message : String(fetchError),
-          errorType: typeof fetchError
+        console.error(`[v0] getProductDetails: Fetch failed`, {
+          message: fetchError instanceof Error ? fetchError.message : String(fetchError),
         })
       }
 
       return null
     }
   } catch (error) {
-    console.error("[v0] getProductDetails: Critical error:", {
-      errorName: error instanceof Error ? error.name : typeof error,
-      errorMessage: error instanceof Error ? error.message : String(error)
+    console.error("[v0] getProductDetails: Critical error", {
+      message: error instanceof Error ? error.message : String(error)
     })
     return null
   }
