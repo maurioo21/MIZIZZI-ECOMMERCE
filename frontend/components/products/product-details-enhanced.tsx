@@ -327,7 +327,6 @@ export default function ProductDetailsEnhanced({
     const fetchRelatedProducts = async () => {
       // Start with server-provided similarProducts if available
       if (similarProducts && similarProducts.length > 0) {
-        console.log("[v0] Using server-provided similarProducts:", similarProducts.length)
         setExploreProducts(similarProducts.slice(0, 12))
         setExploreHasMore(similarProducts.length > 12)
         setExploreLoading(false)
@@ -336,14 +335,12 @@ export default function ProductDetailsEnhanced({
 
       // If we already have products, don't fetch again
       if (exploreProducts.length > 0) {
-        console.log("[v0] Already have explore products")
         setExploreLoading(false)
         return
       }
 
       // Fetch from the backend's /related endpoint
       if (!product?.id) {
-        console.log("[v0] No product ID available")
         setExploreLoading(false)
         return
       }
@@ -351,26 +348,22 @@ export default function ProductDetailsEnhanced({
       setExploreLoading(true)
       try {
         const url = `/api/product-details/${product.id}/related?limit=12`
-        console.log("[v0] Fetching related products from:", url)
         const response = await fetch(url)
         if (!response.ok) {
           throw new Error(`Failed to fetch: ${response.status}`)
         }
 
         const data = await response.json()
-        console.log("[v0] Related products response:", data)
         
         if (data.success && Array.isArray(data.related)) {
-          console.log("[v0] Setting explore products:", data.related.length)
           setExploreProducts(data.related)
           setExploreHasMore((data.total || 0) > 12)
         } else {
-          console.log("[v0] Invalid response structure")
           setExploreProducts([])
           setExploreHasMore(false)
         }
       } catch (error) {
-        console.error("[v0] Error fetching related products:", error)
+        console.error("Error fetching related products:", error)
         setExploreProducts([])
         setExploreHasMore(false)
       } finally {
@@ -379,7 +372,6 @@ export default function ProductDetailsEnhanced({
     }
 
     if (product?.id) {
-      console.log("[v0] Product loaded, fetching related:", product.id)
       fetchRelatedProducts()
     }
   }, [product?.id])
