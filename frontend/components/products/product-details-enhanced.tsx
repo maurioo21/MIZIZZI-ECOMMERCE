@@ -422,39 +422,6 @@ function getProductImages(product: any): string[] {
 
   return imageUrls
 }
-        } catch {
-          imageUrls = []
-        }
-      } else {
-        imageUrls = product.image_urls
-          .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-          .map((u: string) => safeCloudinaryUrl(u))
-      }
-    } else if (typeof product.image_urls === "string") {
-      try {
-        const parsed = JSON.parse(product.image_urls)
-        if (Array.isArray(parsed)) {
-          imageUrls = parsed
-            .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
-            .map((u: string) => safeCloudinaryUrl(u))
-        }
-      } catch {
-        if (!product.image_urls.startsWith("blob:")) {
-          imageUrls = [safeCloudinaryUrl(product.image_urls)]
-        }
-      }
-    }
-  }
-
-  const valid = imageUrls.filter((u) => typeof u === "string" && !!u.trim())
-  if (valid.length > 0) return valid
-
-  if (product?.thumbnail_url && typeof product.thumbnail_url === "string") {
-    return [safeCloudinaryUrl(product.thumbnail_url)]
-  }
-
-  return ["/generic-product-display.png"]
-}
 
 function StarRating({
   rating,
