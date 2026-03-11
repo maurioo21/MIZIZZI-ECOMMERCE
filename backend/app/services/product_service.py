@@ -93,10 +93,13 @@ class ProductService:
         limit: int = 6
     ) -> List[Product]:
         """
-        Get related products from same category.
-        Falls back to products from same brand or popular products if category is empty.
-        Excludes the current product.
-        Optimized with eager loading.
+        Get related products with intelligent fallback strategy.
+        1. Same category + same brand
+        2. Same category
+        3. Same brand
+        4. Popular products (by rating)
+        5. Any other products
+        Excludes the current product. Always tries to return products.
         """
         try:
             product = Product.query.filter_by(id=product_id).first()
@@ -106,48 +109,86 @@ class ProductService:
             if not category_id:
                 category_id = product.category_id
             
-            # Try to get related products from same category
             related = []
-            if category_id:
+            
+            # Strategy 1: Same category AND same brand (highest relevance)
+            if category_id and product.brand_id:
                 related = Product.query.options(
                     joinedload(Product.brand),
                     joinedload(Product.category),
                     selectinload(Product.images),
                 ).filter(
                     Product.id != product_id,
-                    Product.category_id == category_id
+                    Product.category_id == category_id,
+                    Product.brand_id == product.brand_id
                 ).limit(limit).all()
             
-            # If not enough from category, try same brand
-            if len(related) < limit and product.brand_id:
-                brand_products = Product.query.options(
+            # Strategy 2: Same category only
+            if len(related) < limit and category_id:
+                additional = Product.query.options(
                     joinedload(Product.brand),
                     joinedload(Product.category),
                     selectinload(Product.images),
                 ).filter(
                     Product.id != product_id,
-                    Product.brand_id == product.brand_id,
-                    Product.id.notin_([p.id for p in related])  # Exclude already fetched
+                    Product.id.notin_([p.id for p in related]),
+                    Product.category_id == category_id
                 ).limit(limit - len(related)).all()
-                related.extend(brand_products)
+                related.extend(additional)
             
-            # If still not enough, fetch popular products (ordered by rating)
-            if len(related) < limit:
-                popular_products = Product.query.options(
+            # Strategy 3: Same brand only
+            if len(related) < limit and product.brand_id:
+                additional = Product.query.options(
                     joinedload(Product.brand),
                     joinedload(Product.category),
                     selectinload(Product.images),
                 ).filter(
                     Product.id != product_id,
-                    Product.id.notin_([p.id for p in related])  # Exclude already fetched
-                ).order_by(Product.rating.desc()).limit(limit - len(related)).all()
-                related.extend(popular_products)
+                    Product.id.notin_([p.id for p in related]),
+                    Product.brand_id == product.brand_id
+                ).limit(limit - len(related)).all()
+                related.extend(additional)
+            
+            # Strategy 4: Popular products (ordered by rating)
+            if len(related) < limit:
+                additional = Product.query.options(
+                    joinedload(Product.brand),
+                    joinedload(Product.category),
+                    selectinload(Product.images),
+                ).filter(
+                    Product.id != product_id,
+                    Product.id.notin_([p.id for p in related])
+                ).order_by(Product.rating.desc(), Product.id.desc()).limit(limit - len(related)).all()
+                related.extend(additional)
+            
+            # Strategy 5: Any other products (last resort - ensures we always have something)
+            if len(related) < limit:
+                additional = Product.query.options(
+                    joinedload(Product.brand),
+                    joinedload(Product.category),
+                    selectinload(Product.images),
+                ).filter(
+                    Product.id != product_id,
+                    Product.id.notin_([p.id for p in related])
+                ).order_by(Product.id.desc()).limit(limit - len(related)).all()
+                related.extend(additional)
             
             return related[:limit]
             
         except Exception as e:
-            logger.error(f"Error fetching related products: {e}")
-            return []
+            logger.error(f"Error fetching related products: {e}", exc_info=True)
+            # Return at least some products even if there's an error
+            try:
+                fallback = Product.query.filter(
+                    Product.id != product_id
+                ).options(
+                    joinedload(Product.brand),
+                    joinedload(Product.category),
+                    selectinload(Product.images),
+                ).limit(limit).all()
+                return fallback
+            except:
+                return []
 
     @staticmethod
     def get_products_by_brand(
