@@ -41,7 +41,7 @@ export async function getProductDetails(productId: string | number): Promise<Pro
     const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
 
     try {
-      const detailsEndpoint = `${API_BASE_URL}/api/products/${id}`
+      const detailsEndpoint = `${API_BASE_URL}/api/product-details/${id}`
       
       const response = await fetch(detailsEndpoint, {
         method: "GET",
@@ -116,77 +116,29 @@ export async function getProductDetails(productId: string | number): Promise<Pro
 
 /**
  * Get product details by slug (for URL-based routing)
+ * Since backend only supports numeric IDs, extract the numeric ID from slug
+ * Example: "7pieces-automatic-buckle-belt-business-casual-for-men" -> 7
  */
 export async function getProductDetailsBySlug(slug: string): Promise<Product | null> {
   try {
-    const encodedSlug = encodeURIComponent(slug.trim())
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000)
+    const trimmedSlug = slug.trim()
 
-    try {
-      const slugEndpoint = `${API_BASE_URL}/api/products/slug/${encodedSlug}`
-
-      const response = await fetch(slugEndpoint, {
-        method: "GET",
-        signal: controller.signal,
-        next: {
-          revalidate: 300,
-          tags: [`product-slug-${slug}`, "products"],
-        },
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        console.error(`[v0] getProductDetailsBySlug: HTTP ${response.status} for slug ${slug}`)
-        return null
-      }
-
-      const responseData = (await response.json()) as ProductDetailsResponse | Product
-
-      const product = "data" in responseData ? responseData.data : responseData
-
-      if (!product || !product.id) {
-        console.error(`[v0] getProductDetailsBySlug: Invalid data for slug ${slug}`)
-        return null
-      }
-
-      const normalizedProduct: Product = {
-        ...product,
-        price: typeof product.price === "string" ? Number.parseFloat(product.price) : product.price || 0,
-        sale_price: product.sale_price
-          ? typeof product.sale_price === "string"
-            ? Number.parseFloat(product.sale_price)
-            : product.sale_price
-          : null,
-        seller: product.seller || defaultSeller,
-        product_type: (product.product_type ?? "regular") as Product["product_type"],
-        reviews: Array.isArray(product.reviews) ? product.reviews : [],
-        images: Array.isArray(product.images)
-          ? product.images
-          : product.image_urls
-            ? Array.isArray(product.image_urls)
-              ? product.image_urls
-              : [product.image_urls]
-            : [],
-      }
-
-      console.log(`[v0] getProductDetailsBySlug: Successfully fetched slug ${slug}`)
-
-      return normalizedProduct
-    } catch (fetchError) {
-      clearTimeout(timeoutId)
-      if (fetchError instanceof Error && fetchError.name === "AbortError") {
-        console.error(`[v0] getProductDetailsBySlug: Request timeout for slug ${slug}`)
-      } else {
-        console.error(`[v0] getProductDetailsBySlug: Fetch failed:`, fetchError)
-      }
-      return null
+    // If it's already numeric, use directly
+    if (/^\d+$/.test(trimmedSlug)) {
+      return getProductDetails(trimmedSlug)
     }
+
+    // Extract numeric prefix from slug (e.g., "7pieces-..." -> "7")
+    const numericMatch = trimmedSlug.match(/^(\d+)/)
+    if (numericMatch) {
+      const productId = numericMatch[1]
+      console.log(`[v0] getProductDetailsBySlug: Extracted ID ${productId} from slug ${trimmedSlug}`)
+      return getProductDetails(productId)
+    }
+
+    // If no numeric ID found, log error
+    console.error(`[v0] getProductDetailsBySlug: Could not extract numeric ID from slug: ${trimmedSlug}`)
+    return null
   } catch (error) {
     console.error("[v0] getProductDetailsBySlug: Critical error:", error)
     return null
