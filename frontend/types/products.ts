@@ -172,6 +172,11 @@ export interface ProductDetails {
   is_preorder?: boolean;
   preorder_release_date?: string;
   preorder_message?: string;
+  // Backward compatibility: legacy properties (use pricing.* fields instead)
+  price?: number;
+  sale_price?: number | null;
+  thumbnail_url?: string;
+  image_urls?: string[];
   // Cache metadata
   _cache?: {
     cache_key?: string;
