@@ -44,6 +44,23 @@ import { websocketService } from "@/services/websocket"
 import { ImageZoomModal } from "./image-zoom-modal"
 import { reviewService, type Review, type ReviewSummary } from "@/services/review-service"
 import { imageBatchService } from "@/services/image-batch-service"
+import type {
+  ProductDetails,
+  ProductImage,
+  getGalleryImages,
+  getGalleryImageUrl,
+  getZoomImageUrl,
+  getThumbnailImageUrl,
+  getCurrentDisplayPrice,
+  getDiscountInfo,
+  isInStock,
+  isLowStock,
+  getStockStatusText,
+  hasReviews,
+  getDisplayRating,
+  getReviewCount,
+} from "@/types/products"
+import * as ProductTypeHelpers from "@/types/products"
 
 interface ProductDetailsEnhancedProps {
   product: any
@@ -100,7 +117,16 @@ function normalizeProductsResponse(data: any): any[] {
 }
 
 function getInitialInventory(product: any): InventoryState {
-  const stock = Number(product?.stock || 0)
+  // Support new ProductDetails structure with nested stock object
+  let stock = 0;
+  if (product?.stock && typeof product.stock === 'object') {
+    // New backend structure: product.stock.quantity
+    stock = Number(product.stock.quantity || 0);
+  } else {
+    // Legacy structure: product.stock (number)
+    stock = Number(product?.stock || 0);
+  }
+  
   return {
     available_quantity: stock,
     is_in_stock: stock > 0,
@@ -140,6 +166,132 @@ function sanitizeHtml(html?: string): string {
   return sanitized
 }
 
+/**
+ * Extract image URLs from new backend ProductDetails structure
+ * Handles both new nested structure (product.images[].urls.large) and legacy structure
+ */
+function extractImagesFromProductDetails(product: any): string[] {
+  if (!product) return [];
+  
+  // New structure: product.images is array with URLs object
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    const urls = product.images
+      .map((img: any) => {
+        if (img.urls && typeof img.urls === 'object') {
+          // Prefer large, fallback to original, then medium, then thumbnail
+          return img.urls.large || img.urls.original || img.urls.medium || img.urls.thumbnail || '';
+        }
+        return '';
+      })
+      .filter((url: string) => url && typeof url === 'string' && !url.startsWith('blob:'))
+      .map((url: string) => safeCloudinaryUrl(url));
+    
+    if (urls.length > 0) return urls;
+  }
+  
+  // Legacy structure: product.image_urls is already array of URLs
+  if (Array.isArray(product.image_urls) && product.image_urls.length > 0) {
+    return product.image_urls
+      .map((url: string) => safeCloudinaryUrl(url))
+      .filter((url: string) => url);
+  }
+  
+  // Legacy structure: image_urls as string or single URL
+  if (typeof product.image_urls === 'string' && product.image_urls.trim()) {
+    return [safeCloudinaryUrl(product.image_urls)];
+  }
+  
+  return [];
+}
+
+/**
+ * Get primary thumbnail from product
+ * Supports new structure with images[].urls and legacy thumbnail_url
+ */
+function getPrimaryThumbnail(product: any): string {
+  if (!product) return '/generic-product-display.png';
+  
+  // New structure: find primary image
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    const primaryImg = product.images.find((img: any) => img.is_primary);
+    const firstImg = product.images[0];
+    const targetImg = primaryImg || firstImg;
+    
+    if (targetImg?.urls?.thumbnail) {
+      return safeCloudinaryUrl(targetImg.urls.thumbnail);
+    }
+    if (targetImg?.urls?.medium) {
+      return safeCloudinaryUrl(targetImg.urls.medium);
+    }
+    if (targetImg?.urls?.large) {
+      return safeCloudinaryUrl(targetImg.urls.large);
+    }
+  }
+  
+  // Legacy structure
+  if (product.thumbnail_url && typeof product.thumbnail_url === 'string') {
+    return safeCloudinaryUrl(product.thumbnail_url);
+  }
+  
+  // Fallback to first image
+  const images = extractImagesFromProductDetails(product);
+  if (images.length > 0) return images[0];
+  
+  return '/generic-product-display.png';
+}
+
+/**
+ * Get current display price from product
+ * Supports new structure with product.pricing and legacy product.price
+ */
+function getDisplayPrice(product: any): number {
+  if (!product) return 0;
+  
+  // New structure: pricing.current_price
+  if (product.pricing && typeof product.pricing === 'object') {
+    return Number(product.pricing.current_price || product.pricing.original_price || 0);
+  }
+  
+  // Legacy structure: sale_price or price
+  const salePrice = Number(product.sale_price || 0);
+  const basePrice = Number(product.price || 0);
+  return salePrice > 0 ? salePrice : basePrice;
+}
+
+/**
+ * Get original price from product
+ * Supports new structure with product.pricing and legacy product.price
+ */
+function getOriginalPrice(product: any): number {
+  if (!product) return 0;
+  
+  // New structure: pricing.original_price
+  if (product.pricing && typeof product.pricing === 'object') {
+    return Number(product.pricing.original_price || 0);
+  }
+  
+  // Legacy structure
+  return Number(product.price || 0);
+}
+
+/**
+ * Get discount percentage from product
+ */
+function getDiscountPercentage(product: any): number {
+  if (!product) return 0;
+  
+  // New structure
+  if (product.pricing && typeof product.pricing === 'object') {
+    return Number(product.pricing.discount_percentage || 0);
+  }
+  
+  // Legacy structure: calculate from prices
+  const original = getOriginalPrice(product);
+  const current = getDisplayPrice(product);
+  if (original <= 0) return 0;
+  return Math.round(((original - current) / original) * 100);
+}
+
 function getProductImageUrl(product: any, index = 0, highQuality = false): string {
   if (
     !highQuality &&
@@ -148,6 +300,23 @@ function getProductImageUrl(product: any, index = 0, highQuality = false): strin
     !product.thumbnail_url.startsWith("blob:")
   ) {
     return product.thumbnail_url
+  }
+
+  // Try new structure first: product.images[].urls
+  if (Array.isArray(product?.images) && product.images.length > index) {
+    const image = product.images[index];
+    if (image?.urls) {
+      const url = highQuality ? image.urls.original : image.urls.large;
+      if (url) {
+        return safeCloudinaryUrl(url, highQuality ? {
+          width: 2048,
+          height: 2048,
+          quality: 90,
+          format: "auto",
+          crop: "fit",
+        } : undefined);
+      }
+    }
   }
 
   if (Array.isArray(product?.image_urls) && product.image_urls.length > index) {
@@ -180,6 +349,25 @@ function getProductImageUrl(product: any, index = 0, highQuality = false): strin
 function getProductImages(product: any): string[] {
   let imageUrls: string[] = []
 
+  // NEW: Try to extract from new ProductDetails structure first (product.images with urls object)
+  if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
+    const newStructureUrls = product.images
+      .map((img: any) => {
+        if (img.urls && typeof img.urls === 'object') {
+          // Use large for gallery
+          return img.urls.large || img.urls.original || '';
+        }
+        return '';
+      })
+      .filter((url: string) => url && typeof url === 'string' && !url.startsWith('blob:'))
+      .map((url) => safeCloudinaryUrl(url));
+    
+    if (newStructureUrls.length > 0) {
+      return newStructureUrls;
+    }
+  }
+
+  // LEGACY: Handle old image_urls structure
   if (product?.image_urls) {
     if (Array.isArray(product.image_urls)) {
       if (
@@ -195,6 +383,45 @@ function getProductImages(product: any): string[] {
               .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
               .map((u) => safeCloudinaryUrl(u))
           }
+        } catch {
+          imageUrls = []
+        }
+      } else {
+        imageUrls = product.image_urls
+          .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "" && !u.startsWith("blob:"))
+          .map((u) => safeCloudinaryUrl(u))
+      }
+    } else if (typeof product.image_urls === "string") {
+      const s = product.image_urls.trim()
+      if (s && !s.startsWith("blob:")) {
+        try {
+          const parsed = JSON.parse(s)
+          if (Array.isArray(parsed)) {
+            imageUrls = parsed
+              .filter((u: unknown): u is string => typeof u === "string" && u.trim() !== "")
+              .map((u) => safeCloudinaryUrl(u))
+          } else if (typeof parsed === "string") {
+            imageUrls = [safeCloudinaryUrl(parsed)]
+          }
+        } catch {
+          imageUrls = [safeCloudinaryUrl(s)]
+        }
+      }
+    }
+  }
+
+  // If still no images, use thumbnail
+  if (imageUrls.length === 0 && product?.thumbnail_url) {
+    imageUrls = [safeCloudinaryUrl(product.thumbnail_url)]
+  }
+
+  // If still no images, use fallback
+  if (imageUrls.length === 0) {
+    imageUrls = ["/generic-product-display.png"]
+  }
+
+  return imageUrls
+}
         } catch {
           imageUrls = []
         }

@@ -6,6 +6,24 @@ import { imageCache } from "@/services/image-cache"
 // Only showing the changes needed to integrate with the new batch service
 import { imageBatchService } from "@/services/image-batch-service"
 import { cloudinaryService } from "@/services/cloudinary-service"
+// Import new product detail types
+import type {
+  ProductDetails,
+  ProductDetailsResponse,
+  ProductImage as ProductImageType,
+  getPrimaryImage,
+  getGalleryImages,
+  getGalleryImageUrl,
+  getZoomImageUrl,
+  getCurrentDisplayPrice,
+  getDiscountInfo,
+  isInStock,
+  isLowStock,
+  getStockStatusText,
+  hasReviews,
+  getDisplayRating,
+  getReviewCount,
+} from "@/types/products"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://mizizzi-ecommerce-1.onrender.com"
 
@@ -409,7 +427,93 @@ export const productService = {
   },
 
   /**
-   * Get a single product by ID
+   * Get product details with new backend structure
+   * Returns properly typed ProductDetails from response.data
+   * Includes pricing, stock, ratings, images with URLs, and full product info
+   * @param id The product ID
+   * @returns Promise resolving to ProductDetails or null
+   */
+  async getProductDetails(id: string | number): Promise<ProductDetails | null> {
+    try {
+      const productId = String(id);
+      
+      if (!productId || productId === "undefined" || productId === "null") {
+        console.error(`[v0] Invalid product ID provided: ${productId}`);
+        return null;
+      }
+
+      // Check cache first
+      const cacheKey = `product-details-${productId}`;
+      const now = Date.now();
+      const cachedItem = productCache.get(cacheKey);
+
+      if (cachedItem && now - cachedItem.timestamp < CACHE_DURATION) {
+        console.log(`[v0] Using cached product details for id ${productId}`);
+        return (cachedItem.data as any)[0] as ProductDetails;
+      }
+
+      const url = `${API_BASE_URL}/api/products/${productId}`;
+      console.log(`[v0] Fetching product details from: ${url}`);
+
+      const response = await api.get<ProductDetailsResponse>(url);
+      
+      // CRITICAL: Unwrap response.data - backend nests the product details in data field
+      let product: ProductDetails | null = null;
+      
+      if (response.data && 'data' in response.data) {
+        // New API format: { success: true, data: {...}, _cache: {...} }
+        product = response.data.data as ProductDetails;
+      } else if (response.data && !('data' in response.data)) {
+        // Old API format: product directly in response
+        product = response.data as any as ProductDetails;
+      }
+
+      if (!product) {
+        console.error(`[v0] No product data returned from API for id ${productId}`);
+        return null;
+      }
+
+      // Validate critical fields
+      if (!product.pricing || !product.stock || !product.ratings) {
+        console.warn(`[v0] Product ${productId} missing critical fields (pricing/stock/ratings)`);
+      }
+
+      // Validate images structure
+      if (product.images && Array.isArray(product.images)) {
+        product.images = product.images.filter((img: ProductImageType) => {
+          const hasUrls = img.urls && typeof img.urls === 'object';
+          const hasCriticalUrls = hasUrls && (img.urls.large || img.urls.original);
+          if (!hasCriticalUrls) {
+            console.warn(`[v0] Image ${img.id} missing critical URL fields`);
+          }
+          return hasUrls;
+        });
+      }
+
+      // Ensure arrays have defaults
+      if (!product.images) product.images = [];
+      if (!product.reviews) product.reviews = [];
+      if (!product.variants) product.variants = [];
+
+      // Cache the result
+      productCache.set(cacheKey, {
+        data: [product],
+        timestamp: now,
+      });
+
+      return product;
+    } catch (error: any) {
+      console.error(`[v0] Error fetching product details for id ${id}:`, error);
+      if (error.response?.status === 404) {
+        console.error(`[v0] Product not found: ${id}`);
+      }
+      return null;
+    }
+  },
+
+  /**
+   * Get product by ID (legacy method for backward compatibility)
+   * For new code, use getProductDetails() instead
    * @param id The product ID
    * @returns Promise resolving to a product or null
    */
