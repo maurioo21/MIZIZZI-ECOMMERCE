@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import ProductDetailsEnhanced from "@/components/products/product-details-enhanced"
-import { productService } from "@/services/product"
+import { getProductDetails, getProductDetailsBySlug, validateProductDetails } from "@/lib/server/get-product-details"
 
 // Define static metadata
 export const metadata = {
@@ -43,11 +43,9 @@ function determineProductType(product: any) {
 
 async function getRelatedProducts(categoryId: string, currentProductId: string) {
   try {
-    const products = await productService.getProductsByCategory(categoryId)
-    return products
-      .filter((p: any) => p.id !== currentProductId)
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 6)
+    // For now, return empty array as we'll fetch related products client-side
+    // This prevents unnecessary server-side calls
+    return []
   } catch {
     return []
   }
@@ -62,12 +60,14 @@ export default async function Page({ params }: PageProps) {
 
     let product
     if (isNumericId) {
-      product = await productService.getProduct(id)
+      // Fetch by numeric ID from backend product-details endpoint
+      product = await getProductDetails(id)
     } else {
-      product = await productService.getProductBySlug(id)
+      // Fetch by slug from backend product-details endpoint
+      product = await getProductDetailsBySlug(id)
     }
 
-    if (!product) {
+    if (!product || !validateProductDetails(product)) {
       return notFound()
     }
 
@@ -75,7 +75,7 @@ export default async function Page({ params }: PageProps) {
     const productType = determineProductType(product)
     product.product_type = productType
 
-    // Ensure product.reviews is an array (no mock/skeleton reviews)
+    // Ensure product.reviews is an array
     if (!product.reviews || !Array.isArray(product.reviews)) {
       product.reviews = []
     }
