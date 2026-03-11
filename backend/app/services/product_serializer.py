@@ -3,15 +3,22 @@ Product Serializer Service - Production Grade
 Handles safe serialization of product data with defensive programming.
 Sanitizes HTML descriptions and safely serializes all product relationships.
 """
-import bleach
 import json
 import logging
+import re
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from app.models.models import Product, ProductImage, Review
-from flask import current_app
 
 logger = logging.getLogger(__name__)
+
+# Try to import bleach for HTML sanitization, fall back to regex if not available
+try:
+    import bleach
+    HAS_BLEACH = True
+except ImportError:
+    HAS_BLEACH = False
+    logger.warning("bleach not installed, using regex-based HTML sanitization")
 
 # HTML sanitization configuration
 ALLOWED_HTML_TAGS = [
@@ -34,18 +41,26 @@ class ProductSerializer:
             return ""
         
         try:
-            # Bleach removes all disallowed tags and attributes
-            cleaned = bleach.clean(
-                html_content,
-                tags=ALLOWED_HTML_TAGS,
-                attributes=ALLOWED_HTML_ATTRIBUTES,
-                strip=True
-            )
+            if HAS_BLEACH:
+                # Use bleach if available
+                cleaned = bleach.clean(
+                    html_content,
+                    tags=ALLOWED_HTML_TAGS,
+                    attributes=ALLOWED_HTML_ATTRIBUTES,
+                    strip=True
+                )
+            else:
+                # Fallback: simple regex-based sanitization
+                # Remove dangerous tags like script, iframe, img, object, embed
+                cleaned = re.sub(r'<(script|iframe|img|object|embed|svg|form|input)[^>]*>.*?</\1>', '', html_content, flags=re.IGNORECASE | re.DOTALL)
+                # Remove event handlers
+                cleaned = re.sub(r'\s*on\w+\s*=\s*["\']?[^"\'>\s]*["\']?', '', cleaned, flags=re.IGNORECASE)
+                
             return cleaned.strip()
         except Exception as e:
-            logger.error(f"HTML sanitization error: {e}")
-            # Fallback: return text only
-            return str(html_content)
+            logger.error(f"HTML sanitization failed: {e}")
+            # If sanitization fails, return plain text
+            return re.sub(r'<[^>]+>', '', html_content or "")
 
     @staticmethod
     def serialize_image(image: ProductImage) -> Optional[Dict[str, Any]]:
