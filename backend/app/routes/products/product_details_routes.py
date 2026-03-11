@@ -447,8 +447,8 @@ def get_product_inventory(product_id: int):
 def get_related_products(product_id: int):
     """
     Get related products from same category, brand, or popular products.
-    Returns full product data with optimized Cloudinary image URLs.
-    Cache only the product data, generate fresh metadata per request.
+    Returns lightweight product data with Cloudinary image URLs.
+    Optimized for fast response times.
     """
     limit = request.args.get('limit', 6, type=int)
     cache_key = f"product:related:{product_id}:{limit}"
@@ -475,40 +475,45 @@ def get_related_products(product_id: int):
                 limit=limit
             )
             
-            # Serialize related products with full details and Cloudinary image URLs
+            # Serialize related products with lightweight format
             related_data = []
             for product in related_products:
                 try:
-                    # Use the product serializer for consistent data format
-                    from app.services.product_serializer import ProductSerializer
-                    serialized = ProductSerializer.serialize_product_full(product)
-                    related_data.append(serialized)
-                except Exception as e:
-                    logger.error(f"Error serializing related product {product.id}: {e}")
-                    # Fallback to basic serialization if full serializer fails
-                    try:
-                        related_data.append({
-                            'id': product.id,
-                            'name': getattr(product, 'name', 'Unknown'),
-                            'price': float(getattr(product, 'price', 0) or 0),
-                            'sale_price': float(getattr(product, 'sale_price', 0) or 0),
-                            'slug': getattr(product, 'slug', None),
-                            'rating': getattr(product, 'rating', 0),
-                            'images': [
-                                {
+                    # Build lightweight product object for related products
+                    product_dict = {
+                        'id': product.id,
+                        'name': product.name or 'Unknown',
+                        'slug': product.slug,
+                        'price': float(product.price or 0),
+                        'sale_price': float(product.sale_price or 0),
+                        'rating': float(product.rating or 0) if product.rating else 0,
+                        'stock': {
+                            'is_in_stock': getattr(product, 'stock', 0) > 0,
+                            'quantity': getattr(product, 'stock', 0),
+                            'stock_status': 'in_stock' if getattr(product, 'stock', 0) > 0 else 'out_of_stock'
+                        },
+                        'images': []
+                    }
+                    
+                    # Add images with pre-generated Cloudinary URLs
+                    if product.images:
+                        for img in product.images:
+                            if img.url:
+                                product_dict['images'].append({
                                     'id': img.id,
+                                    'is_primary': img.is_primary or False,
                                     'urls': {
-                                        'thumbnail': cloudinary_service.generate_url(img.url, 150, 150),
-                                        'medium': cloudinary_service.generate_url(img.url, 400, 400),
-                                        'large': cloudinary_service.generate_url(img.url, 800, 800),
+                                        'thumbnail': f"{img.url.replace('/upload/', '/upload/w_120,h_120,c_fill,q_60/')}",
+                                        'medium': f"{img.url.replace('/upload/', '/upload/w_400,h_400,c_fill,q_75/')}",
+                                        'large': f"{img.url.replace('/upload/', '/upload/w_800,h_800,c_fill,q_85/')}",
                                         'original': img.url
                                     }
-                                }
-                                for img in (product.images or [])
-                            ]
-                        })
-                    except Exception as fallback_e:
-                        logger.error(f"Fallback serialization failed for product {product.id}: {fallback_e}")
+                                })
+                    
+                    related_data.append(product_dict)
+                except Exception as e:
+                    logger.error(f"Error serializing related product {product.id}: {e}", exc_info=True)
+                    continue
             
             # Cache only the related products data
             try:
@@ -525,11 +530,11 @@ def get_related_products(product_id: int):
             'product_id': product_id,
             'related': related_data,
             'total': len(related_data),
-            'timestamp': request_timestamp,  # Always fresh
+            'timestamp': request_timestamp,
             '_cache': {
                 'status': 'HIT' if cache_hit else 'MISS',
                 'key': cache_key,
-                'timestamp': request_timestamp  # Always fresh
+                'timestamp': request_timestamp
             }
         }
         
