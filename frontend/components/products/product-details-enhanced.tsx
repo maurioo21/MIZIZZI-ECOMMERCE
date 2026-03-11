@@ -355,30 +355,15 @@ export default function ProductDetailsEnhanced({
 
         const data = await response.json()
         
-        if (data.success && Array.isArray(data.related) && data.related.length > 0) {
+        if (data.success && Array.isArray(data.related)) {
           setExploreProducts(data.related)
           setExploreHasMore((data.total || 0) > 12)
-          setExploreLoading(false)
-          return
-        }
-        
-        // Fallback to explore endpoint if no related products found
-        const exploreUrl = `/api/product-details/explore?limit=12`
-        const exploreResponse = await fetch(exploreUrl)
-        if (!exploreResponse.ok) {
-          throw new Error(`Failed to fetch explore products: ${exploreResponse.status}`)
-        }
-
-        const exploreData = await exploreResponse.json()
-        if (exploreData.success && Array.isArray(exploreData.products)) {
-          setExploreProducts(exploreData.products)
-          setExploreHasMore((exploreData.total || 0) > 12)
         } else {
           setExploreProducts([])
           setExploreHasMore(false)
         }
       } catch (error) {
-        console.error("Error fetching explore products:", error)
+        console.error("Error fetching related products:", error)
         setExploreProducts([])
         setExploreHasMore(false)
       } finally {
