@@ -1,5 +1,6 @@
 import api from "@/lib/api"
-import type { Product, ProductImage, Category, Brand } from "@/types"
+import type { Product, Category, Brand } from "@/types"
+import type { ProductImage as ProductImageLegacy } from "@/types"
 import { prefetchData } from "@/lib/api"
 // Add import for imageCache
 import { imageCache } from "@/services/image-cache"
@@ -10,6 +11,7 @@ import { cloudinaryService } from "@/services/cloudinary-service"
 import type {
   ProductDetails,
   ProductDetailsResponse,
+  ProductImage,
 } from "@/types/products"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://mizizzi-ecommerce-1.onrender.com"
@@ -467,11 +469,11 @@ export const productService = {
 
       // Validate images structure
       if (product.images && Array.isArray(product.images)) {
-        product.images = product.images.filter((img: ProductImage) => {
-          const hasUrls = img.urls && typeof img.urls === 'object';
+        product.images = product.images.filter((img: any) => {
+          const hasUrls = img && typeof img === 'object' && img.urls && typeof img.urls === 'object';
           const hasCriticalUrls = hasUrls && (img.urls.large || img.urls.original);
           if (!hasCriticalUrls) {
-            console.warn(`[v0] Image ${img.id} missing critical URL fields`);
+            console.warn(`[v0] Image ${img?.id} missing critical URL fields`);
           }
           return hasUrls;
         });
