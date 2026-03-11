@@ -1,11 +1,10 @@
 "use client"
-import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+
+import { useState, useEffect, useMemo, useCallback } from "react"
 import Image from "next/image"
-import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Heart,
-  Share2,
   ArrowLeft,
   ArrowRight,
   Minus,
@@ -24,8 +23,6 @@ import { useCart } from "@/contexts/cart/cart-context"
 import { useWishlist } from "@/contexts/wishlist/wishlist-context"
 import { useToast } from "@/components/ui/use-toast"
 import { formatPrice, cn } from "@/lib/utils"
-import { productService } from "@/services/product"
-import { inventoryService } from "@/services/inventory-service"
 import { cloudinaryService } from "@/services/cloudinary-service"
 import { reviewService, type ReviewSummary } from "@/services/review-service"
 import { useAuth } from "@/contexts/auth/auth-context"
@@ -34,17 +31,14 @@ interface ProductDetailsMobileProps {
   product: any
 }
 
-const PRIMARY_COLOR = "#8B1538"
-const PRIMARY_HOVER = "#6B1028"
-const ACCENT_COLOR = "#FF6B35"
-const SUCCESS_COLOR = "#10B981"
-
 export default function ProductDetailsMobile({ product: initialProduct }: ProductDetailsMobileProps) {
   const { toast } = useToast()
-  const { isAuthenticated, user } = useAuth()
+  const { isAuthenticated } = useAuth()
+  const { addToCart } = useCart()
+  const { isInWishlist, addToWishlist, removeProductFromWishlist } = useWishlist()
 
   // State
-  const [product, setProduct] = useState<any>(initialProduct)
+  const [product] = useState<any>(initialProduct)
   const [selectedImage, setSelectedImage] = useState(0)
   const [selectedVariant, setSelectedVariant] = useState<any>(null)
   const [quantity, setQuantity] = useState(1)
@@ -56,41 +50,26 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
   const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null)
 
   // Inventory state
-  const [inventoryData, setInventoryData] = useState<{
-    available_quantity: number
-    is_in_stock: boolean
-    is_low_stock: boolean
-    stock_status: "in_stock" | "low_stock" | "out_of_stock"
-  }>({
+  const [inventoryData, setInventoryData] = useState({
     available_quantity: initialProduct?.stock || 0,
     is_in_stock: (initialProduct?.stock || 0) > 0,
     is_low_stock: (initialProduct?.stock || 0) > 0 && (initialProduct?.stock || 0) <= 5,
-    stock_status:
-      (initialProduct?.stock || 0) === 0
-        ? "out_of_stock"
-        : (initialProduct?.stock || 0) <= 5
-          ? "low_stock"
-          : "in_stock",
   })
 
-  // Contexts
-  const { addToCart, items: cartItems } = useCart()
-  const { isInWishlist, addToWishlist, removeProductFromWishlist } = useWishlist()
-  const actualWishlistState = isInWishlist(Number(product?.id))
-  const isProductInWishlist = optimisticWishlistState !== null ? optimisticWishlistState : actualWishlistState
-
-  // Derived pricing
-  const currentPrice = selectedVariant?.price ?? product?.sale_price ?? product?.price
-  const originalPrice = product?.price
+  // Derived values
+  const currentPrice = selectedVariant?.price ?? product?.sale_price ?? product?.price ?? 0
+  const originalPrice = product?.price ?? currentPrice
   const discountPercentage =
     originalPrice > currentPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0
+
+  const isProductInWishlist = optimisticWishlistState !== null ? optimisticWishlistState : isInWishlist(Number(product?.id))
 
   // Product images
   const productImages = useMemo(() => {
     const images: string[] = []
     if (product?.image_urls && Array.isArray(product.image_urls)) {
       product.image_urls.forEach((url: any) => {
-        if (typeof url === "string" && url.trim() !== "" && !url.startsWith("blob:")) {
+        if (typeof url === "string" && url.trim() && !url.startsWith("blob:")) {
           images.push(
             url.startsWith("http")
               ? url
@@ -98,57 +77,36 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                   width: 1024,
                   height: 1024,
                   quality: 85,
-                  crop: "fit",
-                }),
+                })
           )
         }
       })
     }
-    return images.length > 0 ? images : ["/generic-product-display.png"]
-  }, [product?.image_urls])
+    return images.length > 0 ? images : [product?.image_url || "/generic-product-display.png"]
+  }, [product])
 
-  // Rating calculation
+  // Calculate average rating
   const calculateAverageRating = useCallback(() => {
-    if (!reviewSummary) return 0
-    return (reviewSummary.average_rating || 0) / 10
+    return reviewSummary?.average_rating ? reviewSummary.average_rating / 10 : 0
   }, [reviewSummary])
 
-  // Load reviews and inventory
+  // Fetch review summary
   useEffect(() => {
-    const loadData = async () => {
+    const fetchReviewSummary = async () => {
       try {
-        if (product?.id) {
-          const [reviewsData, inventoryUpdate] = await Promise.all([
-            reviewService.getProductReviewSummary(product.id),
-            inventoryService.getInventoryStats(),
-          ])
-
-          if (reviewsData) setReviewSummary(reviewsData)
-          if (inventoryUpdate)
-            setInventoryData((prev) => ({
-              ...prev,
-              ...inventoryUpdate,
-            }))
-        }
-      } catch (error) {
-        console.error("[v0] Error loading product data:", error)
+        const summary = await reviewService.getProductReviewSummary(product.id)
+        setReviewSummary(summary)
+      } catch {
+        setReviewSummary(null)
       }
     }
-
-    loadData()
+    if (product?.id) {
+      fetchReviewSummary()
+    }
   }, [product?.id])
 
-  // Handlers
+  // Handle add to cart
   const handleAddToCart = useCallback(async () => {
-    if (!isAuthenticated) {
-      toast({
-        title: "Please sign in",
-        description: "You need to be logged in to add items to cart",
-        variant: "destructive",
-      })
-      return
-    }
-
     if (!inventoryData.is_in_stock) {
       toast({
         title: "Out of stock",
@@ -160,25 +118,15 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
 
     setIsAddingToCart(true)
     try {
-      const cartItem = {
-        productId: product.id,
-        variantId: selectedVariant?.id || null,
+      await addToCart({
+        product_id: Number(product.id),
         quantity,
-        price: currentPrice,
-        name: product.name,
-        thumbnail_url: productImages[0],
-      }
-
-      addToCart(cartItem)
-      setCartNotificationData({ ...product, quantity })
-      setShowCartNotification(true)
-      setTimeout(() => setShowCartNotification(false), 4000)
-
-      toast({
-        title: "Added to cart!",
-        description: `${quantity}x ${product.name}`,
+        variant: selectedVariant,
       })
-    } catch (error) {
+      setShowCartNotification(true)
+      setCartNotificationData({ product: product.name, quantity })
+      setTimeout(() => setShowCartNotification(false), 3000)
+    } catch {
       toast({
         title: "Error",
         description: "Failed to add item to cart",
@@ -187,14 +135,16 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
     } finally {
       setIsAddingToCart(false)
     }
-  }, [isAuthenticated, inventoryData, selectedVariant, quantity, currentPrice, product, productImages, addToCart, toast])
+  }, [product, quantity, selectedVariant, inventoryData.is_in_stock, addToCart, toast])
 
+  // Handle buy via WhatsApp
   const handleBuyViaWhatsApp = useCallback(() => {
-    const message = `Hi! I'm interested in buying: ${product.name} (${selectedVariant?.color || ""})\nQuantity: ${quantity}\nPrice: ${formatPrice(currentPrice * quantity)}`
-    const whatsappUrl = `https://wa.me/254712345678?text=${encodeURIComponent(message)}`
+    const text = `Hi! I'm interested in buying *${product.name}* (${formatPrice(currentPrice * quantity)}). Quantity: ${quantity}`
+    const whatsappUrl = `https://wa.me/254700000000?text=${encodeURIComponent(text)}`
     window.open(whatsappUrl, "_blank")
-  }, [product.name, selectedVariant, quantity, currentPrice])
+  }, [product.name, currentPrice, quantity])
 
+  // Handle wishlist toggle
   const handleToggleWishlist = useCallback(async () => {
     if (!isAuthenticated) {
       toast({
@@ -216,7 +166,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
           product_id: Number(product.id),
         })
       }
-    } catch (error) {
+    } catch {
       setOptimisticWishlistState(null)
       toast({
         title: "Error",
@@ -228,25 +178,9 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
     }
   }, [isAuthenticated, product.id, isProductInWishlist, addToWishlist, removeProductFromWishlist, toast])
 
-  const handleShare = useCallback(() => {
-    if (navigator.share) {
-      navigator.share({
-        title: product.name,
-        text: `Check out this product: ${product.name}`,
-        url: window.location.href,
-      })
-    } else {
-      navigator.clipboard.writeText(window.location.href)
-      toast({
-        title: "Link copied!",
-        description: "Product link copied to clipboard",
-      })
-    }
-  }, [product.name, toast])
-
   return (
     <div className="min-h-screen bg-white pb-32">
-      {/* Cart Toast */}
+      {/* Cart Notification Toast */}
       <AnimatePresence>
         {showCartNotification && cartNotificationData && (
           <motion.div
@@ -254,8 +188,6 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
             className="fixed bottom-20 left-4 right-4 z-50"
-            role="status"
-            aria-live="polite"
           >
             <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 flex items-center gap-3">
               <CheckCircle className="h-5 w-5 text-emerald-500 flex-shrink-0" />
@@ -268,12 +200,12 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
         )}
       </AnimatePresence>
 
-      {/* Image Gallery - Full Width with Optimal Aspect Ratio */}
+      {/* Image Gallery */}
       <div className="w-full bg-white">
         <div className="relative w-full aspect-square bg-gray-50 flex items-center justify-center overflow-hidden">
           <Image
-            src={productImages[selectedImage]}
-            alt={product?.name}
+            src={productImages[selectedImage] || "/generic-product-display.png"}
+            alt={product?.name || "Product"}
             width={600}
             height={600}
             priority
@@ -326,9 +258,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                 onClick={() => setSelectedImage(idx)}
                 className={cn(
                   "w-16 h-16 rounded-lg overflow-hidden border-2 flex-shrink-0 transition-all",
-                  selectedImage === idx
-                    ? "border-[#8B1538] ring-2 ring-[#8B1538]/20"
-                    : "border-gray-200 hover:border-gray-300",
+                  selectedImage === idx ? "border-[#8B1538] ring-2 ring-[#8B1538]/20" : "border-gray-200 hover:border-gray-300"
                 )}
               >
                 <Image
@@ -344,7 +274,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
         )}
       </div>
 
-      {/* Product Info Section */}
+      {/* Product Info */}
       <div className="px-4 py-4 border-b border-gray-100">
         {/* Badges */}
         <div className="flex gap-2 mb-3 flex-wrap">
@@ -375,7 +305,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                   "h-3.5 w-3.5",
                   i < Math.floor(calculateAverageRating())
                     ? "fill-amber-400 text-amber-400"
-                    : "text-gray-300",
+                    : "text-gray-300"
                 )}
               />
             ))}
@@ -400,14 +330,14 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
               ? inventoryData.is_low_stock
                 ? "bg-amber-50 text-amber-700"
                 : "bg-emerald-50 text-emerald-700"
-              : "bg-red-50 text-red-700",
+              : "bg-red-50 text-red-700"
           )}
         >
           {inventoryData.is_in_stock ? (inventoryData.is_low_stock ? "Limited stock" : "In stock") : "Out of stock"}
         </div>
       </div>
 
-      {/* Key Highlights for Phone Products */}
+      {/* Key Features */}
       <div className="px-4 py-4 border-b border-gray-100 bg-gray-50">
         <h3 className="text-sm font-bold text-gray-900 mb-3">Key Features</h3>
         <div className="space-y-2">
@@ -423,7 +353,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
         </div>
       </div>
 
-      {/* Benefits Section */}
+      {/* Benefits */}
       <div className="px-4 py-4 border-b border-gray-100">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
@@ -456,12 +386,12 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
         </div>
       </div>
 
-      {/* Variants Section */}
+      {/* Variants */}
       {product?.variants && product.variants.length > 0 && (
         <div className="px-4 py-4 border-b border-gray-100">
           <h3 className="text-sm font-bold text-gray-900 mb-3">Options</h3>
           <div className="space-y-3">
-            {/* Color Variants */}
+            {/* Color */}
             {Array.from(new Set(product.variants.map((v: any) => v.color))).filter(Boolean).length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-600 mb-2">Color</p>
@@ -479,7 +409,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                           "px-3 py-1.5 text-xs rounded-lg font-medium transition-all",
                           selectedVariant?.color === color
                             ? "bg-[#8B1538] text-white"
-                            : "bg-gray-100 text-gray-700",
+                            : "bg-gray-100 text-gray-700"
                         )}
                       >
                         {color}
@@ -488,7 +418,8 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                 </div>
               </div>
             )}
-            {/* Storage/Capacity Variants */}
+
+            {/* Capacity */}
             {Array.from(new Set(product.variants.map((v: any) => v.capacity))).filter(Boolean).length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-600 mb-2">Capacity</p>
@@ -506,7 +437,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                           "px-3 py-1.5 text-xs rounded-lg font-medium transition-all",
                           selectedVariant?.capacity === capacity
                             ? "bg-[#8B1538] text-white"
-                            : "bg-gray-100 text-gray-700",
+                            : "bg-gray-100 text-gray-700"
                         )}
                       >
                         {capacity}
@@ -520,9 +451,9 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
       )}
 
       {/* Sticky Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-2xl shadow-black/5 z-40">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-2xl z-40">
         <div className="px-4 py-3 max-w-full">
-          {/* Quantity and Price Row */}
+          {/* Quantity and Total */}
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
               <button
@@ -535,9 +466,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
               <span className="text-sm font-bold text-gray-900 w-6 text-center">{quantity}</span>
               <button
                 className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-white rounded-md transition-colors disabled:opacity-40"
-                onClick={() =>
-                  setQuantity((q) => Math.min(inventoryData.available_quantity || 0, q + 1))
-                }
+                onClick={() => setQuantity((q) => Math.min(inventoryData.available_quantity || 0, q + 1))}
                 disabled={!inventoryData.is_in_stock || quantity >= (inventoryData.available_quantity || 0)}
               >
                 <Plus className="h-4 w-4" />
@@ -558,7 +487,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                 "flex-1 h-11 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all",
                 isAddingToCart || !inventoryData.is_in_stock
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-[#8B1538] text-white hover:bg-[#6B1028] shadow-lg shadow-[#8B1538]/20",
+                  : "bg-[#8B1538] text-white hover:bg-[#6B1028] shadow-lg shadow-[#8B1538]/20"
               )}
               whileTap={inventoryData.is_in_stock ? { scale: 0.98 } : {}}
             >
@@ -579,7 +508,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                 "flex-1 h-11 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all",
                 !inventoryData.is_in_stock
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                  : "bg-[#25D366] text-white hover:bg-[#20bd5a]",
+                  : "bg-[#25D366] text-white hover:bg-[#20bd5a]"
               )}
               whileTap={inventoryData.is_in_stock ? { scale: 0.98 } : {}}
             >
@@ -594,7 +523,7 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
                 "w-11 h-11 rounded-lg border-2 flex items-center justify-center transition-all",
                 isProductInWishlist
                   ? "border-[#8B1538] bg-[#8B1538]/5 text-[#8B1538]"
-                  : "border-gray-200 text-gray-400 hover:border-[#8B1538] hover:text-[#8B1538]",
+                  : "border-gray-200 text-gray-400 hover:border-[#8B1538] hover:text-[#8B1538]"
               )}
               whileTap={{ scale: 0.98 }}
             >
