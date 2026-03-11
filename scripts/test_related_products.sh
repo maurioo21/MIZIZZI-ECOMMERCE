@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # Test Backend Related Products Endpoint with Slug
-BACKEND_URL="http://localhost:5000"
+BACKEND_URL="https://mizizzi-ecommerce-1.onrender.com"  # Use deployed backend
 SLUG="7pieces-automatic-buckle-belt-business-casual-for-men"
+TIMEOUT="30"  # Increased timeout for remote API calls
 
 echo "=========================================="
 echo "Testing Product Details by Slug"
@@ -16,7 +17,7 @@ echo "Test 1: GET /api/product-details/by-slug/$SLUG"
 echo "Command: curl -X GET \"$BACKEND_URL/api/product-details/by-slug/$SLUG\""
 echo ""
 
-PRODUCT_RESPONSE=$(curl -s -X GET "$BACKEND_URL/api/product-details/by-slug/$SLUG" \
+PRODUCT_RESPONSE=$(curl -s -m $TIMEOUT -X GET "$BACKEND_URL/api/product-details/by-slug/$SLUG" \
   -H "Content-Type: application/json" \
   -w "\n%{http_code}")
 
@@ -50,7 +51,7 @@ echo "Test 2: GET /api/product-details/$PRODUCT_ID/related?limit=12"
 echo "Command: curl -X GET \"$BACKEND_URL/api/product-details/$PRODUCT_ID/related?limit=12\""
 echo ""
 
-RELATED_RESPONSE=$(curl -s -X GET "$BACKEND_URL/api/product-details/$PRODUCT_ID/related?limit=12" \
+RELATED_RESPONSE=$(curl -s -m $TIMEOUT -X GET "$BACKEND_URL/api/product-details/$PRODUCT_ID/related?limit=12" \
   -H "Content-Type: application/json" \
   -w "\n%{http_code}")
 

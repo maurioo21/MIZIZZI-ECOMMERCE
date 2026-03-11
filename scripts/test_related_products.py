@@ -7,8 +7,9 @@ import json
 from datetime import datetime
 
 # Configuration
-BACKEND_URL = "http://localhost:5000"
+BACKEND_URL = "https://mizizzi-ecommerce-1.onrender.com"  # Use deployed backend
 SLUG = "7pieces-automatic-buckle-belt-business-casual-for-men"
+TIMEOUT = 30  # Increased timeout for remote API calls
 
 def test_product_by_slug():
     """Test getting product details by slug"""
@@ -25,7 +26,7 @@ def test_product_by_slug():
         print(f"URL: {url}")
         print()
         
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=TIMEOUT)
         print(f"Status Code: {response.status_code}")
         print(f"Response Time: {response.elapsed.total_seconds():.2f}s")
         print()
@@ -72,7 +73,7 @@ def test_related_products(product_id, limit=12):
         print(f"URL: {url}")
         print()
         
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=TIMEOUT)
         print(f"Status Code: {response.status_code}")
         print(f"Response Time: {response.elapsed.total_seconds():.2f}s")
         print()
@@ -131,7 +132,7 @@ def test_image_handling(product_id):
     try:
         for limit in [3, 12]:
             url = f"{BACKEND_URL}/api/product-details/{product_id}/related?limit={limit}"
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=TIMEOUT)
             
             if response.ok:
                 data = response.json()
