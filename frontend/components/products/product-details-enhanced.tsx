@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import Image from "next/image"
+import NextImage from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -1060,7 +1060,7 @@ export default function ProductDetailsEnhanced({
             <div className="bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 p-4">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-14 h-14 rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
-                  <Image
+                  <NextImage
                     src={cartNotificationData?.thumbnail_url || "/generic-product-display.png"}
                     alt={cartNotificationData?.name || "Product"}
                     width={56}
@@ -1123,7 +1123,7 @@ export default function ProductDetailsEnhanced({
           <motion.div {...appleVariants.fadeIn} className="lg:col-span-5">
             <div className="bg-white rounded-2xl overflow-hidden shadow-sm sticky top-6">
               <div className="relative aspect-[4/3] cursor-zoom-in group bg-gray-50" ref={imageRef} onClick={handleImageClick}>
-                <Image
+                <NextImage
                   src={productImages[selectedImage] || "/generic-product-display.png"}
                   alt={product?.name || "Product image"}
                   fill
@@ -1192,7 +1192,7 @@ export default function ProductDetailsEnhanced({
                       )}
                       onClick={() => setSelectedImage(i)}
                     >
-                      <Image
+                      <NextImage
                         src={img || "/generic-product-display.png"}
                         alt={`Thumbnail ${i + 1}`}
                         fill
@@ -1833,7 +1833,7 @@ export default function ProductDetailsEnhanced({
                       >
                         <div className="group h-full overflow-hidden bg-white border border-gray-100 rounded-lg transition-all duration-300 hover:shadow-lg">
                           <div className="relative aspect-square overflow-hidden bg-[#f8f8f8]">
-                            <Image
+                            <NextImage
                               src={getProductImageUrl(item) || "/logo.png"}
                               alt={item.name}
                               fill
