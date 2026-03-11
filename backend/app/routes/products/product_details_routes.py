@@ -87,7 +87,7 @@ def serialize_image_with_cloudinary(image: ProductImage) -> Dict[str, Any]:
                 'large': large_url
             },
             'cloudinary_public_id': image.cloudinary_public_id,
-            'display_order': image.display_order or 0
+            'display_order': image.sort_order or 0
         }
     except Exception as e:
         current_app.logger.error(f"Error serializing image {image.id}: {str(e)}")
@@ -102,7 +102,7 @@ def serialize_image_with_cloudinary(image: ProductImage) -> Dict[str, Any]:
                 'large': "/generic-product-display.png"
             },
             'cloudinary_public_id': None,
-            'display_order': image.display_order or 0
+            'display_order': image.sort_order or 0
         }
 
 
@@ -123,10 +123,10 @@ def serialize_product_detail(product: Product, is_admin: bool = False) -> Dict[s
     Includes relationships, images, variants, and ratings.
     """
     try:
-        # Get images (sorted by is_primary first, then display_order)
+        # Get images (sorted by is_primary first, then sort_order)
         images = ProductImage.query.filter_by(product_id=product.id).order_by(
             ProductImage.is_primary.desc(),
-            ProductImage.display_order.asc()
+            ProductImage.sort_order.asc()
         ).all()
         
         # Get variants
@@ -361,7 +361,7 @@ def get_product_images(product_id: int):
         
         images = ProductImage.query.filter_by(product_id=product_id).order_by(
             ProductImage.is_primary.desc(),
-            ProductImage.display_order.asc()
+            ProductImage.sort_order.asc()
         ).all()
         
         # Serialize with Cloudinary optimization
