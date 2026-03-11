@@ -69,12 +69,14 @@ export default async function Page({ params }: PageProps) {
       return notFound()
     }
 
-    // Ensure product has all required fields for component
-    product.reviews = product.reviews || []
-    product.images = product.images || []
-    product.variants = product.variants || []
-    product.is_in_stock = product.is_in_stock ?? true
-    product.stock_quantity = product.stock_quantity || 0
+    // Determine product type
+    const productType = determineProductType(product)
+    product.product_type = productType
+
+    // Ensure product.reviews is an array
+    if (!product.reviews || !Array.isArray(product.reviews)) {
+      product.reviews = []
+    }
 
     // Add mock features if not present
     if (!product.features) {
