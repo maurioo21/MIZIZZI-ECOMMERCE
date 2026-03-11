@@ -142,9 +142,9 @@ def serialize_product_detail(product: Product, is_admin: bool = False) -> Dict[s
         
         # Calculate discount
         discount_percentage = 0
-        if product.sale_price and product.original_price:
+        if product.sale_price and product.price:
             discount_percentage = round(
-                ((product.original_price - product.sale_price) / product.original_price) * 100
+                ((product.price - product.sale_price) / product.price) * 100
             )
         
         # Build base serialization
@@ -153,9 +153,9 @@ def serialize_product_detail(product: Product, is_admin: bool = False) -> Dict[s
             'name': product.name,
             'slug': product.slug,
             'description': product.description,
-            'original_price': float(product.original_price) if product.original_price else 0,
+            'original_price': float(product.price) if product.price else 0,
             'sale_price': float(product.sale_price) if product.sale_price else 0,
-            'current_price': float(product.sale_price or product.original_price or 0),
+            'current_price': float(product.sale_price or product.price or 0),
             'discount_percentage': discount_percentage,
             'sku': product.sku,
             'brand': {
