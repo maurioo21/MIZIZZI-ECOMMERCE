@@ -519,6 +519,7 @@ def create_app(config_name=None, enable_socketio=True):
         'topbar_routes': Blueprint('topbar_routes', __name__),
         'contact_cta_routes': Blueprint('contact_cta_routes', __name__),
         'featured_routes': Blueprint('featured_routes', __name__),
+        'product_details_bp': Blueprint('product_details', __name__),
         'homepage_routes': Blueprint('homepage_routes', __name__),
         'meilisearch_routes': Blueprint('meilisearch_routes', __name__),
         'admin_meilisearch_routes': Blueprint('admin_meilisearch_routes', __name__),
@@ -656,6 +657,10 @@ def create_app(config_name=None, enable_socketio=True):
     @fallback_blueprints['featured_routes'].route('/health', methods=['GET'])
     def fallback_featured_health():
         return jsonify({"status": "ok", "message": "Fallback featured routes active"}), 200
+    
+    @fallback_blueprints['product_details_bp'].route('/health', methods=['GET'])
+    def fallback_product_details_health():
+        return jsonify({"status": "ok", "message": "Fallback product details routes active"}), 200
     
     @fallback_blueprints['homepage_routes'].route('/health', methods=['GET'])
     def fallback_homepage_health():
@@ -866,6 +871,16 @@ def create_app(config_name=None, enable_socketio=True):
             ('backend.routes.products.featured_routes', 'featured_routes'),
             ('backend.app.routes.products.featured_routes', 'featured_bp'),
             ('backend.routes.products.featured_routes', 'featured_bp'),
+        ],
+        'product_details_bp': [
+            ('app.routes.products.product_details_routes', 'product_details_bp'),
+            ('routes.products.product_details_routes', 'product_details_bp'),
+            ('app.routes.products.product_details_routes', 'product_details'),
+            ('routes.products.product_details_routes', 'product_details'),
+            ('backend.app.routes.products.product_details_routes', 'product_details_bp'),
+            ('backend.routes.products.product_details_routes', 'product_details_bp'),
+            ('backend.app.routes.products.product_details_routes', 'product_details'),
+            ('backend.routes.products.product_details_routes', 'product_details'),
         ],
         'homepage_routes': [
             ('app.routes.homepage', 'homepage_routes'),
@@ -1164,6 +1179,7 @@ def create_app(config_name=None, enable_socketio=True):
                 'topbar_routes': '/api/topbar',
                 'contact_cta_routes': '/api/contact-cta',
                 'featured_routes': '/api/products/featured',
+                'product_details_bp': '/api/product-details',
                 'meilisearch_routes': '/api/meilisearch',
                 'admin_meilisearch_routes': '/api/admin/meilisearch',
                 'flash_sale_routes': '/api/flash-sale',
