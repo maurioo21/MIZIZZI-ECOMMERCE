@@ -26,6 +26,9 @@ class ProductService:
         - Images (sorted by primary + order)
         - Variants
         - Reviews
+        
+        Note: Fetches both active and inactive products. 
+        Frontend/API layer decides visibility based on permissions.
         """
         try:
             product = Product.query.options(
@@ -38,8 +41,7 @@ class ProductService:
                 selectinload(Product.variants).joinedload(None),
                 selectinload(Product.reviews).joinedload(None),
             ).filter(
-                Product.id == product_id,
-                Product.is_active == True
+                Product.id == product_id
             ).first()
             
             return product
@@ -73,8 +75,7 @@ class ProductService:
                 selectinload(Product.images),
             ).filter(
                 Product.id != product_id,
-                Product.category_id == category_id,
-                Product.is_active == True
+                Product.category_id == category_id
             ).limit(limit).all()
             
             return related
@@ -96,8 +97,7 @@ class ProductService:
                 joinedload(Product.category),
                 selectinload(Product.images),
             ).filter(
-                Product.brand_id == brand_id,
-                Product.is_active == True
+                Product.brand_id == brand_id
             ).offset(offset).limit(limit).all()
             
             return products
@@ -123,8 +123,7 @@ class ProductService:
             ).filter(
                 (Product.name.ilike(search_term) | 
                  Product.sku.ilike(search_term) |
-                 Product.description.ilike(search_term)),
-                Product.is_active == True
+                 Product.description.ilike(search_term))
             ).offset(offset).limit(limit).all()
             
             return products
