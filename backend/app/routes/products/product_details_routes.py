@@ -19,10 +19,10 @@ from app.services.cloudinary_service import CloudinaryService
 from app.utils.redis_cache import (
     product_cache,
     fast_json_dumps,
-    safe_cache_get,
-    safe_cache_set
+    fast_json_loads,
+    cached_response,
+    fast_cached_response
 )
-from .cache_keys import CACHE_TTL
 
 # Initialize blueprint
 product_details_bp = Blueprint('product_details', __name__, url_prefix='/api/product-details')
@@ -217,7 +217,7 @@ def get_related_products(product: Product, limit: int = 12) -> list:
         cache_key = get_related_cache_key(product.id, product.category_id)
         
         # Try to get from cache
-        cached = safe_cache_get(cache_key)
+        cached = product_cache.get(cache_key)
         if cached:
             current_app.logger.info(f"[v0] Cache HIT: Related products for product {product.id}")
             return json.loads(cached) if isinstance(cached, str) else cached
@@ -233,7 +233,7 @@ def get_related_products(product: Product, limit: int = 12) -> list:
         related_serialized = [serialize_product_detail(p) for p in related]
         
         # Cache results
-        safe_cache_set(cache_key, fast_json_dumps(related_serialized), RELATED_PRODUCTS_CACHE_TTL)
+        product_cache.set(cache_key, fast_json_dumps(related_serialized), RELATED_PRODUCTS_CACHE_TTL)
         
         return related_serialized
     
@@ -259,7 +259,7 @@ def get_product_details(product_id: int):
     try:
         # Check cache first
         cache_key = get_cache_key(product_id)
-        cached_data = safe_cache_get(cache_key)
+        cached_data = product_cache.get(cache_key)
         
         if cached_data:
             current_app.logger.info(f"[v0] Cache HIT: Product details {product_id}")
@@ -316,7 +316,7 @@ def get_product_details(product_id: int):
             'data': product_data,
             'timestamp': datetime.utcnow().isoformat()
         }
-        safe_cache_set(cache_key, fast_json_dumps(response_data), PRODUCT_DETAIL_CACHE_TTL)
+        product_cache.set(cache_key, fast_json_dumps(response_data), PRODUCT_DETAIL_CACHE_TTL)
         
         current_app.logger.info(f"[v0] Cache MISS & SET: Product details {product_id}")
         return jsonify(response_data), 200
@@ -334,7 +334,7 @@ def get_product_images(product_id: int):
     """
     try:
         cache_key = get_images_cache_key(product_id)
-        cached = safe_cache_get(cache_key)
+        cached = product_cache.get(cache_key)
         
         if cached:
             current_app.logger.info(f"[v0] Cache HIT: Product images {product_id}")
@@ -362,7 +362,7 @@ def get_product_images(product_id: int):
         }
         
         # Cache response
-        safe_cache_set(cache_key, fast_json_dumps(response_data), PRODUCT_IMAGES_CACHE_TTL)
+        product_cache.set(cache_key, fast_json_dumps(response_data), PRODUCT_IMAGES_CACHE_TTL)
         
         return jsonify(response_data), 200
     
