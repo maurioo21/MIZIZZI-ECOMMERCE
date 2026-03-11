@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 from app.models.models import Product, Category, Brand, db, User, UserRole, ProductImage
+from app.services.product_cache_invalidation import product_cache_service
 import json
 from datetime import datetime
 import werkzeug
@@ -442,6 +443,9 @@ def update_product(product_id):
 
         db.session.commit()
 
+        # Invalidate product cache after successful update
+        product_cache_service.invalidate_product(product_id)
+
         return jsonify({
             'success': True,
             'message': 'Product updated successfully',
@@ -478,10 +482,20 @@ def delete_product(product_id):
 
         # Store product name for response
         product_name = product.name
+        
+        # Store category_id for related products invalidation
+        category_id = product.category_id
 
         # Delete the product
         db.session.delete(product)
         db.session.commit()
+
+        # Invalidate product cache after successful delete
+        product_cache_service.invalidate_product(product_id)
+        
+        # Also invalidate related products cache for this category
+        if category_id:
+            product_cache_service.invalidate_products_by_category(category_id)
 
         return jsonify({
             'success': True,
@@ -684,6 +698,9 @@ def upload_product_images(product_id):
             'errors': errors,
             'message': 'Upload completed' if len(errors) == 0 else 'Upload completed with errors'
         }), 200 if len(errors) == 0 else 207
+
+        # Invalidate product cache after images change
+        product_cache_service.invalidate_product_images(product_id)
 
     except Exception as e:
         db.session.rollback()

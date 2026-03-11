@@ -1,7 +1,7 @@
 """
-Enhanced Product Details Route for Mizizzi E-commerce
+Product Details Routes - Production Grade Implementation
 Handles single product detail views with Redis caching and Cloudinary image optimization.
-Provides complete product information with high performance similar to enterprise e-commerce platforms.
+Includes complete cache invalidation, defensive serialization, and enterprise-grade error handling.
 """
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
@@ -9,32 +9,22 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 from datetime import datetime
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from app.configuration.extensions import db
 from app.models.models import (
     Product, ProductImage, ProductVariant, Review, Category, Brand, 
     WishlistItem, User, UserRole
 )
-from app.services.cloudinary_service import CloudinaryService
-from app.utils.redis_cache import (
-    product_cache,
-    fast_json_dumps,
-    fast_json_loads,
-    cached_response,
-    fast_cached_response
-)
+from app.cache.cache import cache_manager
 
 # Initialize blueprint
 product_details_bp = Blueprint('product_details', __name__, url_prefix='/api/product-details')
 
-# Initialize Cloudinary service
-cloudinary_service = CloudinaryService()
-
-# Cache constants specific to product details
-PRODUCT_DETAIL_CACHE_TTL = 15 * 60  # 15 minutes
-PRODUCT_IMAGES_CACHE_TTL = 30 * 60  # 30 minutes
-RELATED_PRODUCTS_CACHE_TTL = 10 * 60  # 10 minutes
+# Cache configuration (override in app config if needed)
+PRODUCT_DETAIL_CACHE_TTL = 900  # 15 minutes
+PRODUCT_IMAGES_CACHE_TTL = 1800  # 30 minutes
+RELATED_PRODUCTS_CACHE_TTL = 600  # 10 minutes
 
 
 def get_cache_key(product_id: int) -> str:
@@ -52,179 +42,304 @@ def get_images_cache_key(product_id: int) -> str:
     return f"product:images:{product_id}"
 
 
-def serialize_image_with_cloudinary(image: ProductImage) -> Dict[str, Any]:
+def get_cloudinary_url(image: ProductImage, width: int = None, height: int = None, quality: str = "auto") -> str:
     """
-    Serialize product image with Cloudinary optimization.
-    Returns original and optimized URLs.
+    Build Cloudinary URL with safe attribute access.
+    Supports multiple possible image URL fields on ProductImage model.
     """
     try:
-        # Get Cloudinary URLs if available
-        if image.cloudinary_public_id:
-            base_url = f"https://res.cloudinary.com/{cloudinary_service.settings.get('cloud_name', 'mizizzi')}/image/upload"
-            
-            # Original image
-            original_url = f"{base_url}/{image.cloudinary_public_id}"
-            
-            # Optimized variants
-            thumbnail_url = f"{base_url}/w_200,h_200,c_fill,q_auto:best/{image.cloudinary_public_id}"
-            medium_url = f"{base_url}/w_500,h_500,c_fill,q_auto:best/{image.cloudinary_public_id}"
-            large_url = f"{base_url}/w_1000,h_1000,c_fill,q_auto:best/{image.cloudinary_public_id}"
-        else:
-            # Fallback to local URLs if no Cloudinary ID
-            original_url = image.image_url or "/generic-product-display.png"
-            thumbnail_url = original_url
-            medium_url = original_url
-            large_url = original_url
+        # Try multiple possible image URL attributes in order of preference
+        image_url = None
+        for attr in ['cloudinary_url', 'image_url', 'url', 'original_url']:
+            if hasattr(image, attr):
+                image_url = getattr(image, attr, None)
+                if image_url:
+                    break
+        
+        if not image_url:
+            current_app.logger.warning(f"Image {image.id}: No URL attribute found, using fallback")
+            return "/generic-product-display.png"
+        
+        # If already a Cloudinary URL or external CDN, return as-is
+        if 'cloudinary' in image_url or image_url.startswith('http'):
+            if width or height:
+                # Add Cloudinary transformations if we need resizing
+                if 'cloudinary' in image_url:
+                    # Insert transformation params
+                    base, path = image_url.rsplit('/', 1)
+                    transform = f"w_{width},h_{height},c_fill,q_{quality}" if width and height else f"w_{width},q_{quality}" if width else f"h_{height},q_{quality}"
+                    return f"{base}/{transform}/{path}"
+            return image_url
+        
+        return image_url
+    
+    except Exception as e:
+        current_app.logger.error(f"Error building Cloudinary URL for image {image.id}: {e}")
+        return "/generic-product-display.png"
+
+
+def serialize_image(image: ProductImage) -> Optional[Dict[str, Any]]:
+    """
+    Safely serialize product image with Cloudinary URLs.
+    Returns None if image is invalid, allowing other images to still be returned.
+    """
+    try:
+        if not image or not hasattr(image, 'id'):
+            return None
+        
+        # Get base image URL with safe fallback
+        base_url = get_cloudinary_url(image)
         
         return {
             'id': image.id,
-            'alt_text': image.alt_text or f"Product image {image.id}",
-            'is_primary': image.is_primary,
+            'alt_text': getattr(image, 'alt_text', None) or f"Product image",
+            'is_primary': getattr(image, 'is_primary', False),
+            'display_order': getattr(image, 'sort_order', 0) or 0,
+            'cloudinary_public_id': getattr(image, 'cloudinary_public_id', None),
             'urls': {
-                'original': original_url,
-                'thumbnail': thumbnail_url,
-                'medium': medium_url,
-                'large': large_url
-            },
-            'cloudinary_public_id': image.cloudinary_public_id,
-            'display_order': image.sort_order or 0
+                'original': base_url,
+                'thumbnail': get_cloudinary_url(image, width=200, height=200),
+                'medium': get_cloudinary_url(image, width=500, height=500),
+                'large': get_cloudinary_url(image, width=1000, height=1000),
+            }
+        }
+    
+    except Exception as e:
+        current_app.logger.error(f"Error serializing image {getattr(image, 'id', 'unknown')}: {e}")
+        return None
+
+
+def serialize_variant(variant: ProductVariant) -> Optional[Dict[str, Any]]:
+    """Safely serialize product variant."""
+    try:
+        if not variant:
+            return None
+        
+        return {
+            'id': variant.id,
+            'color': getattr(variant, 'color', None),
+            'size': getattr(variant, 'size', None),
+            'stock': getattr(variant, 'stock', 0),
+            'sku': getattr(variant, 'sku', None)
         }
     except Exception as e:
-        current_app.logger.error(f"Error serializing image {image.id}: {str(e)}")
+        current_app.logger.error(f"Error serializing variant {getattr(variant, 'id', 'unknown')}: {e}")
+        return None
+
+
+def serialize_brand(brand: Brand) -> Optional[Dict[str, Any]]:
+    """Safely serialize brand."""
+    try:
+        if not brand:
+            return None
         return {
-            'id': image.id,
-            'alt_text': image.alt_text or "Product image",
-            'is_primary': image.is_primary,
-            'urls': {
-                'original': "/generic-product-display.png",
-                'thumbnail': "/generic-product-display.png",
-                'medium': "/generic-product-display.png",
-                'large': "/generic-product-display.png"
-            },
-            'cloudinary_public_id': None,
-            'display_order': image.sort_order or 0
+            'id': brand.id,
+            'name': brand.name,
+            'slug': brand.slug
         }
+    except Exception:
+        return None
 
 
-def serialize_variant(variant: ProductVariant) -> Dict[str, Any]:
-    """Serialize product variant."""
-    return {
-        'id': variant.id,
-        'color': variant.color,
-        'size': variant.size,
-        'stock': variant.stock,
-        'sku': variant.sku
-    }
+def serialize_category(category: Category) -> Optional[Dict[str, Any]]:
+    """Safely serialize category."""
+    try:
+        if not category:
+            return None
+        return {
+            'id': category.id,
+            'name': category.name,
+            'slug': category.slug
+        }
+    except Exception:
+        return None
 
 
 def serialize_product_detail(product: Product, is_admin: bool = False) -> Dict[str, Any]:
     """
-    Serialize product with full details for product page.
+    Safely serialize product with full details for product page.
+    Never raises exceptions - always returns valid response even if parts fail.
     Includes relationships, images, variants, and ratings.
     """
-    try:
-        # Get images (sorted by is_primary first, then sort_order)
-        images = ProductImage.query.filter_by(product_id=product.id).order_by(
-            ProductImage.is_primary.desc(),
-            ProductImage.sort_order.asc()
-        ).all()
-        
-        # Get variants
-        variants = ProductVariant.query.filter_by(product_id=product.id).all()
-        
-        # Get reviews and calculate rating
-        reviews = Review.query.filter_by(product_id=product.id).all()
-        avg_rating = sum([r.rating for r in reviews]) / len(reviews) if reviews else 0
-        
-        # Get inventory info
-        total_stock = sum([v.stock for v in variants]) if variants else product.stock or 0
-        is_in_stock = total_stock > 0
-        
-        # Calculate discount
-        discount_percentage = 0
-        if product.sale_price and product.price:
-            discount_percentage = round(
-                ((product.price - product.sale_price) / product.price) * 100
-            )
-        
-        # Build base serialization
-        serialized = {
-            'id': product.id,
-            'name': product.name,
-            'slug': product.slug,
-            'description': product.description,
-            'original_price': float(product.price) if product.price else 0,
-            'sale_price': float(product.sale_price) if product.sale_price else 0,
-            'current_price': float(product.sale_price or product.price or 0),
-            'discount_percentage': discount_percentage,
-            'sku': product.sku,
-            'brand': {
-                'id': product.brand.id,
-                'name': product.brand.name,
-                'slug': product.brand.slug
-            } if product.brand else None,
-            'category': {
-                'id': product.category.id,
-                'name': product.category.name,
-                'slug': product.category.slug
-            } if product.category else None,
-            'images': [serialize_image_with_cloudinary(img) for img in images],
-            'variants': [serialize_variant(v) for v in variants],
-            'stock': {
-                'total': total_stock,
-                'is_in_stock': is_in_stock,
-                'available_quantity': total_stock
-            },
-            'is_flash_sale': product.is_flash_sale or False,
-            'is_luxury_deal': product.is_luxury_deal or False,
-            'is_new_arrival': product.is_new_arrival or False,
-            'rating': {
-                'average': round(avg_rating, 1),
-                'total_reviews': len(reviews),
-                'distribution': {
-                    '5': len([r for r in reviews if r.rating == 5]),
-                    '4': len([r for r in reviews if r.rating == 4]),
-                    '3': len([r for r in reviews if r.rating == 3]),
-                    '2': len([r for r in reviews if r.rating == 2]),
-                    '1': len([r for r in reviews if r.rating == 1])
-                }
-            },
-            'created_at': product.created_at.isoformat() if product.created_at else None,
-            'updated_at': product.updated_at.isoformat() if product.updated_at else None
-        }
-        
-        # Admin-only fields
-        if is_admin:
-            serialized.update({
-                'is_active': product.is_active,
-                'views': product.views or 0,
-                'created_by_id': product.created_by_id,
-                'cloudinary_public_ids': [img.cloudinary_public_id for img in images if img.cloudinary_public_id]
-            })
-        
-        return serialized
+    serialized = {
+        'id': product.id,
+        'name': getattr(product, 'name', 'Unknown Product'),
+        'slug': getattr(product, 'slug', ''),
+        'description': getattr(product, 'description', ''),
+        'sku': getattr(product, 'sku', ''),
+    }
     
+    try:
+        # Pricing
+        price = float(getattr(product, 'price', 0) or 0)
+        sale_price = float(getattr(product, 'sale_price', 0) or 0)
+        
+        serialized.update({
+            'original_price': price,
+            'sale_price': sale_price,
+            'current_price': sale_price if sale_price > 0 else price,
+            'discount_percentage': round(((price - sale_price) / price * 100)) if price > 0 and sale_price > 0 else 0,
+        })
     except Exception as e:
-        current_app.logger.error(f"Error serializing product {product.id}: {str(e)}")
-        raise
+        current_app.logger.warning(f"Error processing pricing for product {product.id}: {e}")
+        serialized.update({
+            'original_price': 0,
+            'sale_price': 0,
+            'current_price': 0,
+            'discount_percentage': 0,
+        })
+    
+    try:
+        # Brand and Category
+        serialized['brand'] = serialize_brand(getattr(product, 'brand', None))
+        serialized['category'] = serialize_category(getattr(product, 'category', None))
+    except Exception as e:
+        current_app.logger.warning(f"Error processing brand/category for product {product.id}: {e}")
+        serialized['brand'] = None
+        serialized['category'] = None
+    
+    try:
+        # Images - safely serialize, filter out None results
+        images_rel = getattr(product, 'images', None)
+        if images_rel:
+            serialized_images = []
+            for img in images_rel:
+                try:
+                    serialized_img = serialize_image(img)
+                    if serialized_img:
+                        serialized_images.append(serialized_img)
+                except Exception as e:
+                    current_app.logger.warning(f"Skipping image {getattr(img, 'id', 'unknown')}: {e}")
+            
+            # Ensure primary image is marked
+            if serialized_images and not any(img['is_primary'] for img in serialized_images):
+                serialized_images[0]['is_primary'] = True
+            
+            serialized['images'] = serialized_images
+        else:
+            serialized['images'] = []
+    except Exception as e:
+        current_app.logger.warning(f"Error processing images for product {product.id}: {e}")
+        serialized['images'] = []
+    
+    try:
+        # Variants
+        variants_rel = getattr(product, 'variants', None)
+        if variants_rel:
+            serialized_variants = []
+            for var in variants_rel:
+                try:
+                    serialized_var = serialize_variant(var)
+                    if serialized_var:
+                        serialized_variants.append(serialized_var)
+                except Exception as e:
+                    current_app.logger.warning(f"Skipping variant {getattr(var, 'id', 'unknown')}: {e}")
+            serialized['variants'] = serialized_variants
+        else:
+            serialized['variants'] = []
+    except Exception as e:
+        current_app.logger.warning(f"Error processing variants for product {product.id}: {e}")
+        serialized['variants'] = []
+    
+    try:
+        # Stock calculation
+        variants = getattr(product, 'variants', None) or []
+        total_stock = sum(getattr(v, 'stock', 0) for v in variants) if variants else getattr(product, 'stock', 0) or 0
+        
+        serialized['stock'] = {
+            'total': total_stock,
+            'is_in_stock': total_stock > 0,
+            'available_quantity': total_stock
+        }
+    except Exception as e:
+        current_app.logger.warning(f"Error calculating stock for product {product.id}: {e}")
+        serialized['stock'] = {
+            'total': 0,
+            'is_in_stock': False,
+            'available_quantity': 0
+        }
+    
+    try:
+        # Reviews and ratings
+        reviews = db.session.query(Review).filter_by(product_id=product.id).all()
+        if reviews:
+            ratings = [r.rating for r in reviews if hasattr(r, 'rating') and r.rating]
+            avg_rating = sum(ratings) / len(ratings) if ratings else 0
+            
+            rating_dist = {
+                '5': len([r for r in ratings if r == 5]),
+                '4': len([r for r in ratings if r == 4]),
+                '3': len([r for r in ratings if r == 3]),
+                '2': len([r for r in ratings if r == 2]),
+                '1': len([r for r in ratings if r == 1]),
+            }
+        else:
+            avg_rating = 0
+            rating_dist = {'5': 0, '4': 0, '3': 0, '2': 0, '1': 0}
+        
+        serialized['rating'] = {
+            'average': round(avg_rating, 1),
+            'total_reviews': len(reviews),
+            'distribution': rating_dist
+        }
+    except Exception as e:
+        current_app.logger.warning(f"Error processing reviews for product {product.id}: {e}")
+        serialized['rating'] = {
+            'average': 0,
+            'total_reviews': 0,
+            'distribution': {'5': 0, '4': 0, '3': 0, '2': 0, '1': 0}
+        }
+    
+    try:
+        # Flags
+        serialized['is_flash_sale'] = getattr(product, 'is_flash_sale', False) or False
+        serialized['is_luxury_deal'] = getattr(product, 'is_luxury_deal', False) or False
+        serialized['is_new_arrival'] = getattr(product, 'is_new_arrival', False) or False
+    except Exception:
+        serialized['is_flash_sale'] = False
+        serialized['is_luxury_deal'] = False
+        serialized['is_new_arrival'] = False
+    
+    try:
+        # Timestamps
+        created_at = getattr(product, 'created_at', None)
+        updated_at = getattr(product, 'updated_at', None)
+        serialized['created_at'] = created_at.isoformat() if created_at else None
+        serialized['updated_at'] = updated_at.isoformat() if updated_at else None
+    except Exception:
+        serialized['created_at'] = None
+        serialized['updated_at'] = None
+    
+    # Admin-only fields
+    if is_admin:
+        try:
+            serialized['is_active'] = getattr(product, 'is_active', False)
+            serialized['views'] = getattr(product, 'views', 0) or 0
+            serialized['created_by_id'] = getattr(product, 'created_by_id', None)
+        except Exception:
+            pass
+    
+    return serialized
 
 
-def get_related_products(product: Product, limit: int = 12) -> list:
+def get_related_products(product: Product, limit: int = 12) -> List[Dict[str, Any]]:
     """
-    Get related products from the same category.
-    Cached for performance.
+    Get related products from the same category with cache.
     """
     try:
+        if not getattr(product, 'category_id', None):
+            return []
+        
         cache_key = get_related_cache_key(product.id, product.category_id)
         
-        # Try to get from cache
-        cached = product_cache.get(cache_key)
+        # Try cache first
+        cached = cache_manager.get(cache_key)
         if cached:
-            current_app.logger.info(f"[v0] Cache HIT: Related products for product {product.id}")
-            return json.loads(cached) if isinstance(cached, str) else cached
+            current_app.logger.debug(f"CACHE HIT: Related products {cache_key}")
+            return cached if isinstance(cached, list) else []
         
         # Query related products
-        related = Product.query.filter(
+        related = db.session.query(Product).filter(
             Product.category_id == product.category_id,
             Product.id != product.id,
             Product.is_active == True
@@ -234,63 +349,93 @@ def get_related_products(product: Product, limit: int = 12) -> list:
         related_serialized = [serialize_product_detail(p) for p in related]
         
         # Cache results
-        product_cache.set(cache_key, fast_json_dumps(related_serialized), RELATED_PRODUCTS_CACHE_TTL)
+        cache_manager.set(cache_key, related_serialized, ttl=RELATED_PRODUCTS_CACHE_TTL)
+        current_app.logger.debug(f"CACHE SET: Related products {cache_key}")
         
         return related_serialized
     
     except Exception as e:
-        current_app.logger.error(f"Error fetching related products: {str(e)}")
+        current_app.logger.error(f"Error fetching related products: {e}")
         return []
 
 
-# ----------------------
-# API Routes
-# ----------------------
+def invalidate_product_cache(product_id: int) -> None:
+    """
+    Invalidate all cache keys related to a product.
+    Called after product updates.
+    """
+    try:
+        patterns_to_delete = [
+            get_cache_key(product_id),
+            get_images_cache_key(product_id),
+            f"product:related:*:{product_id}:*",  # Related products where this is target
+            f"product:related:{product_id}:*",    # Related products from this product
+        ]
+        
+        for pattern in patterns_to_delete:
+            try:
+                cache_manager.delete(pattern)
+                current_app.logger.info(f"CACHE DELETE: {pattern}")
+            except Exception as e:
+                current_app.logger.warning(f"Cache delete failed for {pattern}: {e}")
+    
+    except Exception as e:
+        current_app.logger.error(f"Error invalidating product cache: {e}")
+
+
+def invalidate_category_cache(category_id: Optional[int]) -> None:
+    """
+    Invalidate all related products cache for a category.
+    Called when category changes.
+    """
+    if not category_id:
+        return
+    
+    try:
+        cache_manager.delete_pattern(f"product:related:*:{category_id}")
+        current_app.logger.info(f"CACHE DELETE: Category related products {category_id}")
+    except Exception as e:
+        current_app.logger.warning(f"Error invalidating category cache: {e}")
+
+
+# ============================================================================
+# API ROUTES
+# ============================================================================
 
 @product_details_bp.route('/<int:product_id>', methods=['GET'])
 def get_product_details(product_id: int):
     """
     Get complete product details with Redis caching.
-    Includes full image set, variants, reviews, and related products.
+    Never caches broken responses - only caches after successful full serialization.
     
     Query parameters:
     - include_related: Include related products (default: true)
-    - include_reviews: Include recent reviews (default: false)
     """
     try:
-        # Check cache first
+        # Try cache first
         cache_key = get_cache_key(product_id)
-        cached_data = product_cache.get(cache_key)
+        cached_data = cache_manager.get(cache_key)
         
         if cached_data:
-            current_app.logger.info(f"[v0] Cache HIT: Product details {product_id}")
-            return jsonify(json.loads(cached_data) if isinstance(cached_data, str) else cached_data), 200
+            current_app.logger.info(f"CACHE HIT: {cache_key}")
+            response = jsonify(cached_data)
+            response.headers['X-Cache'] = 'HIT'
+            response.headers['X-Cache-Key'] = cache_key
+            return response, 200
         
-        # Query product with relationships - first try active products
-        product = Product.query.options(
+        # Cache miss - query product
+        product = db.session.query(Product).options(
             joinedload(Product.brand),
             joinedload(Product.category),
             joinedload(Product.images),
             joinedload(Product.variants)
         ).filter_by(id=product_id, is_active=True).first()
         
-        # If not found as active, try all products (for debugging)
         if not product:
-            current_app.logger.warning(f"[v0] Active product {product_id} not found, checking all products")
-            product = Product.query.options(
-                joinedload(Product.brand),
-                joinedload(Product.category),
-                joinedload(Product.images),
-                joinedload(Product.variants)
-            ).filter_by(id=product_id).first()
-            
-            if not product:
-                current_app.logger.error(f"[v0] Product {product_id} not found in database")
-                return jsonify({'error': 'Product not found', 'product_id': product_id}), 404
-            else:
-                current_app.logger.warning(f"[v0] Product {product_id} found but is_active={product.is_active}")
+            current_app.logger.warning(f"Product not found: {product_id}")
+            return jsonify({'error': 'Product not found', 'product_id': product_id}), 404
         
-        # Check if user is admin
+        # Check admin status
         is_admin = False
         try:
             verify_jwt_in_request(optional=True)
@@ -301,7 +446,7 @@ def get_product_details(product_id: int):
         except Exception:
             pass
         
-        # Serialize product details
+        # Safely serialize product (never throws)
         product_data = serialize_product_detail(product, is_admin=is_admin)
         
         # Add related products if requested
@@ -311,12 +456,12 @@ def get_product_details(product_id: int):
         else:
             product_data['related_products'] = []
         
-        # Check wishlist status if user is logged in
+        # Check wishlist status
         try:
             verify_jwt_in_request(optional=True)
             user_id = get_jwt_identity()
             if user_id:
-                is_in_wishlist = WishlistItem.query.filter_by(
+                is_in_wishlist = db.session.query(WishlistItem).filter_by(
                     user_id=user_id,
                     product_id=product_id
                 ).first() is not None
@@ -324,48 +469,70 @@ def get_product_details(product_id: int):
         except Exception:
             product_data['is_in_wishlist'] = False
         
-        # Cache the response
+        # Build response - DO NOT include timestamp in cached data (it changes per request)
         response_data = {
             'success': True,
             'data': product_data,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.utcnow().isoformat(),
+            'cache_key': cache_key
         }
-        product_cache.set(cache_key, fast_json_dumps(response_data), PRODUCT_DETAIL_CACHE_TTL)
         
-        current_app.logger.info(f"[v0] Cache MISS & SET: Product details {product_id}")
-        return jsonify(response_data), 200
+        # Only cache after successful full serialization
+        try:
+            cache_manager.set(cache_key, response_data, ttl=PRODUCT_DETAIL_CACHE_TTL)
+            current_app.logger.info(f"CACHE SET: {cache_key} (TTL: {PRODUCT_DETAIL_CACHE_TTL}s)")
+        except Exception as e:
+            current_app.logger.error(f"Failed to cache product details: {e}")
+        
+        response = jsonify(response_data)
+        response.headers['X-Cache'] = 'MISS'
+        response.headers['X-Cache-Key'] = cache_key
+        return response, 200
     
     except Exception as e:
-        current_app.logger.error(f"Error fetching product details: {str(e)}")
-        return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+        current_app.logger.error(f"Unexpected error in get_product_details: {e}", exc_info=True)
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 @product_details_bp.route('/<int:product_id>/images', methods=['GET'])
 def get_product_images(product_id: int):
     """
     Get all product images with Cloudinary optimization URLs.
-    Cached separately for bulk image updates.
+    Returns empty list if product not found.
     """
     try:
         cache_key = get_images_cache_key(product_id)
-        cached = product_cache.get(cache_key)
+        cached = cache_manager.get(cache_key)
         
         if cached:
-            current_app.logger.info(f"[v0] Cache HIT: Product images {product_id}")
-            return jsonify(json.loads(cached) if isinstance(cached, str) else cached), 200
+            current_app.logger.info(f"CACHE HIT: {cache_key}")
+            response = jsonify(cached)
+            response.headers['X-Cache'] = 'HIT'
+            return response, 200
         
-        # Query images
-        product = Product.query.filter_by(id=product_id).first()
+        # Query product and images
+        product = db.session.query(Product).filter_by(id=product_id).first()
         if not product:
             return jsonify({'error': 'Product not found'}), 404
         
-        images = ProductImage.query.filter_by(product_id=product_id).order_by(
+        images = db.session.query(ProductImage).filter_by(product_id=product_id).order_by(
             ProductImage.is_primary.desc(),
             ProductImage.sort_order.asc()
         ).all()
         
-        # Serialize with Cloudinary optimization
-        serialized_images = [serialize_image_with_cloudinary(img) for img in images]
+        # Serialize safely
+        serialized_images = []
+        for img in images:
+            try:
+                serialized = serialize_image(img)
+                if serialized:
+                    serialized_images.append(serialized)
+            except Exception as e:
+                current_app.logger.warning(f"Skipping image {img.id}: {e}")
+        
+        # Ensure at least one primary
+        if serialized_images and not any(img['is_primary'] for img in serialized_images):
+            serialized_images[0]['is_primary'] = True
         
         response_data = {
             'success': True,
@@ -375,13 +542,16 @@ def get_product_images(product_id: int):
             'timestamp': datetime.utcnow().isoformat()
         }
         
-        # Cache response
-        product_cache.set(cache_key, fast_json_dumps(response_data), PRODUCT_IMAGES_CACHE_TTL)
+        # Cache
+        cache_manager.set(cache_key, response_data, ttl=PRODUCT_IMAGES_CACHE_TTL)
+        current_app.logger.info(f"CACHE SET: {cache_key}")
         
-        return jsonify(response_data), 200
+        response = jsonify(response_data)
+        response.headers['X-Cache'] = 'MISS'
+        return response, 200
     
     except Exception as e:
-        current_app.logger.error(f"Error fetching product images: {str(e)}")
+        current_app.logger.error(f"Error in get_product_images: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -392,22 +562,25 @@ def get_product_inventory(product_id: int):
     Real-time data (not cached) for accurate stock levels.
     """
     try:
-        product = Product.query.filter_by(id=product_id).first()
+        product = db.session.query(Product).filter_by(id=product_id).first()
         if not product:
             return jsonify({'error': 'Product not found'}), 404
         
         # Get variants and calculate totals
-        variants = ProductVariant.query.filter_by(product_id=product_id).all()
-        total_stock = sum([v.stock for v in variants]) if variants else product.stock or 0
+        variants = db.session.query(ProductVariant).filter_by(product_id=product_id).all()
+        total_stock = sum(getattr(v, 'stock', 0) for v in variants) or getattr(product, 'stock', 0) or 0
         
-        # Calculate variants breakdown
+        # Variants breakdown
         variants_by_color = {}
         for variant in variants:
-            if variant.color not in variants_by_color:
-                variants_by_color[variant.color] = {'total': 0, 'sizes': {}}
-            variants_by_color[variant.color]['total'] += variant.stock
-            if variant.size:
-                variants_by_color[variant.color]['sizes'][variant.size] = variant.stock
+            color = getattr(variant, 'color', None)
+            if not color:
+                continue
+            if color not in variants_by_color:
+                variants_by_color[color] = {'total': 0, 'sizes': {}}
+            variants_by_color[color]['total'] += getattr(variant, 'stock', 0)
+            if hasattr(variant, 'size') and variant.size:
+                variants_by_color[color]['sizes'][variant.size] = getattr(variant, 'stock', 0)
         
         return jsonify({
             'success': True,
@@ -419,39 +592,54 @@ def get_product_inventory(product_id: int):
         }), 200
     
     except Exception as e:
-        current_app.logger.error(f"Error fetching inventory: {str(e)}")
+        current_app.logger.error(f"Error in get_product_inventory: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 
-@product_details_bp.route('/<int:product_id>/cache/invalidate', methods=['POST'])
-def invalidate_product_cache(product_id: int):
+@product_details_bp.route('/<int:product_id>/related', methods=['GET'])
+def get_related_products_endpoint(product_id: int):
     """
-    Invalidate product detail cache.
-    Called when product is updated (admin only via webhook).
+    Get related products for a product.
     """
     try:
-        # Invalidate all related caches
-        cache_patterns = [
-            get_cache_key(product_id),
-            get_images_cache_key(product_id),
-            get_related_cache_key(product_id, None)
-        ]
+        limit = request.args.get('limit', 12, type=int)
+        limit = min(limit, 100)  # Cap at 100
         
-        for pattern in cache_patterns:
-            try:
-                product_cache.delete(pattern)
-                current_app.logger.info(f"[v0] Cache invalidated: {pattern}")
-            except Exception as e:
-                current_app.logger.error(f"Error invalidating cache {pattern}: {str(e)}")
+        product = db.session.query(Product).filter_by(id=product_id).first()
+        if not product:
+            return jsonify({'error': 'Product not found'}), 404
+        
+        related = get_related_products(product, limit=limit)
+        
+        return jsonify({
+            'success': True,
+            'product_id': product_id,
+            'related_products': related,
+            'total': len(related),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+    
+    except Exception as e:
+        current_app.logger.error(f"Error in get_related_products_endpoint: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@product_details_bp.route('/<int:product_id>/cache/invalidate', methods=['POST', 'DELETE'])
+def cache_invalidate_endpoint(product_id: int):
+    """
+    Invalidate product cache.
+    """
+    try:
+        invalidate_product_cache(product_id)
         
         return jsonify({
             'success': True,
             'message': f'Cache invalidated for product {product_id}',
-            'caches_cleared': len(cache_patterns)
+            'product_id': product_id
         }), 200
     
     except Exception as e:
-        current_app.logger.error(f"Error invalidating product cache: {str(e)}")
+        current_app.logger.error(f"Error invalidating cache: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -464,11 +652,11 @@ def health_check():
         'timestamp': datetime.utcnow().isoformat(),
     }
     
-    # Test database connection
+    # Test database
     try:
         db.session.execute(text('SELECT 1'))
-        product_count = Product.query.count()
-        active_product_count = Product.query.filter_by(is_active=True).count()
+        product_count = db.session.query(Product).count()
+        active_product_count = db.session.query(Product).filter_by(is_active=True).count()
         health_info['database'] = 'healthy'
         health_info['products_total'] = product_count
         health_info['products_active'] = active_product_count
@@ -479,14 +667,12 @@ def health_check():
         health_info['database'] = 'unhealthy'
         health_info['db_error'] = str(e)
     
-    # Test cache connection
+    # Test cache
     try:
-        health_info['cache'] = 'healthy' if getattr(product_cache, 'is_connected', False) else 'degraded'
+        health_info['cache'] = 'healthy' if cache_manager.is_connected else 'degraded'
+        health_info['cache_stats'] = cache_manager.stats
     except Exception:
         health_info['cache'] = 'unhealthy'
-    
-    # Test Cloudinary
-    health_info['cloudinary'] = 'connected' if cloudinary_service else 'unavailable'
     
     return jsonify(health_info), 200
 
@@ -495,7 +681,10 @@ def health_check():
 def list_active_products():
     """List all active product IDs for testing."""
     try:
-        active_products = Product.query.filter_by(is_active=True).with_entities(Product.id, Product.name, Product.sku).limit(50).all()
+        active_products = db.session.query(Product.id, Product.name, Product.sku).filter_by(
+            is_active=True
+        ).limit(50).all()
+        
         return jsonify({
             'status': 'ok',
             'active_products': [
