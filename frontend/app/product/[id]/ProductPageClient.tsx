@@ -1,10 +1,8 @@
 "use client"
-import { use, useState, useEffect } from "react"
+import { use } from "react"
 import { notFound } from "next/navigation"
 import ProductDetailsEnhanced from "@/components/products/product-details-enhanced"
-import ProductDetailsMobile from "@/components/products/product-details-mobile"
 import { productService } from "@/services/product"
-import { useMobile } from "@/hooks/use-mobile"
 
 // Helper function to determine product type
 const determineProductType = (product: any) => {
@@ -37,15 +35,37 @@ const determineProductType = (product: any) => {
 
 export default function ProductPageClient({ params }: { params: { id: Promise<string> } }) {
   const id = use(params.id)
-  const isMobile = useMobile()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  console.log(`[DEBUG] Page component started for ID: ${id}`)
 
   try {
+    // Use the productService instead of direct fetch
+    console.log(`[DEBUG] Fetching product using productService.getProduct`)
     const product = use(productService.getProduct(id))
+
+    console.log(`[DEBUG] Product fetch result:`, product ? "Success" : "Not found")
+
+    if (!product) {
+      console.log(`[DEBUG] Product not found, returning 404`)
+      return notFound()
+    }
+
+    // Determine product type and add it to the product object
+    product.product_type = determineProductType(product)
+    console.log(`[DEBUG] Product type determined: ${product.product_type}`)
+
+    // Ensure product.reviews is an array
+    if (!product.reviews) {
+      console.log(`[DEBUG] No reviews property, initializing empty array`)
+      product.reviews = []
+    } else if (!Array.isArray(product.reviews)) {
+      console.log(`[DEBUG] Reviews is not an array, converting to array`)
+      product.reviews = []
+    }
+
+    // If no reviews, add mock reviews
+    if (product.reviews.length === 0) {
+      console.log(`[DEBUG] Adding mock reviews`)
+      product.reviews = [
         {
           id: 1,
           rating: 5,
@@ -113,23 +133,18 @@ export default function ProductPageClient({ params }: { params: { id: Promise<st
       ]
     }
 
-    // Don't render until component is mounted (prevents hydration mismatch)
-    if (!mounted) {
-      return null
-    }
-
+    console.log(`[DEBUG] Rendering product page`)
     return (
-      <>
-        {isMobile ? (
-          <ProductDetailsMobile product={product} />
-        ) : (
-          <div className="container px-4 py-8 sm:px-6 lg:px-8">
-            <ProductDetailsEnhanced product={product} />
-          </div>
-        )}
-      </>
+      <div className="container px-4 py-8 sm:px-6 lg:px-8">
+        <ProductDetailsEnhanced product={product} />
+      </div>
     )
   } catch (error) {
+    console.error(
+      `[ERROR] Unhandled exception in page component:`,
+      error instanceof Error ? error.message : String(error),
+    )
+    console.error(`[ERROR] Stack trace:`, error instanceof Error ? error.stack : "No stack trace")
     return notFound()
   }
 }
