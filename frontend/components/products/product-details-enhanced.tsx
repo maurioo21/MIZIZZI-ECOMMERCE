@@ -52,10 +52,16 @@ interface ProductDetailsEnhancedProps {
   recentlyViewedProducts?: any[]
 }
 
-const PRIMARY_COLOR = "#8B1538" // Cherry red (brand color)
-const PRIMARY_HOVER = "#6B1028"
-const ACCENT_COLOR = "#FF6B35" // Vibrant orange accent
-const SUCCESS_COLOR = "#10B981" // Emerald green
+const PRIMARY_COLOR = "#000000" // Sophisticated black
+const PRIMARY_HOVER = "#333333"
+const ACCENT_COLOR = "#8B1538" // Cherry red accent
+const SUCCESS_COLOR = "#059669" // Emerald green
+const NEUTRAL_50 = "#FAFAFA"
+const NEUTRAL_100 = "#F3F3F3"
+const NEUTRAL_200 = "#E8E8E8"
+const NEUTRAL_400 = "#9CA3AF"
+const NEUTRAL_600 = "#4B5563"
+const NEUTRAL_900 = "#0F0F0F"
 
 const appleVariants = {
   fadeIn: {
@@ -1072,8 +1078,8 @@ export default function ProductDetailsEnhanced({
   }, [exploreLoading, exploreHasMore, explorePage, product?.id, product?.category?.slug])
 
   return (
-    <div className="min-h-screen bg-[#F5F5F5]">
-      {/* Cart Toast */}
+    <div className="min-h-screen bg-white">
+      {/* Cart Toast - Luxury refined */}
       <AnimatePresence>
         {showCartNotification && cartNotificationData && (
           <motion.div
@@ -1083,38 +1089,38 @@ export default function ProductDetailsEnhanced({
             role="status"
             aria-live="polite"
           >
-            <div className="bg-white rounded-2xl shadow-2xl shadow-black/10 border border-gray-100 p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-14 h-14 rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
+            <div className="bg-white rounded-sm shadow-xl border border-neutral-200 p-5">
+              <div className="flex items-center gap-4 mb-5">
+                <div className="w-12 h-12 rounded-sm overflow-hidden border border-neutral-200 bg-neutral-50">
                   <Image
                     src={cartNotificationData?.thumbnail_url || "/generic-product-display.png"}
                     alt={cartNotificationData?.name || "Product"}
-                    width={56}
-                    height={56}
+                    width={48}
+                    height={48}
                     className="object-cover w-full h-full"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm line-clamp-2 leading-tight">
+                  <p className="font-light text-neutral-900 text-sm line-clamp-2 leading-snug">
                     {cartNotificationData?.name}
                   </p>
-                  <div className="flex items-center gap-2 text-sm mt-1.5">
-                    <span className="font-bold text-[#8B1538]">{formatPrice(cartNotificationData?.price || 0)}</span>
-                    <span className="text-gray-400">·</span>
-                    <span className="text-gray-500">Qty: {cartNotificationData?.quantity || 1}</span>
+                  <div className="flex items-center gap-2 text-xs mt-2">
+                    <span className="font-medium text-neutral-900">{formatPrice(cartNotificationData?.price || 0)}</span>
+                    <span className="text-neutral-400">·</span>
+                    <span className="text-neutral-500">Qty: {cartNotificationData?.quantity || 1}</span>
                   </div>
                 </div>
-                <CheckCircle className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0" />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <button
                   onClick={() => setShowCartNotification(false)}
-                  className="flex-1 h-11 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200 transition-colors"
+                  className="flex-1 h-10 rounded-sm bg-neutral-100 text-neutral-900 text-xs font-medium hover:bg-neutral-200 transition-colors"
                 >
                   Continue
                 </button>
                 <Link href="/cart" className="flex-1">
-                  <button className="w-full h-11 rounded-xl bg-[#8B1538] text-white text-sm font-semibold hover:bg-[#6B1028] transition-colors">
+                  <button className="w-full h-10 rounded-sm bg-neutral-900 text-white text-xs font-medium hover:bg-neutral-800 transition-colors">
                     View Cart ({cartItems.length})
                   </button>
                 </Link>
@@ -1124,97 +1130,91 @@ export default function ProductDetailsEnhanced({
         )}
       </AnimatePresence>
 
-      {/* Breadcrumbs */}
-      <div className="bg-white border-b border-gray-100">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
-          <nav className="flex items-center text-sm text-gray-500" aria-label="Breadcrumb">
-            <Link href="/" className="flex items-center hover:text-[#8B1538] transition-colors">
-              <Home className="mr-1.5 h-4 w-4" />
-              Home
+      {/* Breadcrumbs - Minimalist */}
+      <div className="bg-white border-b border-neutral-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <nav className="flex items-center text-xs text-neutral-500 tracking-wide" aria-label="Breadcrumb">
+            <Link href="/" className="flex items-center hover:text-neutral-900 transition-colors">
+              <Home className="mr-2 h-3.5 w-3.5" />
+              HOME
             </Link>
-            <ChevronRight className="mx-2 h-4 w-4 text-gray-300" />
-            <Link href="/products" className="hover:text-[#8B1538] transition-colors">
+            <ChevronRight className="mx-3 h-3.5 w-3.5 text-neutral-300" />
+            <Link href="/products" className="hover:text-neutral-900 transition-colors uppercase">
               Products
             </Link>
-            <ChevronRight className="mx-2 h-4 w-4 text-gray-300" />
-            <span className="text-gray-900 font-medium truncate max-w-[200px]">{product?.name}</span>
+            <ChevronRight className="mx-3 h-3.5 w-3.5 text-neutral-300" />
+            <span className="text-neutral-900 font-light uppercase truncate max-w-[200px]">{product?.name}</span>
           </nav>
         </div>
       </div>
 
-      {/* Main Content - Three Column Layout */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* LEFT COLUMN: Image Gallery */}
-          <motion.div {...appleVariants.fadeIn} className="lg:col-span-5">
-            <div className="bg-white rounded-2xl overflow-hidden shadow-sm sticky top-6">
-              <div className="relative aspect-[4/3] cursor-zoom-in group bg-gray-50" ref={imageRef} onClick={handleImageClick}>
+      {/* Main Content - Luxury minimalist grid */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16">
+          {/* LEFT: Image Gallery - Clean and spacious */}
+          <motion.div {...appleVariants.fadeIn} className="flex flex-col">
+            <div className="bg-white rounded-none overflow-hidden sticky top-0">
+              {/* Main Image */}
+              <div 
+                className="relative bg-neutral-50 group cursor-zoom-in aspect-square" 
+                ref={imageRef} 
+                onClick={handleImageClick}
+              >
                 <Image
                   src={productImages[selectedImage] || "/generic-product-display.png"}
                   alt={product?.name || "Product image"}
                   fill
-                  sizes="(max-width: 768px) 100vw, 40vw"
-                  className="object-contain p-6 transition-transform duration-500 group-hover:scale-105"
+                  sizes="(max-width: 768px) 100vw, 45vw"
+                  className="object-contain p-8 transition-transform duration-500"
                   priority
-                  loading="eager"
-                  quality={85}
-                  onError={() => {
-                    // Fallback to generic image if specific image fails
-                    console.log("[v0] Image failed to load:", productImages[selectedImage])
-                  }}
+                  quality={90}
                 />
 
-                {/* Discount Badge */}
+                {/* Discount Badge - Minimal */}
                 {discountPercentage > 0 && (
-                  <div className="absolute top-4 left-4 bg-[#FF6B35] text-white text-xs font-bold px-3 py-1.5 rounded-full">
+                  <div className="absolute top-6 left-6 bg-neutral-900 text-white text-xs font-light px-4 py-2 tracking-wide">
                     -{discountPercentage}%
                   </div>
                 )}
 
-                {/* Navigation Arrows */}
+                {/* Navigation Arrows - Subtle */}
                 {productImages.length > 1 && (
                   <>
                     <button
                       aria-label="Previous image"
-                      className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                      className="absolute left-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-none bg-white/95 border border-neutral-300 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelectedImage((prev) => (prev === 0 ? productImages.length - 1 : prev - 1))
                       }}
                     >
-                      <ArrowLeft className="h-5 w-5 text-gray-700" />
+                      <ArrowLeft className="h-4 w-4 text-neutral-900" />
                     </button>
                     <button
                       aria-label="Next image"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/90 border border-gray-200 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                      className="absolute right-6 top-1/2 -translate-y-1/2 w-8 h-8 rounded-none bg-white/95 border border-neutral-300 flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
                       onClick={(e) => {
                         e.stopPropagation()
                         setSelectedImage((prev) => (prev === productImages.length - 1 ? 0 : prev + 1))
                       }}
                     >
-                      <ArrowRight className="h-5 w-5 text-gray-700" />
+                      <ArrowRight className="h-4 w-4 text-neutral-900" />
                     </button>
                   </>
                 )}
-
-                {/* Zoom hint */}
-                <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity bg-black/70 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-sm">
-                  <Maximize2 className="h-3.5 w-3.5" />
-                  <span>Click to zoom</span>
-                </div>
               </div>
 
-              {/* Thumbnails */}
-              <div className="p-4 border-t border-gray-100">
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              {/* Thumbnails - Grid layout */}
+              {productImages.length > 1 && (
+                <div className="grid grid-cols-5 gap-2 p-6 border-t border-neutral-100 bg-white">
                   {productImages.map((img, i) => (
                     <button
                       key={i}
                       className={cn(
-                        "relative w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-all bg-gray-50",
+                        "relative aspect-square rounded-none overflow-hidden border transition-all",
                         selectedImage === i
-                          ? "border-[#8B1538] ring-2 ring-[#8B1538]/20"
-                          : "border-gray-200 hover:border-gray-300",
+                          ? "border-neutral-900 ring-1 ring-neutral-900"
+                          : "border-neutral-200 hover:border-neutral-400",
                       )}
                       onClick={() => setSelectedImage(i)}
                     >
@@ -1224,131 +1224,188 @@ export default function ProductDetailsEnhanced({
                         fill
                         sizes="80px"
                         className="object-cover"
-                        loading={i === 0 ? "eager" : "lazy"}
+                        loading="lazy"
                         quality={75}
                       />
                     </button>
                   ))}
                 </div>
-              </div>
+              )}
             </div>
           </motion.div>
 
-          {/* CENTER COLUMN: Product Info */}
-          <motion.div {...appleVariants.fadeIn} className="lg:col-span-4 space-y-4">
-            {/* Product Title & Rating */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
+          {/* RIGHT: Product Information - Clean hierarchy */}
+          <motion.div {...appleVariants.fadeIn} className="flex flex-col justify-start">
+            {/* Title & Price Section */}
+            <div className="mb-8 pb-8 border-b border-neutral-100">
               {/* Badges */}
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex flex-wrap gap-3 mb-6">
                 {product?.is_flash_sale && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-semibold rounded-full">
-                    <Zap className="w-3 h-3" />
+                  <span className="text-xs font-light tracking-widest text-neutral-900 border border-neutral-900 px-3 py-1.5 uppercase">
                     Flash Sale
                   </span>
                 )}
                 {product?.is_luxury_deal && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 text-purple-600 text-xs font-semibold rounded-full">
-                    <Award className="w-3 h-3" />
+                  <span className="text-xs font-light tracking-widest text-neutral-900 border border-neutral-900 px-3 py-1.5 uppercase">
                     Premium
                   </span>
                 )}
               </div>
 
-              <h1 className="text-xl font-bold text-gray-900 leading-tight mb-3">{product?.name}</h1>
+              <h1 className="text-4xl lg:text-5xl font-light text-neutral-900 leading-tight mb-6">{product?.name}</h1>
 
               {/* Rating */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex items-center gap-1.5">
-                  <StarRating rating={calculateAverageRating()} size={16} />
-                  <span className="text-sm font-semibold text-gray-900">{calculateAverageRating().toFixed(1)}</span>
+              <div className="flex items-center gap-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <StarRating rating={calculateAverageRating()} size={14} />
+                  <span className="text-sm font-light text-neutral-900">{calculateAverageRating().toFixed(1)}</span>
                 </div>
-                <span className="text-sm text-gray-500">({reviewSummary?.total_reviews || 0} reviews)</span>
+                <span className="text-sm text-neutral-500">({reviewSummary?.total_reviews || 0} reviews)</span>
               </div>
 
-              {/* Price */}
-              <div className="flex items-baseline gap-3 mb-4">
-                <span className="text-3xl font-black text-[#8B1538]">{formatPrice(currentPrice)}</span>
+              {/* Price - Prominent */}
+              <div className="flex items-baseline gap-4">
+                <span className="text-3xl font-light text-neutral-900">{formatPrice(currentPrice)}</span>
                 {currentPrice < originalPrice && (
-                  <span className="text-lg text-gray-400 line-through">{formatPrice(originalPrice)}</span>
+                  <span className="text-lg text-neutral-400 line-through">{formatPrice(originalPrice)}</span>
                 )}
               </div>
+            </div>
 
-              {/* Stock Status */}
+            {/* Stock Status */}
+            <div className="mb-8 pb-8 border-b border-neutral-100">
               <div
                 className={cn(
-                  "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-full border",
+                  "inline-flex items-center px-4 py-2 text-xs font-light tracking-wide uppercase",
                   stockDisplay.cls,
                 )}
               >
-                <stockDisplay.icon className={cn("h-4 w-4 mr-1.5", stockDisplay.ic)} />
+                <stockDisplay.icon className={cn("h-3.5 w-3.5 mr-2", stockDisplay.ic)} />
                 {stockDisplay.text}
               </div>
             </div>
 
+            {/* Product Details */}
+            <div className="mb-8 pb-8 border-b border-neutral-100">
+              <h3 className="text-sm font-light text-neutral-900 mb-4 tracking-wide uppercase">Product Details</h3>
+              <div className="space-y-3 text-sm">
+                <p className="text-neutral-600 font-light leading-relaxed">{product?.description || "Premium quality product designed for discerning customers."}</p>
+                {product?.sku && <p className="text-neutral-500"><span className="font-medium">SKU:</span> {product.sku}</p>}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-4 mb-8">
+              <div className="flex gap-3">
+                {/* Quantity */}
+                <div className="flex items-center border border-neutral-200 rounded-none">
+                  <button
+                    className="px-4 py-3 text-neutral-900 hover:bg-neutral-50 transition-colors disabled:opacity-40"
+                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <div className="px-4 py-3 border-l border-r border-neutral-200 text-sm font-light text-neutral-900 min-w-12 text-center">
+                    {quantity}
+                  </div>
+                  <button
+                    className="px-4 py-3 text-neutral-900 hover:bg-neutral-50 transition-colors disabled:opacity-40"
+                    onClick={() => setQuantity((q) => Math.min(inventoryData?.available_quantity || 0, q + 1))}
+                    disabled={!inventoryData?.is_in_stock || quantity >= (inventoryData?.available_quantity || 0)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Add to Cart */}
+                <motion.button
+                  onClick={handleAddToCart}
+                  disabled={isAddingToCart || !inventoryData?.is_in_stock}
+                  className={cn(
+                    "flex-1 px-6 py-3 text-sm font-light tracking-wide uppercase transition-colors",
+                    isAddingToCart || !inventoryData?.is_in_stock
+                      ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+                      : "bg-neutral-900 text-white hover:bg-neutral-800",
+                  )}
+                  whileTap={inventoryData?.is_in_stock ? { scale: 0.98 } : {}}
+                >
+                  {isAddingToCart ? "Adding..." : "Add to Cart"}
+                </motion.button>
+              </div>
+
+              {/* Buy via WhatsApp */}
+              <motion.button
+                onClick={handleBuyViaWhatsApp}
+                className="w-full px-6 py-3 border border-neutral-900 text-neutral-900 text-sm font-light tracking-wide uppercase hover:bg-neutral-50 transition-colors"
+                whileTap={{ scale: 0.98 }}
+              >
+                <FaWhatsapp className="inline-block h-4 w-4 mr-2" />
+                Buy via WhatsApp
+              </motion.button>
+
+              {/* Wishlist */}
+              <motion.button
+                onClick={handleToggleWishlist}
+                disabled={isTogglingWishlist}
+                className={cn(
+                  "w-full px-6 py-3 text-sm font-light tracking-wide uppercase transition-colors",
+                  isProductInWishlist
+                    ? "bg-neutral-100 text-neutral-900"
+                    : "border border-neutral-200 text-neutral-600 hover:border-neutral-900",
+                )}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Heart className={cn("inline-block h-4 w-4 mr-2", isProductInWishlist && "fill-current")} />
+                {isProductInWishlist ? "Saved" : "Save for later"}
+              </motion.button>
+            </div>
+
+            {/* Trust Information */}
+            <div className="space-y-4 text-sm">
+              <div className="flex gap-4 py-4 border-t border-b border-neutral-100">
+                <Truck className="h-5 w-5 text-neutral-600 flex-shrink-0" />
+                <div>
+                  <p className="font-light text-neutral-900">Free Delivery</p>
+                  <p className="text-xs text-neutral-500">Orders over KSh 2,000</p>
+                </div>
+              </div>
+              <div className="flex gap-4 py-4 border-b border-neutral-100">
+                <RotateCcw className="h-5 w-5 text-neutral-600 flex-shrink-0" />
+                <div>
+                  <p className="font-light text-neutral-900">14-Day Returns</p>
+                  <p className="text-xs text-neutral-500">Easy return policy</p>
+                </div>
+              </div>
+              <div className="flex gap-4 py-4 border-b border-neutral-100">
+                <ShieldCheck className="h-5 w-5 text-neutral-600 flex-shrink-0" />
+                <div>
+                  <p className="font-light text-neutral-900">100% Genuine</p>
+                  <p className="text-xs text-neutral-500">Verified authentic products</p>
+                </div>
+              </div>
+            </div>
+
             {/* Seller Info */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="mt-8 pt-8 border-t border-neutral-100">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-[#8B1538]/10 flex items-center justify-center">
-                    <Shield className="h-6 w-6 text-[#8B1538]" />
-                  </div>
+                  <Shield className="h-5 w-5 text-neutral-600" />
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">Mizizzi Store</span>
-                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded">
-                        Official
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500">Verified Seller</p>
+                    <p className="font-light text-neutral-900 text-sm">Mizizzi Store</p>
+                    <p className="text-xs text-neutral-500">Official Seller</p>
                   </div>
                 </div>
-                <button
-                  onClick={handleShare}
-                  className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <Share2 className="h-5 w-5" />
+                <button onClick={handleShare} className="p-2 hover:bg-neutral-100 transition-colors">
+                  <Share2 className="h-4 w-4 text-neutral-600" />
                 </button>
               </div>
             </div>
-
-            {/* Shipping & Returns */}
-            <div className="bg-white rounded-2xl p-5 shadow-sm">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
-                    <Truck className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 text-sm">Free Delivery</p>
-                    <p className="text-xs text-gray-500">Orders over KSh 2,000</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                    <RotateCcw className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 text-sm">Easy Returns</p>
-                    <p className="text-xs text-gray-500">14-day return policy</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
-                    <ShieldCheck className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900 text-sm">100% Genuine</p>
-                    <p className="text-xs text-gray-500">Verified quality products</p>
-                  </div>
-                </div>
-              </div>
-            </div>
           </motion.div>
+        </div>
+      </div>
 
-          {/* RIGHT COLUMN: Purchase Panel (Sticky) */}
-          <motion.div {...appleVariants.slideUp} className="lg:col-span-3">
-            <div className="bg-white rounded-2xl shadow-sm sticky top-6">
-              <div className="p-5 space-y-5">
+      {/* Product Details Tabs */}
                 {/* Variants */}
                 {product?.variants?.length > 0 && (
                   <div className="space-y-4">
