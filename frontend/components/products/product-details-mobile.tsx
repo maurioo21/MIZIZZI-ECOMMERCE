@@ -54,7 +54,6 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
   const [showCartNotification, setShowCartNotification] = useState(false)
   const [cartNotificationData, setCartNotificationData] = useState<any>(null)
   const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null)
-  const [reviews, setReviews] = useState<Review[]>(initialReviews || [])
 
   // Inventory state
   const [inventoryData, setInventoryData] = useState<{
@@ -120,8 +119,8 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
       try {
         if (product?.id) {
           const [reviewsData, inventoryUpdate] = await Promise.all([
-            reviewService.getReviewSummary(product.id),
-            inventoryService.getInventoryStatus(product.id),
+            reviewService.getProductReviewSummary(product.id),
+            inventoryService.getInventoryStats(),
           ])
 
           if (reviewsData) setReviewSummary(reviewsData)
@@ -213,7 +212,9 @@ export default function ProductDetailsMobile({ product: initialProduct }: Produc
       if (isProductInWishlist) {
         await removeProductFromWishlist(Number(product.id))
       } else {
-        await addToWishlist(Number(product.id))
+        await addToWishlist({
+          product_id: Number(product.id),
+        })
       }
     } catch (error) {
       setOptimisticWishlistState(null)
