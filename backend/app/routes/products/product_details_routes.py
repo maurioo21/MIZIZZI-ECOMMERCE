@@ -133,7 +133,7 @@ def serialize_product_detail(product: Product, is_admin: bool = False) -> Dict[s
         variants = ProductVariant.query.filter_by(product_id=product.id).all()
         
         # Get reviews and calculate rating
-        reviews = Review.query.filter_by(product_id=product.id, is_approved=True).all()
+        reviews = Review.query.filter_by(product_id=product.id).all()
         avg_rating = sum([r.rating for r in reviews]) / len(reviews) if reviews else 0
         
         # Get inventory info
