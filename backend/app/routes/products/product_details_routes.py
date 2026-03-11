@@ -489,3 +489,19 @@ def health_check():
     health_info['cloudinary'] = 'connected' if cloudinary_service else 'unavailable'
     
     return jsonify(health_info), 200
+
+
+@product_details_bp.route('/active-products', methods=['GET'])
+def list_active_products():
+    """List all active product IDs for testing."""
+    try:
+        active_products = Product.query.filter_by(is_active=True).with_entities(Product.id, Product.name, Product.sku).limit(50).all()
+        return jsonify({
+            'status': 'ok',
+            'active_products': [
+                {'id': p.id, 'name': p.name, 'sku': p.sku} for p in active_products
+            ],
+            'total': len(active_products)
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
