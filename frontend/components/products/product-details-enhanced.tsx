@@ -125,8 +125,9 @@ export default function ProductDetailsEnhanced({
   const [likedReviews, setLikedReviews] = useState<Set<number>>(new Set())
   const [animatingReviews, setAnimatingReviews] = useState<Set<number>>(new Set())
   const [activeTab, setActiveTab] = useState<"details" | "specs" | "reviews">("details")
-
-  // Inventory state
+  const [exploreHoverStates, setExploreHoverStates] = useState<Record<number, boolean>>({})
+  const [exploreImageLoadedStates, setExploreImageLoadedStates] = useState<Record<number, boolean>>({})
+  const isDesktop = useMediaQuery("(min-width: 1024px)")
   const [inventoryData, setInventoryData] = useState<{
     available_quantity: number
     is_in_stock: boolean
@@ -1822,9 +1823,8 @@ export default function ProductDetailsEnhanced({
                   // Get primary and secondary images
                   const primaryImage = item.images?.[0]?.urls?.large || item.images?.[0]?.urls?.original || getProductImageUrl(item)
                   const secondaryImage = item.images?.[1]?.urls?.large || item.images?.[1]?.urls?.original
-                  const [isHovering, setIsHovering] = useState(false)
-                  const [secondaryImageLoaded, setSecondaryImageLoaded] = useState(false)
-                  const isDesktop = useMediaQuery("(min-width: 1024px)")
+                  const isHovering = exploreHoverStates[item.id] || false
+                  const secondaryImageLoaded = exploreImageLoadedStates[item.id] || false
                   const hasHoverImage = Boolean(secondaryImage) && isDesktop
 
                   return (
@@ -1845,9 +1845,9 @@ export default function ProductDetailsEnhanced({
                           <div
                             className="relative aspect-square overflow-hidden bg-[#f8f8f8]"
                             onMouseEnter={() => {
-                              if (hasHoverImage) setIsHovering(true)
+                              if (hasHoverImage) setExploreHoverStates(prev => ({ ...prev, [item.id]: true }))
                             }}
-                            onMouseLeave={() => setIsHovering(false)}
+                            onMouseLeave={() => setExploreHoverStates(prev => ({ ...prev, [item.id]: false }))}
                           >
                             {/* Primary Image */}
                             {primaryImage && (
@@ -1885,8 +1885,8 @@ export default function ProductDetailsEnhanced({
                                   sizes="16vw"
                                   className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                                   loading="lazy"
-                                  onLoad={() => setSecondaryImageLoaded(true)}
-                                  onError={() => setSecondaryImageLoaded(false)}
+                                  onLoad={() => setExploreImageLoadedStates(prev => ({ ...prev, [item.id]: true }))}
+                                  onError={() => setExploreImageLoadedStates(prev => ({ ...prev, [item.id]: false }))}
                                 />
                               </div>
                             ) : null}
