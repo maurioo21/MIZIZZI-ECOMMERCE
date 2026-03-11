@@ -5,7 +5,7 @@ Production-safe: validates data with optional strict mode.
 """
 import logging
 import json
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple
 from app.models.models import Product, Brand, Category, db
 
 logger = logging.getLogger(__name__)
