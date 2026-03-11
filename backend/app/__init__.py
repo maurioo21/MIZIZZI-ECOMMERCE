@@ -1063,7 +1063,17 @@ def create_app(config_name=None, enable_socketio=True):
         app.register_blueprint(final_blueprints['admin_shop_categories_routes'], url_prefix='/api/admin/shop-categories')
         app.register_blueprint(final_blueprints['product_images_batch_bp'])
         
-        # Removed payment_routes registration
+        # Product details (ensure available at /api/product-details)
+        app.register_blueprint(final_blueprints['product_details_bp'], url_prefix='/api/product-details')
+        app.register_blueprint(final_blueprints['categories_routes'], url_prefix='/api/categories')
+        
+        app.register_blueprint(final_blueprints['user_address_routes'], url_prefix='/api/addresses/user')
+        app.register_blueprint(final_blueprints['admin_address_routes'], url_prefix='/api/admin/addresses')
+        
+        app.register_blueprint(final_blueprints['user_inventory_routes'], url_prefix='/api/inventory/user')
+        app.register_blueprint(final_blueprints['admin_inventory_routes'], url_prefix='/api/inventory/admin')
+        
+        # Pesapal payment routes
         app.register_blueprint(final_blueprints['pesapal_routes'], url_prefix='/api/pesapal')
         
         app.register_blueprint(final_blueprints['coupon_routes'], url_prefix='/api/coupons')
@@ -1078,14 +1088,6 @@ def create_app(config_name=None, enable_socketio=True):
         app.register_blueprint(final_blueprints['admin_wishlist_routes'], url_prefix='/api/admin/wishlist')
         
         app.register_blueprint(final_blueprints['products_routes'], url_prefix='/api/products')
-        app.register_blueprint(final_blueprints['categories_routes'], url_prefix='/api/categories')
-        
-        app.register_blueprint(final_blueprints['user_address_routes'], url_prefix='/api/addresses/user')
-        app.register_blueprint(final_blueprints['admin_address_routes'], url_prefix='/api/admin/addresses')
-        
-        app.register_blueprint(final_blueprints['user_inventory_routes'], url_prefix='/api/inventory/user')
-        app.register_blueprint(final_blueprints['admin_inventory_routes'], url_prefix='/api/inventory/admin')
-        
         app.register_blueprint(final_blueprints['admin_products_routes'], url_prefix='/api/admin/products')
         
         app.register_blueprint(final_blueprints['notification_routes'], url_prefix='/api/notifications')
@@ -1097,11 +1099,11 @@ def create_app(config_name=None, enable_socketio=True):
         app.register_blueprint(final_blueprints['contact_cta_routes'], url_prefix='/api/contact-cta')
         app.register_blueprint(final_blueprints['featured_routes'], url_prefix='/api/products/featured')
         app.register_blueprint(final_blueprints['homepage_routes'])
-
+    
         app.register_blueprint(final_blueprints['meilisearch_routes'], url_prefix='/api/meilisearch')
         app.register_blueprint(final_blueprints['admin_meilisearch_routes'], url_prefix='/api/admin/meilisearch')
         app.logger.info("✅ Meilisearch routes registered successfully")
-
+    
         app.register_blueprint(final_blueprints['flash_sale_routes'], url_prefix='/api/flash-sale')
         app.logger.info("✅ Flash sale routes registered at /api/flash-sale")
         
