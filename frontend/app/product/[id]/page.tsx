@@ -55,19 +55,37 @@ export default async function Page({ params }: PageProps) {
   const { id } = await params
 
   try {
+    console.log(`[v0] Product page: Loading product with ID/slug: ${id}`)
+    
     // Check if the ID is numeric or a slug
     const isNumericId = /^\d+$/.test(id)
+    console.log(`[v0] Product page: Is numeric ID? ${isNumericId}`)
 
     let product
     if (isNumericId) {
       // Fetch by numeric ID from backend product-details endpoint
+      console.log(`[v0] Product page: Fetching product by numeric ID: ${id}`)
       product = await getProductDetails(id)
     } else {
       // Fetch by slug from backend product-details endpoint
+      console.log(`[v0] Product page: Fetching product by slug: ${id}`)
       product = await getProductDetailsBySlug(id)
     }
 
+    console.log(`[v0] Product page: Fetch result:`, { 
+      productId: product?.id, 
+      productName: product?.name,
+      hasProduct: !!product 
+    })
+
     if (!product || !validateProductDetails(product)) {
+      console.error(`[v0] Product page: Validation failed for ${id}`, {
+        hasProduct: !!product,
+        isValid: product ? validateProductDetails(product) : false,
+        productId: product?.id,
+        productName: product?.name,
+        productPrice: product?.price
+      })
       return notFound()
     }
 
@@ -108,9 +126,10 @@ export default async function Page({ params }: PageProps) {
       ? await getRelatedProducts(String(product.category_id), String(product.id))
       : []
 
+    console.log(`[v0] Product page: Successfully rendering product ${product.id}`)
     return <ProductDetailsEnhanced product={product} similarProducts={relatedProducts} />
   } catch (error) {
-    console.error("Error loading product:", error)
+    console.error("[v0] Product page: Error loading product:", error instanceof Error ? error.message : String(error))
     return notFound()
   }
 }

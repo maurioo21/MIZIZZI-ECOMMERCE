@@ -37,6 +37,8 @@ export async function getProductDetails(productId: string | number): Promise<Pro
     }
 
     const backendUrl = `${API_BASE_URL}/api/product-details/${id}`
+    console.log(`[v0] getProductDetails: API_BASE_URL = ${API_BASE_URL}`)
+    console.log(`[v0] getProductDetails: Full URL = ${backendUrl}`)
     console.log(`[v0] getProductDetails: Fetching from backend: ${backendUrl}`)
 
     const controller = new AbortController()
@@ -58,17 +60,33 @@ export async function getProductDetails(productId: string | number): Promise<Pro
 
       clearTimeout(timeoutId)
 
+      console.log(`[v0] getProductDetails: Response status ${response.status}`)
+
       if (!response.ok) {
-        console.error(`[v0] getProductDetails: Backend HTTP ${response.status} for product ${id}`)
+        const errorText = await response.text()
+        console.error(`[v0] getProductDetails: HTTP ${response.status} for product ${id}`, {
+          statusText: response.statusText,
+          errorBody: errorText.substring(0, 200)
+        })
         return null
       }
 
       const responseData = (await response.json()) as ProductDetailsResponse | Product
 
+      console.log(`[v0] getProductDetails: Response data structure:`, {
+        hasData: "data" in responseData,
+        hasId: responseData.id !== undefined,
+        keys: Object.keys(responseData).slice(0, 5)
+      })
+
       const product = "data" in responseData ? responseData.data : responseData
 
       if (!product || !product.id) {
-        console.error("[v0] getProductDetails: Invalid product data structure")
+        console.error("[v0] getProductDetails: Invalid product data structure", {
+          productExists: !!product,
+          productId: product?.id,
+          productKeys: product ? Object.keys(product).slice(0, 5) : []
+        })
         return null
       }
 
@@ -92,21 +110,28 @@ export async function getProductDetails(productId: string | number): Promise<Pro
             : [],
       }
 
-      console.log(`[v0] getProductDetails: Success - ${normalizedProduct.name}`)
+      console.log(`[v0] getProductDetails: Success - ${normalizedProduct.name} (ID: ${normalizedProduct.id})`)
       return normalizedProduct
     } catch (fetchError) {
       clearTimeout(timeoutId)
 
       if (fetchError instanceof Error && fetchError.name === "AbortError") {
-        console.error(`[v0] getProductDetails: Timeout for product ${id}`)
+        console.error(`[v0] getProductDetails: Request timeout (15s) for product ${id}`)
       } else {
-        console.error(`[v0] getProductDetails: Fetch failed:`, fetchError instanceof Error ? fetchError.message : String(fetchError))
+        console.error(`[v0] getProductDetails: Fetch failed:`, {
+          errorName: fetchError instanceof Error ? fetchError.name : typeof fetchError,
+          errorMessage: fetchError instanceof Error ? fetchError.message : String(fetchError),
+          errorType: typeof fetchError
+        })
       }
 
       return null
     }
   } catch (error) {
-    console.error("[v0] getProductDetails: Critical error:", error instanceof Error ? error.message : String(error))
+    console.error("[v0] getProductDetails: Critical error:", {
+      errorName: error instanceof Error ? error.name : typeof error,
+      errorMessage: error instanceof Error ? error.message : String(error)
+    })
     return null
   }
 }
